@@ -1,10 +1,11 @@
-#include "../../src/config_manager.h"
+// Define mock EEPROM storage first (before including EEPROM.h)
+#include <stdint.h>
+uint8_t mock_eeprom_storage[1024];
+
 #include "../../src/device_info.h"
 #include "../EEPROM.h"
-#include <unity.h>
 
-// Define mock EEPROM storage
-uint8_t mock_eeprom_storage[1024];
+// Define EEPROM instance
 EEPROMClass EEPROM;
 
 // Mock Arduino functions
@@ -24,6 +25,10 @@ int analogRead(uint8_t pin)
     // Stub - not used in config_manager tests
     return 0;
 }
+
+// Include config_manager implementation after mocks are defined
+#include "../../src/config_manager.cpp"
+#include <unity.h>
 
 void setUp()
 {
