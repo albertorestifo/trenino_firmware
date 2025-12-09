@@ -1,0 +1,70 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - environment: sparkfun_promicro16
+            name: sparkfun-pro-micro
+          - environment: leonardo
+            name: arduino-leonardo
+          - environment: micro
+            name: arduino-micro
+          - environment: uno
+            name: arduino-uno
+          - environment: nanoatmega328
+            name: arduino-nano-old-bootloader
+          - environment: nanoatmega328new
+            name: arduino-nano
+          - environment: megaatmega2560
+            name: arduino-mega-2560
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install PlatformIO
+        run: pip install platformio
+
+      - name: Build firmware
+        run: pio run -e ${{ matrix.environment }}
+
+      - name: Rename firmware
+        run: |
+          mkdir -p release
+          cp .pio/build/${{ matrix.environment }}/firmware.hex release/tws-io-${{ matrix.name }}.hex
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware-${{ matrix.name }}
+          path: release/
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: firmware
+          pattern: firmware-*
+          merge-multiple: true
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: firmware/*.hex
+          generate_release_notes: true
