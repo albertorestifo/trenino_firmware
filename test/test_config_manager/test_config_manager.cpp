@@ -1,6 +1,6 @@
-#include "../src/config_manager.h"
-#include "../src/device_info.h"
-#include <EEPROM.h>
+#include "../../src/config_manager.h"
+#include "../../src/device_info.h"
+#include "../EEPROM.h"
 #include <unity.h>
 
 // Define mock EEPROM storage

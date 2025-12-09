@@ -1,4 +1,4 @@
-#include "../src/heartbeat.h"
+#include "../../src/heartbeat.h"
 #include <unity.h>
 
 using namespace Heartbeat;

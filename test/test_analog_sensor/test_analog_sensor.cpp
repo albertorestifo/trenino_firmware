@@ -21,8 +21,8 @@ int analogRead(uint8_t pin)
 }
 
 // Now include the sensor code
-#include "../src/analog_sensor.h"
-#include "../src/sensor.h"
+#include "../../src/analog_sensor.h"
+#include "../../src/sensor.h"
 #include <unity.h>
 
 using namespace Sensor;

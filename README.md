@@ -81,4 +81,6 @@ docs/          # Documentation
 
 ## License
 
-[Add your license here]
+Licensed under [CC BY-NC](https://creativecommons.org/licenses/by-nc/4.0/).
+
+For commercial use, contact me.

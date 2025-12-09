@@ -1,4 +1,4 @@
-#include "../src/protocol.h"
+#include "../../src/protocol.h"
 #include <string.h>
 #include <unity.h>
 
