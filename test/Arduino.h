@@ -8,6 +8,10 @@
 #define OUTPUT 1
 #define INPUT_PULLUP 2
 
+// Digital values
+#define LOW 0
+#define HIGH 1
+
 // Analog pin definitions
 #define A0 14
 #define A1 15
@@ -21,4 +25,7 @@
 // Mock Arduino functions (declarations only - implementations in test files)
 void pinMode(uint8_t pin, uint8_t mode);
 int analogRead(uint8_t pin);
+int digitalRead(uint8_t pin);
+void digitalWrite(uint8_t pin, uint8_t val);
+void delayMicroseconds(unsigned int us);
 unsigned long millis();

@@ -48,7 +48,7 @@ bool handleConfigure(const Protocol::Configure& cfg, bool& complete, bool& error
     }
 
     // Add this part to the configuration
-    if (!g_config_state.addPart(cfg.part_number, cfg.input_type, cfg.pin, cfg.sensitivity)) {
+    if (!g_config_state.addPart(cfg)) {
         error = true;
         g_config_state.reset();
         return true;
@@ -104,15 +104,41 @@ void storeToEEPROM(uint32_t config_id, const InputConfig* inputs, uint8_t num_in
     // Write number of inputs
     EEPROM.put(EEPROM_NUM_INPUTS_ADDR, num_inputs);
 
-    // Write input configurations
+    // Write input configurations (variable size based on type)
     addr = EEPROM_INPUTS_ADDR;
     for (uint8_t i = 0; i < num_inputs; i++) {
+        // Write input type
         EEPROM.put(addr, inputs[i].input_type);
         addr += sizeof(uint8_t);
-        EEPROM.put(addr, inputs[i].pin);
-        addr += sizeof(uint8_t);
-        EEPROM.put(addr, inputs[i].sensitivity);
-        addr += sizeof(uint8_t);
+
+        switch (inputs[i].input_type) {
+        case Protocol::INPUT_TYPE_ANALOG:
+            EEPROM.put(addr, inputs[i].analog.pin);
+            addr += sizeof(uint8_t);
+            EEPROM.put(addr, inputs[i].analog.sensitivity);
+            addr += sizeof(uint8_t);
+            break;
+
+        case Protocol::INPUT_TYPE_BUTTON:
+            EEPROM.put(addr, inputs[i].button.pin);
+            addr += sizeof(uint8_t);
+            EEPROM.put(addr, inputs[i].button.debounce);
+            addr += sizeof(uint8_t);
+            break;
+
+        case Protocol::INPUT_TYPE_MATRIX: {
+            EEPROM.put(addr, inputs[i].matrix.num_row_pins);
+            addr += sizeof(uint8_t);
+            EEPROM.put(addr, inputs[i].matrix.num_col_pins);
+            addr += sizeof(uint8_t);
+            uint8_t total_pins = inputs[i].matrix.num_row_pins + inputs[i].matrix.num_col_pins;
+            for (uint8_t p = 0; p < total_pins; p++) {
+                EEPROM.put(addr, inputs[i].matrix.pins[p]);
+                addr += sizeof(uint8_t);
+            }
+            break;
+        }
+        }
     }
 }
 
@@ -147,15 +173,46 @@ bool loadFromEEPROM()
         return false;
     }
 
-    // Read input configurations
+    // Read input configurations (variable size based on type)
     int addr = EEPROM_INPUTS_ADDR;
     for (uint8_t i = 0; i < g_current_num_inputs; i++) {
         EEPROM.get(addr, g_current_inputs[i].input_type);
         addr += sizeof(uint8_t);
-        EEPROM.get(addr, g_current_inputs[i].pin);
-        addr += sizeof(uint8_t);
-        EEPROM.get(addr, g_current_inputs[i].sensitivity);
-        addr += sizeof(uint8_t);
+
+        switch (g_current_inputs[i].input_type) {
+        case Protocol::INPUT_TYPE_ANALOG:
+            EEPROM.get(addr, g_current_inputs[i].analog.pin);
+            addr += sizeof(uint8_t);
+            EEPROM.get(addr, g_current_inputs[i].analog.sensitivity);
+            addr += sizeof(uint8_t);
+            break;
+
+        case Protocol::INPUT_TYPE_BUTTON:
+            EEPROM.get(addr, g_current_inputs[i].button.pin);
+            addr += sizeof(uint8_t);
+            EEPROM.get(addr, g_current_inputs[i].button.debounce);
+            addr += sizeof(uint8_t);
+            break;
+
+        case Protocol::INPUT_TYPE_MATRIX: {
+            EEPROM.get(addr, g_current_inputs[i].matrix.num_row_pins);
+            addr += sizeof(uint8_t);
+            EEPROM.get(addr, g_current_inputs[i].matrix.num_col_pins);
+            addr += sizeof(uint8_t);
+            uint8_t total_pins = g_current_inputs[i].matrix.num_row_pins + g_current_inputs[i].matrix.num_col_pins;
+            if (total_pins > MAX_MATRIX_PINS) {
+                return false; // Invalid matrix config
+            }
+            for (uint8_t p = 0; p < total_pins; p++) {
+                EEPROM.get(addr, g_current_inputs[i].matrix.pins[p]);
+                addr += sizeof(uint8_t);
+            }
+            break;
+        }
+
+        default:
+            return false; // Unknown input type
+        }
     }
 
     return true;

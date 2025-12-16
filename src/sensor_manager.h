@@ -1,7 +1,9 @@
 #pragma once
 
 #include "analog_sensor.h"
+#include "button_sensor.h"
 #include "config_manager.h"
+#include "matrix_sensor.h"
 #include "sensor.h"
 #include <stdint.h>
 

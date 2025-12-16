@@ -16,6 +16,11 @@ constexpr uint8_t MESSAGE_TYPE_HEARTBEAT = 6;
 
 // Input Type constants for Configure message
 constexpr uint8_t INPUT_TYPE_ANALOG = 0;
+constexpr uint8_t INPUT_TYPE_BUTTON = 1;
+constexpr uint8_t INPUT_TYPE_MATRIX = 2;
+
+// Maximum number of pins for matrix configuration (row_pins + col_pins)
+constexpr uint8_t MAX_MATRIX_PINS = 16;
 
 // Maximum payload size
 constexpr size_t MAX_PAYLOAD_SIZE = 64;
@@ -47,13 +52,44 @@ struct IdentityResponse {
 };
 
 // Configure message - sent by host to configure device inputs
+// Uses a discriminated union based on input_type
 struct Configure {
     uint32_t config_id;
     uint8_t total_parts;
     uint8_t part_number;
     uint8_t input_type;
-    uint8_t pin;
-    uint8_t sensitivity;
+
+    // Type-specific payload (discriminated by input_type)
+    union {
+        // INPUT_TYPE_ANALOG
+        struct {
+            uint8_t pin;
+            uint8_t sensitivity;
+        } analog;
+
+        // INPUT_TYPE_BUTTON
+        struct {
+            uint8_t pin;
+            uint8_t debounce;
+        } button;
+
+        // INPUT_TYPE_MATRIX
+        struct {
+            uint8_t num_row_pins;
+            uint8_t num_col_pins;
+            uint8_t pins[MAX_MATRIX_PINS]; // row_pins followed by col_pins
+        } matrix;
+    };
+
+    Configure()
+        : config_id(0)
+        , total_parts(0)
+        , part_number(0)
+        , input_type(INPUT_TYPE_ANALOG)
+    {
+        analog.pin = 0;
+        analog.sensitivity = 0;
+    }
 
     // Encode to buffer (returns number of bytes written, 0 on error)
     size_t encode(uint8_t* buffer, size_t buffer_size) const;

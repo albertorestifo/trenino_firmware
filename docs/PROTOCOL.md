@@ -51,9 +51,12 @@ All messages start with a 1-byte message type.
 ### Configure (2)
 
 Multi-part message to configure device inputs. Send one message per input.
+The message uses a discriminated union based on `input_type`.
+
+**Common Header (8 bytes)**
 
 ```
-[type: u8 = 2] [config_id: u32] [total_parts: u8] [part_number: u8] [input_type: u8] [pin: u8] [sensitivity: u8]
+[type: u8 = 2] [config_id: u32] [total_parts: u8] [part_number: u8] [input_type: u8]
 ```
 
 | Field | Description |
@@ -61,9 +64,44 @@ Multi-part message to configure device inputs. Send one message per input.
 | config_id | Unique configuration identifier |
 | total_parts | Total number of inputs to configure |
 | part_number | This input's index (0-based) |
-| input_type | 0 = Analog |
+| input_type | 0 = Analog, 1 = Button, 2 = Matrix |
+
+**Analog Payload (input_type = 0)**
+
+```
+[pin: u8] [sensitivity: u8]
+```
+
+| Field | Description |
+|-------|-------------|
 | pin | Hardware pin number |
 | sensitivity | 0-10 (higher = more frequent updates) |
+
+**Button Payload (input_type = 1)**
+
+```
+[pin: u8] [debounce: u8]
+```
+
+| Field | Description |
+|-------|-------------|
+| pin | Hardware pin number |
+| debounce | Debounce threshold (number of scan cycles, ~10ms each) |
+
+**Matrix Payload (input_type = 2)**
+
+```
+[num_row_pins: u8] [num_col_pins: u8] [row_pins: u8[num_row_pins]] [col_pins: u8[num_col_pins]]
+```
+
+| Field | Description |
+|-------|-------------|
+| num_row_pins | Number of row pins |
+| num_col_pins | Number of column pins |
+| row_pins | Array of row pin numbers |
+| col_pins | Array of column pin numbers |
+
+Matrix buttons are reported using virtual pins: `pin = 128 + (row * num_cols + col)`
 
 ### ConfigurationStored (3)
 

@@ -183,7 +183,7 @@ void test_message_decode_invalid_type()
     TEST_ASSERT_FALSE(result);
 }
 
-// Test Configure encoding
+// Test Configure encoding for Analog
 void test_configure_encode()
 {
     Configure cfg;
@@ -191,8 +191,8 @@ void test_configure_encode()
     cfg.total_parts = 3;
     cfg.part_number = 0;
     cfg.input_type = INPUT_TYPE_ANALOG;
-    cfg.pin = 0xA0; // A0
-    cfg.sensitivity = 128;
+    cfg.analog.pin = 0xA0; // A0
+    cfg.analog.sensitivity = 128;
 
     uint8_t buffer[64];
     size_t size = cfg.encode(buffer, sizeof(buffer));
@@ -210,7 +210,7 @@ void test_configure_encode()
     TEST_ASSERT_EQUAL_UINT8(128, buffer[9]); // sensitivity
 }
 
-// Test Configure decoding
+// Test Configure decoding for Analog
 void test_configure_decode()
 {
     uint8_t buffer[] = { MESSAGE_TYPE_CONFIGURE, 0x01, 0x00, 0x00, 0x00, 0x03, 0x00, INPUT_TYPE_ANALOG, 0xA0, 0x80 };
@@ -223,14 +223,14 @@ void test_configure_decode()
     TEST_ASSERT_EQUAL_UINT8(3, cfg.total_parts);
     TEST_ASSERT_EQUAL_UINT8(0, cfg.part_number);
     TEST_ASSERT_EQUAL_UINT8(INPUT_TYPE_ANALOG, cfg.input_type);
-    TEST_ASSERT_EQUAL_UINT8(0xA0, cfg.pin);
-    TEST_ASSERT_EQUAL_UINT8(0x80, cfg.sensitivity);
+    TEST_ASSERT_EQUAL_UINT8(0xA0, cfg.analog.pin);
+    TEST_ASSERT_EQUAL_UINT8(0x80, cfg.analog.sensitivity);
 }
 
 // Test Configure decode with insufficient data
 void test_configure_decode_insufficient_data()
 {
-    uint8_t buffer[] = { MESSAGE_TYPE_CONFIGURE, 0x01, 0x00, 0x00 }; // Only 4 bytes, need 12
+    uint8_t buffer[] = { MESSAGE_TYPE_CONFIGURE, 0x01, 0x00, 0x00 }; // Only 4 bytes, need 8+ header
 
     Configure cfg;
     bool result = cfg.decode(buffer, sizeof(buffer));
@@ -238,7 +238,7 @@ void test_configure_decode_insufficient_data()
     TEST_ASSERT_FALSE(result);
 }
 
-// Test Configure roundtrip
+// Test Configure roundtrip for Analog
 void test_configure_roundtrip()
 {
     Configure original;
@@ -246,8 +246,8 @@ void test_configure_roundtrip()
     original.total_parts = 5;
     original.part_number = 2;
     original.input_type = INPUT_TYPE_ANALOG;
-    original.pin = 0xA1;
-    original.sensitivity = 200;
+    original.analog.pin = 0xA1;
+    original.analog.sensitivity = 200;
 
     uint8_t buffer[64];
     size_t size = original.encode(buffer, sizeof(buffer));
@@ -260,11 +260,234 @@ void test_configure_roundtrip()
     TEST_ASSERT_EQUAL_UINT8(original.total_parts, decoded.total_parts);
     TEST_ASSERT_EQUAL_UINT8(original.part_number, decoded.part_number);
     TEST_ASSERT_EQUAL_UINT8(original.input_type, decoded.input_type);
-    TEST_ASSERT_EQUAL_UINT8(original.pin, decoded.pin);
-    TEST_ASSERT_EQUAL_UINT8(original.sensitivity, decoded.sensitivity);
+    TEST_ASSERT_EQUAL_UINT8(original.analog.pin, decoded.analog.pin);
+    TEST_ASSERT_EQUAL_UINT8(original.analog.sensitivity, decoded.analog.sensitivity);
 }
 
-// Test Message decode for Configure
+// Test Configure encoding for Button
+void test_configure_button_encode()
+{
+    Configure cfg;
+    cfg.config_id = 0x00000002;
+    cfg.total_parts = 2;
+    cfg.part_number = 1;
+    cfg.input_type = INPUT_TYPE_BUTTON;
+    cfg.button.pin = 7;
+    cfg.button.debounce = 3;
+
+    uint8_t buffer[64];
+    size_t size = cfg.encode(buffer, sizeof(buffer));
+
+    TEST_ASSERT_EQUAL(10, size); // header(8) + pin(1) + debounce(1)
+    TEST_ASSERT_EQUAL_UINT8(MESSAGE_TYPE_CONFIGURE, buffer[0]);
+    TEST_ASSERT_EQUAL_UINT8(INPUT_TYPE_BUTTON, buffer[7]);
+    TEST_ASSERT_EQUAL_UINT8(7, buffer[8]); // pin
+    TEST_ASSERT_EQUAL_UINT8(3, buffer[9]); // debounce
+}
+
+// Test Configure decoding for Button
+void test_configure_button_decode()
+{
+    uint8_t buffer[] = { MESSAGE_TYPE_CONFIGURE, 0x02, 0x00, 0x00, 0x00, 0x02, 0x01, INPUT_TYPE_BUTTON, 0x07, 0x03 };
+
+    Configure cfg;
+    bool result = cfg.decode(buffer, sizeof(buffer));
+
+    TEST_ASSERT_TRUE(result);
+    TEST_ASSERT_EQUAL_UINT32(0x00000002, cfg.config_id);
+    TEST_ASSERT_EQUAL_UINT8(2, cfg.total_parts);
+    TEST_ASSERT_EQUAL_UINT8(1, cfg.part_number);
+    TEST_ASSERT_EQUAL_UINT8(INPUT_TYPE_BUTTON, cfg.input_type);
+    TEST_ASSERT_EQUAL_UINT8(7, cfg.button.pin);
+    TEST_ASSERT_EQUAL_UINT8(3, cfg.button.debounce);
+}
+
+// Test Configure roundtrip for Button
+void test_configure_button_roundtrip()
+{
+    Configure original;
+    original.config_id = 0xCAFEBABE;
+    original.total_parts = 4;
+    original.part_number = 3;
+    original.input_type = INPUT_TYPE_BUTTON;
+    original.button.pin = 12;
+    original.button.debounce = 5;
+
+    uint8_t buffer[64];
+    size_t size = original.encode(buffer, sizeof(buffer));
+
+    Configure decoded;
+    bool result = decoded.decode(buffer, size);
+
+    TEST_ASSERT_TRUE(result);
+    TEST_ASSERT_EQUAL_UINT32(original.config_id, decoded.config_id);
+    TEST_ASSERT_EQUAL_UINT8(original.total_parts, decoded.total_parts);
+    TEST_ASSERT_EQUAL_UINT8(original.part_number, decoded.part_number);
+    TEST_ASSERT_EQUAL_UINT8(original.input_type, decoded.input_type);
+    TEST_ASSERT_EQUAL_UINT8(original.button.pin, decoded.button.pin);
+    TEST_ASSERT_EQUAL_UINT8(original.button.debounce, decoded.button.debounce);
+}
+
+// Test Configure encoding for Matrix
+void test_configure_matrix_encode()
+{
+    Configure cfg;
+    cfg.config_id = 0x00000003;
+    cfg.total_parts = 1;
+    cfg.part_number = 0;
+    cfg.input_type = INPUT_TYPE_MATRIX;
+    cfg.matrix.num_row_pins = 3;
+    cfg.matrix.num_col_pins = 4;
+    // Row pins: 2, 3, 4
+    cfg.matrix.pins[0] = 2;
+    cfg.matrix.pins[1] = 3;
+    cfg.matrix.pins[2] = 4;
+    // Col pins: 5, 6, 7, 8
+    cfg.matrix.pins[3] = 5;
+    cfg.matrix.pins[4] = 6;
+    cfg.matrix.pins[5] = 7;
+    cfg.matrix.pins[6] = 8;
+
+    uint8_t buffer[64];
+    size_t size = cfg.encode(buffer, sizeof(buffer));
+
+    // header(8) + num_row_pins(1) + num_col_pins(1) + pins(7) = 17
+    TEST_ASSERT_EQUAL(17, size);
+    TEST_ASSERT_EQUAL_UINT8(MESSAGE_TYPE_CONFIGURE, buffer[0]);
+    TEST_ASSERT_EQUAL_UINT8(INPUT_TYPE_MATRIX, buffer[7]);
+    TEST_ASSERT_EQUAL_UINT8(3, buffer[8]); // num_row_pins
+    TEST_ASSERT_EQUAL_UINT8(4, buffer[9]); // num_col_pins
+    TEST_ASSERT_EQUAL_UINT8(2, buffer[10]); // row pin 0
+    TEST_ASSERT_EQUAL_UINT8(3, buffer[11]); // row pin 1
+    TEST_ASSERT_EQUAL_UINT8(4, buffer[12]); // row pin 2
+    TEST_ASSERT_EQUAL_UINT8(5, buffer[13]); // col pin 0
+    TEST_ASSERT_EQUAL_UINT8(6, buffer[14]); // col pin 1
+    TEST_ASSERT_EQUAL_UINT8(7, buffer[15]); // col pin 2
+    TEST_ASSERT_EQUAL_UINT8(8, buffer[16]); // col pin 3
+}
+
+// Test Configure decoding for Matrix
+void test_configure_matrix_decode()
+{
+    uint8_t buffer[] = {
+        MESSAGE_TYPE_CONFIGURE,
+        0x03, 0x00, 0x00, 0x00, // config_id
+        0x01, // total_parts
+        0x00, // part_number
+        INPUT_TYPE_MATRIX,
+        0x02, // num_row_pins
+        0x03, // num_col_pins
+        0x0A, 0x0B, // row pins
+        0x0C, 0x0D, 0x0E // col pins
+    };
+
+    Configure cfg;
+    bool result = cfg.decode(buffer, sizeof(buffer));
+
+    TEST_ASSERT_TRUE(result);
+    TEST_ASSERT_EQUAL_UINT32(0x00000003, cfg.config_id);
+    TEST_ASSERT_EQUAL_UINT8(1, cfg.total_parts);
+    TEST_ASSERT_EQUAL_UINT8(0, cfg.part_number);
+    TEST_ASSERT_EQUAL_UINT8(INPUT_TYPE_MATRIX, cfg.input_type);
+    TEST_ASSERT_EQUAL_UINT8(2, cfg.matrix.num_row_pins);
+    TEST_ASSERT_EQUAL_UINT8(3, cfg.matrix.num_col_pins);
+    TEST_ASSERT_EQUAL_UINT8(0x0A, cfg.matrix.pins[0]); // row 0
+    TEST_ASSERT_EQUAL_UINT8(0x0B, cfg.matrix.pins[1]); // row 1
+    TEST_ASSERT_EQUAL_UINT8(0x0C, cfg.matrix.pins[2]); // col 0
+    TEST_ASSERT_EQUAL_UINT8(0x0D, cfg.matrix.pins[3]); // col 1
+    TEST_ASSERT_EQUAL_UINT8(0x0E, cfg.matrix.pins[4]); // col 2
+}
+
+// Test Configure roundtrip for Matrix
+void test_configure_matrix_roundtrip()
+{
+    Configure original;
+    original.config_id = 0x11223344;
+    original.total_parts = 2;
+    original.part_number = 1;
+    original.input_type = INPUT_TYPE_MATRIX;
+    original.matrix.num_row_pins = 4;
+    original.matrix.num_col_pins = 4;
+    for (uint8_t i = 0; i < 8; i++) {
+        original.matrix.pins[i] = i + 10;
+    }
+
+    uint8_t buffer[64];
+    size_t size = original.encode(buffer, sizeof(buffer));
+
+    Configure decoded;
+    bool result = decoded.decode(buffer, size);
+
+    TEST_ASSERT_TRUE(result);
+    TEST_ASSERT_EQUAL_UINT32(original.config_id, decoded.config_id);
+    TEST_ASSERT_EQUAL_UINT8(original.total_parts, decoded.total_parts);
+    TEST_ASSERT_EQUAL_UINT8(original.part_number, decoded.part_number);
+    TEST_ASSERT_EQUAL_UINT8(original.input_type, decoded.input_type);
+    TEST_ASSERT_EQUAL_UINT8(original.matrix.num_row_pins, decoded.matrix.num_row_pins);
+    TEST_ASSERT_EQUAL_UINT8(original.matrix.num_col_pins, decoded.matrix.num_col_pins);
+    for (uint8_t i = 0; i < 8; i++) {
+        TEST_ASSERT_EQUAL_UINT8(original.matrix.pins[i], decoded.matrix.pins[i]);
+    }
+}
+
+// Test Configure decode with insufficient data for matrix
+void test_configure_matrix_decode_insufficient_data()
+{
+    // Has header but not enough pins
+    uint8_t buffer[] = {
+        MESSAGE_TYPE_CONFIGURE,
+        0x03, 0x00, 0x00, 0x00, // config_id
+        0x01, // total_parts
+        0x00, // part_number
+        INPUT_TYPE_MATRIX,
+        0x02, // num_row_pins
+        0x03, // num_col_pins
+        0x0A // Only 1 pin, need 5
+    };
+
+    Configure cfg;
+    bool result = cfg.decode(buffer, sizeof(buffer));
+
+    TEST_ASSERT_FALSE(result);
+}
+
+// Test Configure decode with too many matrix pins
+void test_configure_matrix_decode_too_many_pins()
+{
+    uint8_t buffer[] = {
+        MESSAGE_TYPE_CONFIGURE,
+        0x03, 0x00, 0x00, 0x00, // config_id
+        0x01, // total_parts
+        0x00, // part_number
+        INPUT_TYPE_MATRIX,
+        0x0A, // num_row_pins = 10
+        0x0A, // num_col_pins = 10 (total 20 > MAX_MATRIX_PINS)
+    };
+
+    Configure cfg;
+    bool result = cfg.decode(buffer, sizeof(buffer));
+
+    TEST_ASSERT_FALSE(result);
+}
+
+// Test Configure decode with unknown input type
+void test_configure_decode_unknown_type()
+{
+    uint8_t buffer[] = {
+        MESSAGE_TYPE_CONFIGURE,
+        0x01, 0x00, 0x00, 0x00,
+        0x01, 0x00,
+        0xFF, // Unknown input type
+        0x00, 0x00
+    };
+
+    Configure cfg;
+    bool result = cfg.decode(buffer, sizeof(buffer));
+
+    TEST_ASSERT_FALSE(result);
+}
+
+// Test Message decode for Configure (Analog)
 void test_message_decode_configure()
 {
     uint8_t buffer[] = { MESSAGE_TYPE_CONFIGURE, 0x01, 0x00, 0x00, 0x00, 0x03, 0x00, INPUT_TYPE_ANALOG, 0xA0, 0x80 };
@@ -278,8 +501,48 @@ void test_message_decode_configure()
     TEST_ASSERT_EQUAL_UINT8(3, msg.configure.total_parts);
     TEST_ASSERT_EQUAL_UINT8(0, msg.configure.part_number);
     TEST_ASSERT_EQUAL_UINT8(INPUT_TYPE_ANALOG, msg.configure.input_type);
-    TEST_ASSERT_EQUAL_UINT8(0xA0, msg.configure.pin);
-    TEST_ASSERT_EQUAL_UINT8(0x80, msg.configure.sensitivity);
+    TEST_ASSERT_EQUAL_UINT8(0xA0, msg.configure.analog.pin);
+    TEST_ASSERT_EQUAL_UINT8(0x80, msg.configure.analog.sensitivity);
+}
+
+// Test Message decode for Configure (Button)
+void test_message_decode_configure_button()
+{
+    uint8_t buffer[] = { MESSAGE_TYPE_CONFIGURE, 0x02, 0x00, 0x00, 0x00, 0x01, 0x00, INPUT_TYPE_BUTTON, 0x07, 0x03 };
+
+    Message msg;
+    bool result = msg.decode(buffer, sizeof(buffer));
+
+    TEST_ASSERT_TRUE(result);
+    TEST_ASSERT_TRUE(msg.isConfigure());
+    TEST_ASSERT_EQUAL_UINT8(INPUT_TYPE_BUTTON, msg.configure.input_type);
+    TEST_ASSERT_EQUAL_UINT8(7, msg.configure.button.pin);
+    TEST_ASSERT_EQUAL_UINT8(3, msg.configure.button.debounce);
+}
+
+// Test Message decode for Configure (Matrix)
+void test_message_decode_configure_matrix()
+{
+    uint8_t buffer[] = {
+        MESSAGE_TYPE_CONFIGURE,
+        0x03, 0x00, 0x00, 0x00, // config_id
+        0x01, // total_parts
+        0x00, // part_number
+        INPUT_TYPE_MATRIX,
+        0x02, // num_row_pins
+        0x02, // num_col_pins
+        0x0A, 0x0B, // row pins
+        0x0C, 0x0D // col pins
+    };
+
+    Message msg;
+    bool result = msg.decode(buffer, sizeof(buffer));
+
+    TEST_ASSERT_TRUE(result);
+    TEST_ASSERT_TRUE(msg.isConfigure());
+    TEST_ASSERT_EQUAL_UINT8(INPUT_TYPE_MATRIX, msg.configure.input_type);
+    TEST_ASSERT_EQUAL_UINT8(2, msg.configure.matrix.num_row_pins);
+    TEST_ASSERT_EQUAL_UINT8(2, msg.configure.matrix.num_col_pins);
 }
 
 // Test encode with buffer too small
@@ -423,11 +686,24 @@ int main(int argc, char** argv)
     RUN_TEST(test_identity_response_decode_insufficient_data);
     RUN_TEST(test_identity_response_roundtrip);
 
-    // Configure tests
+    // Configure tests (Analog)
     RUN_TEST(test_configure_encode);
     RUN_TEST(test_configure_decode);
     RUN_TEST(test_configure_decode_insufficient_data);
     RUN_TEST(test_configure_roundtrip);
+
+    // Configure tests (Button)
+    RUN_TEST(test_configure_button_encode);
+    RUN_TEST(test_configure_button_decode);
+    RUN_TEST(test_configure_button_roundtrip);
+
+    // Configure tests (Matrix)
+    RUN_TEST(test_configure_matrix_encode);
+    RUN_TEST(test_configure_matrix_decode);
+    RUN_TEST(test_configure_matrix_roundtrip);
+    RUN_TEST(test_configure_matrix_decode_insufficient_data);
+    RUN_TEST(test_configure_matrix_decode_too_many_pins);
+    RUN_TEST(test_configure_decode_unknown_type);
 
     // ConfigurationStored tests
     RUN_TEST(test_configuration_stored_encode);
@@ -443,6 +719,8 @@ int main(int argc, char** argv)
     RUN_TEST(test_message_decode_identity_request);
     RUN_TEST(test_message_decode_identity_response);
     RUN_TEST(test_message_decode_configure);
+    RUN_TEST(test_message_decode_configure_button);
+    RUN_TEST(test_message_decode_configure_matrix);
     RUN_TEST(test_message_decode_configuration_stored);
     RUN_TEST(test_message_decode_configuration_error);
     RUN_TEST(test_message_decode_invalid_type);

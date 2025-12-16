@@ -47,12 +47,12 @@ void tearDown()
 void test_store_writes_version()
 {
     ConfigManager::InputConfig inputs[2];
-    inputs[0].input_type = 0; // Analog
-    inputs[0].pin = 14;
-    inputs[0].sensitivity = 5;
-    inputs[1].input_type = 0; // Analog
-    inputs[1].pin = 15;
-    inputs[1].sensitivity = 8;
+    inputs[0].input_type = Protocol::INPUT_TYPE_ANALOG;
+    inputs[0].analog.pin = 14;
+    inputs[0].analog.sensitivity = 5;
+    inputs[1].input_type = Protocol::INPUT_TYPE_ANALOG;
+    inputs[1].analog.pin = 15;
+    inputs[1].analog.sensitivity = 8;
 
     uint32_t config_id = 12345;
 
@@ -84,9 +84,9 @@ void test_load_succeeds_with_matching_version()
 {
     // Store a valid configuration
     ConfigManager::InputConfig inputs[1];
-    inputs[0].input_type = 0;
-    inputs[0].pin = 14;
-    inputs[0].sensitivity = 5;
+    inputs[0].input_type = Protocol::INPUT_TYPE_ANALOG;
+    inputs[0].analog.pin = 14;
+    inputs[0].analog.sensitivity = 5;
 
     uint32_t config_id = 54321;
     ConfigManager::storeToEEPROM(config_id, inputs, 1);
@@ -102,9 +102,9 @@ void test_load_succeeds_with_matching_version()
     uint8_t num_inputs = 0;
     const ConfigManager::InputConfig* loaded = ConfigManager::getCurrentConfig(num_inputs);
     TEST_ASSERT_EQUAL_UINT8(1, num_inputs);
-    TEST_ASSERT_EQUAL_UINT8(0, loaded[0].input_type);
-    TEST_ASSERT_EQUAL_UINT8(14, loaded[0].pin);
-    TEST_ASSERT_EQUAL_UINT8(5, loaded[0].sensitivity);
+    TEST_ASSERT_EQUAL_UINT8(Protocol::INPUT_TYPE_ANALOG, loaded[0].input_type);
+    TEST_ASSERT_EQUAL_UINT8(14, loaded[0].analog.pin);
+    TEST_ASSERT_EQUAL_UINT8(5, loaded[0].analog.sensitivity);
 }
 
 // Test that loadFromEEPROM fails and clears EEPROM with mismatched version

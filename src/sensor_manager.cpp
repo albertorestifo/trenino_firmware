@@ -48,7 +48,19 @@ bool applyConfiguration(const ConfigManager::InputConfig* inputs, uint8_t input_
         // Create sensor based on input type
         switch (config.input_type) {
         case Protocol::INPUT_TYPE_ANALOG:
-            sensor = new Sensor::AnalogSensor(config.pin, config.sensitivity);
+            sensor = new Sensor::AnalogSensor(config.analog.pin, config.analog.sensitivity);
+            break;
+
+        case Protocol::INPUT_TYPE_BUTTON:
+            sensor = new Sensor::ButtonSensor(config.button.pin, config.button.debounce);
+            break;
+
+        case Protocol::INPUT_TYPE_MATRIX:
+            sensor = new Sensor::MatrixSensor(
+                config.matrix.num_row_pins,
+                config.matrix.num_col_pins,
+                config.matrix.pins, // row pins
+                config.matrix.pins + config.matrix.num_row_pins); // col pins
             break;
 
         default:

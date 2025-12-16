@@ -124,9 +124,27 @@ bool IdentityResponse::decode(const uint8_t* buffer, size_t length)
 
 size_t Configure::encode(uint8_t* buffer, size_t buffer_size) const
 {
-    constexpr size_t REQUIRED_SIZE = 10; // 1 type + 4 config_id + 1 total_parts + 1 part_number + 1 input_type + 1 pin + 1 sensitivity
+    // Common header: 1 type + 4 config_id + 1 total_parts + 1 part_number + 1 input_type = 8 bytes
+    constexpr size_t HEADER_SIZE = 8;
 
-    if (buffer_size < REQUIRED_SIZE) {
+    // Calculate required size based on input_type
+    size_t payload_size = 0;
+    switch (input_type) {
+    case INPUT_TYPE_ANALOG:
+        payload_size = 2; // pin + sensitivity
+        break;
+    case INPUT_TYPE_BUTTON:
+        payload_size = 2; // pin + debounce
+        break;
+    case INPUT_TYPE_MATRIX:
+        payload_size = 2 + matrix.num_row_pins + matrix.num_col_pins; // counts + pins
+        break;
+    default:
+        return 0; // Unknown input type
+    }
+
+    size_t required_size = HEADER_SIZE + payload_size;
+    if (buffer_size < required_size) {
         return 0; // Buffer too small
     }
 
@@ -150,21 +168,37 @@ size_t Configure::encode(uint8_t* buffer, size_t buffer_size) const
     // input_type (u8)
     buffer[offset++] = input_type;
 
-    // pin (u8)
-    buffer[offset++] = pin;
+    // Type-specific payload
+    switch (input_type) {
+    case INPUT_TYPE_ANALOG:
+        buffer[offset++] = analog.pin;
+        buffer[offset++] = analog.sensitivity;
+        break;
 
-    // sensitivity (u8)
-    buffer[offset++] = sensitivity;
+    case INPUT_TYPE_BUTTON:
+        buffer[offset++] = button.pin;
+        buffer[offset++] = button.debounce;
+        break;
+
+    case INPUT_TYPE_MATRIX:
+        buffer[offset++] = matrix.num_row_pins;
+        buffer[offset++] = matrix.num_col_pins;
+        for (uint8_t i = 0; i < matrix.num_row_pins + matrix.num_col_pins; i++) {
+            buffer[offset++] = matrix.pins[i];
+        }
+        break;
+    }
 
     return offset;
 }
 
 bool Configure::decode(const uint8_t* buffer, size_t length)
 {
-    constexpr size_t REQUIRED_SIZE = 10;
+    // Minimum size: header (8 bytes)
+    constexpr size_t HEADER_SIZE = 8;
 
-    if (length < REQUIRED_SIZE) {
-        return false; // Not enough data
+    if (length < HEADER_SIZE) {
+        return false; // Not enough data for header
     }
 
     if (buffer[0] != MESSAGE_TYPE_CONFIGURE) {
@@ -186,11 +220,47 @@ bool Configure::decode(const uint8_t* buffer, size_t length)
     // input_type (u8)
     input_type = buffer[offset++];
 
-    // pin (u8)
-    pin = buffer[offset++];
+    // Type-specific payload
+    switch (input_type) {
+    case INPUT_TYPE_ANALOG:
+        if (length < HEADER_SIZE + 2) {
+            return false; // Not enough data for analog payload
+        }
+        analog.pin = buffer[offset++];
+        analog.sensitivity = buffer[offset++];
+        break;
 
-    // sensitivity (u8)
-    sensitivity = buffer[offset++];
+    case INPUT_TYPE_BUTTON:
+        if (length < HEADER_SIZE + 2) {
+            return false; // Not enough data for button payload
+        }
+        button.pin = buffer[offset++];
+        button.debounce = buffer[offset++];
+        break;
+
+    case INPUT_TYPE_MATRIX: {
+        if (length < HEADER_SIZE + 2) {
+            return false; // Not enough data for matrix header
+        }
+        matrix.num_row_pins = buffer[offset++];
+        matrix.num_col_pins = buffer[offset++];
+
+        uint8_t total_pins = matrix.num_row_pins + matrix.num_col_pins;
+        if (total_pins > MAX_MATRIX_PINS) {
+            return false; // Too many pins
+        }
+        if (length < HEADER_SIZE + 2 + total_pins) {
+            return false; // Not enough data for matrix pins
+        }
+        for (uint8_t i = 0; i < total_pins; i++) {
+            matrix.pins[i] = buffer[offset++];
+        }
+        break;
+    }
+
+    default:
+        return false; // Unknown input type
+    }
 
     return true;
 }

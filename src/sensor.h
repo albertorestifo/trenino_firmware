@@ -6,7 +6,9 @@ namespace Sensor {
 
 // Input types (matches protocol INPUT_TYPE_* constants)
 enum class InputType : uint8_t {
-    Analog = 0
+    Analog = 0,
+    Button = 1,
+    Matrix = 2
 };
 
 // Sensor reading result

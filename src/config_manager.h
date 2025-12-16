@@ -23,17 +23,39 @@ constexpr int EEPROM_INPUTS_ADDR = 10; // Start of input configurations
 // Magic number to validate EEPROM data
 constexpr uint32_t EEPROM_MAGIC = 0xC0FF1234;
 
-// Single input configuration
+// Maximum matrix pins (row + col pins)
+constexpr uint8_t MAX_MATRIX_PINS = Protocol::MAX_MATRIX_PINS;
+
+// Single input configuration - union-based to match protocol
 struct InputConfig {
     uint8_t input_type;
-    uint8_t pin;
-    uint8_t sensitivity;
+
+    union {
+        // INPUT_TYPE_ANALOG
+        struct {
+            uint8_t pin;
+            uint8_t sensitivity;
+        } analog;
+
+        // INPUT_TYPE_BUTTON
+        struct {
+            uint8_t pin;
+            uint8_t debounce;
+        } button;
+
+        // INPUT_TYPE_MATRIX
+        struct {
+            uint8_t num_row_pins;
+            uint8_t num_col_pins;
+            uint8_t pins[MAX_MATRIX_PINS]; // row_pins followed by col_pins
+        } matrix;
+    };
 
     InputConfig()
-        : input_type(0)
-        , pin(0)
-        , sensitivity(0)
+        : input_type(Protocol::INPUT_TYPE_ANALOG)
     {
+        analog.pin = 0;
+        analog.sensitivity = 0;
     }
 };
 
@@ -76,21 +98,42 @@ public:
         }
     }
 
-    // Add a configuration part
-    bool addPart(uint8_t part_number, uint8_t input_type, uint8_t pin, uint8_t sensitivity)
+    // Add a configuration part from a Configure message
+    bool addPart(const Protocol::Configure& cfg)
     {
-        if (!active || part_number >= total_parts || part_number >= MAX_INPUTS) {
+        if (!active || cfg.part_number >= total_parts || cfg.part_number >= MAX_INPUTS) {
             return false;
         }
 
-        // Store the input configuration
-        inputs[part_number].input_type = input_type;
-        inputs[part_number].pin = pin;
-        inputs[part_number].sensitivity = sensitivity;
+        // Store the input configuration based on type
+        inputs[cfg.part_number].input_type = cfg.input_type;
+
+        switch (cfg.input_type) {
+        case Protocol::INPUT_TYPE_ANALOG:
+            inputs[cfg.part_number].analog.pin = cfg.analog.pin;
+            inputs[cfg.part_number].analog.sensitivity = cfg.analog.sensitivity;
+            break;
+
+        case Protocol::INPUT_TYPE_BUTTON:
+            inputs[cfg.part_number].button.pin = cfg.button.pin;
+            inputs[cfg.part_number].button.debounce = cfg.button.debounce;
+            break;
+
+        case Protocol::INPUT_TYPE_MATRIX:
+            inputs[cfg.part_number].matrix.num_row_pins = cfg.matrix.num_row_pins;
+            inputs[cfg.part_number].matrix.num_col_pins = cfg.matrix.num_col_pins;
+            for (uint8_t i = 0; i < cfg.matrix.num_row_pins + cfg.matrix.num_col_pins; i++) {
+                inputs[cfg.part_number].matrix.pins[i] = cfg.matrix.pins[i];
+            }
+            break;
+
+        default:
+            return false; // Unknown input type
+        }
 
         // Mark this part as received
-        if (!parts_received[part_number]) {
-            parts_received[part_number] = true;
+        if (!parts_received[cfg.part_number]) {
+            parts_received[cfg.part_number] = true;
             received_parts++;
         }
 
