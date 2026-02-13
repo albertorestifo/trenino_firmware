@@ -1,4 +1,6 @@
 #include "sensor_manager.h"
+#include "bldc_lever.h"
+#include "bldc_manager.h"
 
 namespace SensorManager {
 
@@ -63,6 +65,10 @@ bool applyConfiguration(const ConfigManager::InputConfig* inputs, uint8_t input_
                 config.matrix.pins + config.matrix.num_row_pins); // col pins
             break;
 
+        case Protocol::INPUT_TYPE_BLDC_LEVER:
+            sensor = new Sensor::BLDCLever(config.bldc.board_profile);
+            break;
+
         default:
             // Unknown input type - skip
             continue;
@@ -70,6 +76,19 @@ bool applyConfiguration(const ConfigManager::InputConfig* inputs, uint8_t input_
 
         if (sensor != nullptr) {
             sensor->begin();
+
+            // Special handling for BLDC levers - run calibration and register
+            if (config.input_type == Protocol::INPUT_TYPE_BLDC_LEVER) {
+                Sensor::BLDCLever* bldc = static_cast<Sensor::BLDCLever*>(sensor);
+                if (bldc->runCalibration()) {
+                    // Register with BLDCManager
+                    BLDCManager::registerLever(bldc);
+                } else {
+                    // Calibration failed - still add sensor but it won't be active
+                    // Error will be sent by message handler
+                }
+            }
+
             g_sensors[g_sensor_count++] = sensor;
         }
     }

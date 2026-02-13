@@ -61,6 +61,11 @@ struct InputConfig {
             uint8_t num_col_pins;
             uint8_t pins[MAX_MATRIX_PINS]; // row_pins followed by col_pins
         } matrix;
+
+        // INPUT_TYPE_BLDC_LEVER
+        struct {
+            uint8_t board_profile;
+        } bldc;
     };
 
     InputConfig()
@@ -137,6 +142,10 @@ public:
             for (uint8_t i = 0; i < cfg.matrix.num_row_pins + cfg.matrix.num_col_pins; i++) {
                 inputs[cfg.part_number].matrix.pins[i] = cfg.matrix.pins[i];
             }
+            break;
+
+        case Protocol::INPUT_TYPE_BLDC_LEVER:
+            inputs[cfg.part_number].bldc.board_profile = cfg.bldc_lever.board_profile;
             break;
 
         default:
