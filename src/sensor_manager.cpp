@@ -1,6 +1,7 @@
 #include "sensor_manager.h"
 #include "bldc_lever.h"
 #include "bldc_manager.h"
+#include "message_handler.h"
 
 namespace SensorManager {
 
@@ -84,8 +85,10 @@ bool applyConfiguration(const ConfigManager::InputConfig* inputs, uint8_t input_
                     // Register with BLDCManager
                     BLDCManager::registerLever(bldc);
                 } else {
-                    // Calibration failed - still add sensor but it won't be active
-                    // Error will be sent by message handler
+                    // Calibration failed - send error
+                    MessageHandler::sendCalibrationError(
+                        bldc->getPin(),
+                        static_cast<uint8_t>(bldc->getLastCalibrationError()));
                 }
             }
 

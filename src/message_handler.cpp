@@ -167,4 +167,21 @@ void sendHeartbeat()
     }
 }
 
+void sendCalibrationError(uint8_t pin, uint8_t error_code)
+{
+    Protocol::CalibrationError msg;
+    msg.pin = pin;
+    msg.error_code = error_code;
+
+    sendMessage(msg);
+}
+
+void sendEncoderError(uint8_t pin)
+{
+    Protocol::EncoderError msg;
+    msg.pin = pin;
+
+    sendMessage(msg);
+}
+
 } // namespace MessageHandler
