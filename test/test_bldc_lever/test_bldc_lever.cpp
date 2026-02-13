@@ -53,6 +53,36 @@ void test_calibration_success() {
     TEST_ASSERT_TRUE(lever.isCalibrated());
 }
 
+void test_load_profile() {
+    BLDCLever lever(BoardProfiles::SIMPLEFOC_SHIELD_V2_MEGA);
+    lever.begin();
+    lever.runCalibration();
+
+    BLDC::DetentConfig detents[3];
+    detents[0].position_percent = 0;
+    detents[0].engagement_strength = 100;
+    detents[0].hold_strength = 150;
+    detents[0].exit_strength = 100;
+    detents[0].spring_back_target = 255;  // No spring-back
+
+    detents[1].position_percent = 50;
+    detents[1].engagement_strength = 100;
+    detents[1].hold_strength = 150;
+    detents[1].exit_strength = 100;
+    detents[1].spring_back_target = 255;
+
+    detents[2].position_percent = 100;
+    detents[2].engagement_strength = 100;
+    detents[2].hold_strength = 150;
+    detents[2].exit_strength = 100;
+    detents[2].spring_back_target = 255;
+
+    bool result = lever.loadProfile(detents, 3, nullptr, 0);
+
+    TEST_ASSERT_TRUE(result);
+    TEST_ASSERT_TRUE(lever.isProfileActive());
+}
+
 void setUp() {}
 void tearDown() {}
 
@@ -60,5 +90,6 @@ int main() {
     UNITY_BEGIN();
     RUN_TEST(test_bldc_lever_construction);
     RUN_TEST(test_calibration_success);
+    RUN_TEST(test_load_profile);
     return UNITY_END();
 }

@@ -191,6 +191,80 @@ bool BLDCLever::runCalibration() {
     return true;
 }
 
+bool BLDCLever::loadProfile(
+    const BLDC::DetentConfig* detents,
+    uint8_t num_detents,
+    const BLDC::LinearRangeConfig* ranges,
+    uint8_t num_ranges
+) {
+    if (!calibrated_) {
+        return false;  // Must calibrate before loading profile
+    }
+
+    if (detents == nullptr || num_detents == 0) {
+        return false;  // Need at least one detent
+    }
+
+    // Deactivate current profile if any
+    deactivateProfile();
+
+    // Clean up old profile data
+    if (detents_ != nullptr) {
+        delete[] detents_;
+        detents_ = nullptr;
+    }
+    if (linear_ranges_ != nullptr) {
+        delete[] linear_ranges_;
+        linear_ranges_ = nullptr;
+    }
+
+    // Allocate and copy detents
+    detents_ = new BLDC::DetentConfig[num_detents];
+    for (uint8_t i = 0; i < num_detents; i++) {
+        detents_[i] = detents[i];
+    }
+    num_detents_ = num_detents;
+
+    // Allocate and copy ranges if provided
+    if (ranges != nullptr && num_ranges > 0) {
+        linear_ranges_ = new BLDC::LinearRangeConfig[num_ranges];
+        for (uint8_t i = 0; i < num_ranges; i++) {
+            linear_ranges_[i] = ranges[i];
+        }
+        num_linear_ranges_ = num_ranges;
+    } else {
+        linear_ranges_ = nullptr;
+        num_linear_ranges_ = 0;
+    }
+
+    // Validate profile
+    if (!validateProfile()) {
+        // Clean up on validation failure
+        delete[] detents_;
+        detents_ = nullptr;
+        num_detents_ = 0;
+        if (linear_ranges_ != nullptr) {
+            delete[] linear_ranges_;
+            linear_ranges_ = nullptr;
+        }
+        num_linear_ranges_ = 0;
+        return false;
+    }
+
+    // Initialize state
+    current_detent_index_ = 0;
+    last_reported_detent_ = 0;
+    detent_changed_ = false;
+
+    // Enable profile and motor
+    profile_active_ = true;
+    if (motor_ != nullptr) {
+        motor_->enable();
+    }
+
+    return true;
+}
+
 // Private helper methods (stubs for now - will be implemented in later tasks)
 
 void BLDCLever::updateDetentState() {
@@ -236,8 +310,40 @@ bool BLDCLever::isInLinearRange(uint8_t& start_detent, uint8_t& end_detent) cons
 }
 
 bool BLDCLever::validateProfile() const {
-    // Stub: Will be implemented in Task 12
-    // This will validate detents and ranges configuration
+    if (detents_ == nullptr || num_detents_ == 0) {
+        return false;
+    }
+
+    // Validate each detent
+    for (uint8_t i = 0; i < num_detents_; i++) {
+        // Position must be 0-100%
+        if (detents_[i].position_percent > 100) {
+            return false;
+        }
+
+        // If spring-back is specified, target must be valid detent index
+        if (detents_[i].spring_back_target != 255 &&
+            detents_[i].spring_back_target >= num_detents_) {
+            return false;
+        }
+    }
+
+    // Validate linear ranges if present
+    if (linear_ranges_ != nullptr && num_linear_ranges_ > 0) {
+        for (uint8_t i = 0; i < num_linear_ranges_; i++) {
+            // Range indices must be valid
+            if (linear_ranges_[i].start_detent_index >= num_detents_ ||
+                linear_ranges_[i].end_detent_index >= num_detents_) {
+                return false;
+            }
+
+            // Start must be different from end
+            if (linear_ranges_[i].start_detent_index == linear_ranges_[i].end_detent_index) {
+                return false;
+            }
+        }
+    }
+
     return true;
 }
 
