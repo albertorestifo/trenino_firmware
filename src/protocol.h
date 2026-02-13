@@ -14,11 +14,17 @@ constexpr uint8_t MESSAGE_TYPE_CONFIGURATION_ERROR = 4;
 constexpr uint8_t MESSAGE_TYPE_INPUT_VALUE = 5;
 constexpr uint8_t MESSAGE_TYPE_HEARTBEAT = 6;
 constexpr uint8_t MESSAGE_TYPE_SET_OUTPUT = 7;
+constexpr uint8_t MESSAGE_TYPE_RETRY_CALIBRATION = 8;
+constexpr uint8_t MESSAGE_TYPE_CALIBRATION_ERROR = 9;
+constexpr uint8_t MESSAGE_TYPE_ENCODER_ERROR = 10;
+constexpr uint8_t MESSAGE_TYPE_LOAD_BLDC_PROFILE = 11;
+constexpr uint8_t MESSAGE_TYPE_DEACTIVATE_BLDC_PROFILE = 12;
 
 // Input Type constants for Configure message
 constexpr uint8_t INPUT_TYPE_ANALOG = 0;
 constexpr uint8_t INPUT_TYPE_BUTTON = 1;
 constexpr uint8_t INPUT_TYPE_MATRIX = 2;
+constexpr uint8_t INPUT_TYPE_BLDC_LEVER = 3;
 
 // Maximum number of pins for matrix configuration (row_pins + col_pins)
 constexpr uint8_t MAX_MATRIX_PINS = 16;
@@ -80,6 +86,11 @@ struct Configure {
             uint8_t num_col_pins;
             uint8_t pins[MAX_MATRIX_PINS]; // row_pins followed by col_pins
         } matrix;
+
+        // INPUT_TYPE_BLDC_LEVER
+        struct {
+            uint8_t board_profile;
+        } bldc_lever;
     };
 
     Configure()
@@ -154,6 +165,65 @@ struct SetOutput {
     bool decode(const uint8_t* buffer, size_t length);
 };
 
+// RetryCalibration message - sent by host to retry calibration on BLDC lever
+struct RetryCalibration {
+    uint8_t pin;
+
+    // Encode to buffer (returns number of bytes written, 0 on error)
+    size_t encode(uint8_t* buffer, size_t buffer_size) const;
+
+    // Decode from buffer (returns true on success)
+    bool decode(const uint8_t* buffer, size_t length);
+};
+
+// CalibrationError message - sent by device when BLDC calibration fails
+struct CalibrationError {
+    uint8_t pin;
+    uint8_t error_code; // 0=timeout, 1=range_too_small, 2=encoder_error
+
+    // Encode to buffer (returns number of bytes written, 0 on error)
+    size_t encode(uint8_t* buffer, size_t buffer_size) const;
+
+    // Decode from buffer (returns true on success)
+    bool decode(const uint8_t* buffer, size_t length);
+};
+
+// EncoderError message - sent by device when encoder error is detected
+struct EncoderError {
+    uint8_t pin;
+
+    // Encode to buffer (returns number of bytes written, 0 on error)
+    size_t encode(uint8_t* buffer, size_t buffer_size) const;
+
+    // Decode from buffer (returns true on success)
+    bool decode(const uint8_t* buffer, size_t length);
+};
+
+// LoadBLDCProfile message - sent by host to load haptic profile for BLDC lever
+struct LoadBLDCProfile {
+    uint8_t pin;
+    uint8_t num_detents;
+    uint8_t num_linear_ranges;
+    // Followed by detent data and range data in subsequent bytes
+
+    // Encode to buffer (returns number of bytes written, 0 on error)
+    size_t encode(uint8_t* buffer, size_t buffer_size) const;
+
+    // Decode from buffer (returns true on success)
+    bool decode(const uint8_t* buffer, size_t length);
+};
+
+// DeactivateBLDCProfile message - sent by host to deactivate BLDC profile
+struct DeactivateBLDCProfile {
+    uint8_t pin;
+
+    // Encode to buffer (returns number of bytes written, 0 on error)
+    size_t encode(uint8_t* buffer, size_t buffer_size) const;
+
+    // Decode from buffer (returns true on success)
+    bool decode(const uint8_t* buffer, size_t length);
+};
+
 // Generic message union for decoding
 struct Message {
     uint8_t message_type;
@@ -167,6 +237,11 @@ struct Message {
         InputValue input_value;
         Heartbeat heartbeat;
         SetOutput set_output;
+        RetryCalibration retry_calibration;
+        CalibrationError calibration_error;
+        EncoderError encoder_error;
+        LoadBLDCProfile load_bldc_profile;
+        DeactivateBLDCProfile deactivate_bldc_profile;
     };
 
     Message()
@@ -202,6 +277,21 @@ struct Message {
 
     // Check if this is a SetOutput message
     bool isSetOutput() const { return message_type == MESSAGE_TYPE_SET_OUTPUT; }
+
+    // Check if this is a RetryCalibration message
+    bool isRetryCalibration() const { return message_type == MESSAGE_TYPE_RETRY_CALIBRATION; }
+
+    // Check if this is a CalibrationError message
+    bool isCalibrationError() const { return message_type == MESSAGE_TYPE_CALIBRATION_ERROR; }
+
+    // Check if this is an EncoderError message
+    bool isEncoderError() const { return message_type == MESSAGE_TYPE_ENCODER_ERROR; }
+
+    // Check if this is a LoadBLDCProfile message
+    bool isLoadBLDCProfile() const { return message_type == MESSAGE_TYPE_LOAD_BLDC_PROFILE; }
+
+    // Check if this is a DeactivateBLDCProfile message
+    bool isDeactivateBLDCProfile() const { return message_type == MESSAGE_TYPE_DEACTIVATE_BLDC_PROFILE; }
 };
 
 } // namespace Protocol

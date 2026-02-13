@@ -139,6 +139,9 @@ size_t Configure::encode(uint8_t* buffer, size_t buffer_size) const
     case INPUT_TYPE_MATRIX:
         payload_size = 2 + matrix.num_row_pins + matrix.num_col_pins; // counts + pins
         break;
+    case INPUT_TYPE_BLDC_LEVER:
+        payload_size = 1; // board_profile
+        break;
     default:
         return 0; // Unknown input type
     }
@@ -186,6 +189,10 @@ size_t Configure::encode(uint8_t* buffer, size_t buffer_size) const
         for (uint8_t i = 0; i < matrix.num_row_pins + matrix.num_col_pins; i++) {
             buffer[offset++] = matrix.pins[i];
         }
+        break;
+
+    case INPUT_TYPE_BLDC_LEVER:
+        buffer[offset++] = bldc_lever.board_profile;
         break;
     }
 
@@ -257,6 +264,13 @@ bool Configure::decode(const uint8_t* buffer, size_t length)
         }
         break;
     }
+
+    case INPUT_TYPE_BLDC_LEVER:
+        if (length < HEADER_SIZE + 1) {
+            return false; // Not enough data for BLDC lever payload
+        }
+        bldc_lever.board_profile = buffer[offset++];
+        break;
 
     default:
         return false; // Unknown input type
@@ -478,6 +492,229 @@ bool SetOutput::decode(const uint8_t* buffer, size_t length)
     return true;
 }
 
+// RetryCalibration implementation
+
+size_t RetryCalibration::encode(uint8_t* buffer, size_t buffer_size) const
+{
+    constexpr size_t REQUIRED_SIZE = 2; // 1 type + 1 pin
+
+    if (buffer_size < REQUIRED_SIZE) {
+        return 0; // Buffer too small
+    }
+
+    size_t offset = 0;
+
+    // Message type (u8)
+    buffer[offset++] = MESSAGE_TYPE_RETRY_CALIBRATION;
+
+    // pin (u8)
+    buffer[offset++] = pin;
+
+    return offset;
+}
+
+bool RetryCalibration::decode(const uint8_t* buffer, size_t length)
+{
+    constexpr size_t REQUIRED_SIZE = 2;
+
+    if (length < REQUIRED_SIZE) {
+        return false; // Not enough data
+    }
+
+    if (buffer[0] != MESSAGE_TYPE_RETRY_CALIBRATION) {
+        return false; // Wrong message type
+    }
+
+    size_t offset = 1;
+
+    // pin (u8)
+    pin = buffer[offset++];
+
+    return true;
+}
+
+// CalibrationError implementation
+
+size_t CalibrationError::encode(uint8_t* buffer, size_t buffer_size) const
+{
+    constexpr size_t REQUIRED_SIZE = 3; // 1 type + 1 pin + 1 error_code
+
+    if (buffer_size < REQUIRED_SIZE) {
+        return 0; // Buffer too small
+    }
+
+    size_t offset = 0;
+
+    // Message type (u8)
+    buffer[offset++] = MESSAGE_TYPE_CALIBRATION_ERROR;
+
+    // pin (u8)
+    buffer[offset++] = pin;
+
+    // error_code (u8)
+    buffer[offset++] = error_code;
+
+    return offset;
+}
+
+bool CalibrationError::decode(const uint8_t* buffer, size_t length)
+{
+    constexpr size_t REQUIRED_SIZE = 3;
+
+    if (length < REQUIRED_SIZE) {
+        return false; // Not enough data
+    }
+
+    if (buffer[0] != MESSAGE_TYPE_CALIBRATION_ERROR) {
+        return false; // Wrong message type
+    }
+
+    size_t offset = 1;
+
+    // pin (u8)
+    pin = buffer[offset++];
+
+    // error_code (u8)
+    error_code = buffer[offset++];
+
+    return true;
+}
+
+// EncoderError implementation
+
+size_t EncoderError::encode(uint8_t* buffer, size_t buffer_size) const
+{
+    constexpr size_t REQUIRED_SIZE = 2; // 1 type + 1 pin
+
+    if (buffer_size < REQUIRED_SIZE) {
+        return 0; // Buffer too small
+    }
+
+    size_t offset = 0;
+
+    // Message type (u8)
+    buffer[offset++] = MESSAGE_TYPE_ENCODER_ERROR;
+
+    // pin (u8)
+    buffer[offset++] = pin;
+
+    return offset;
+}
+
+bool EncoderError::decode(const uint8_t* buffer, size_t length)
+{
+    constexpr size_t REQUIRED_SIZE = 2;
+
+    if (length < REQUIRED_SIZE) {
+        return false; // Not enough data
+    }
+
+    if (buffer[0] != MESSAGE_TYPE_ENCODER_ERROR) {
+        return false; // Wrong message type
+    }
+
+    size_t offset = 1;
+
+    // pin (u8)
+    pin = buffer[offset++];
+
+    return true;
+}
+
+// LoadBLDCProfile implementation
+
+size_t LoadBLDCProfile::encode(uint8_t* buffer, size_t buffer_size) const
+{
+    constexpr size_t REQUIRED_SIZE = 4; // 1 type + 1 pin + 1 num_detents + 1 num_linear_ranges
+
+    if (buffer_size < REQUIRED_SIZE) {
+        return 0; // Buffer too small
+    }
+
+    size_t offset = 0;
+
+    // Message type (u8)
+    buffer[offset++] = MESSAGE_TYPE_LOAD_BLDC_PROFILE;
+
+    // pin (u8)
+    buffer[offset++] = pin;
+
+    // num_detents (u8)
+    buffer[offset++] = num_detents;
+
+    // num_linear_ranges (u8)
+    buffer[offset++] = num_linear_ranges;
+
+    return offset;
+}
+
+bool LoadBLDCProfile::decode(const uint8_t* buffer, size_t length)
+{
+    constexpr size_t REQUIRED_SIZE = 4;
+
+    if (length < REQUIRED_SIZE) {
+        return false; // Not enough data
+    }
+
+    if (buffer[0] != MESSAGE_TYPE_LOAD_BLDC_PROFILE) {
+        return false; // Wrong message type
+    }
+
+    size_t offset = 1;
+
+    // pin (u8)
+    pin = buffer[offset++];
+
+    // num_detents (u8)
+    num_detents = buffer[offset++];
+
+    // num_linear_ranges (u8)
+    num_linear_ranges = buffer[offset++];
+
+    return true;
+}
+
+// DeactivateBLDCProfile implementation
+
+size_t DeactivateBLDCProfile::encode(uint8_t* buffer, size_t buffer_size) const
+{
+    constexpr size_t REQUIRED_SIZE = 2; // 1 type + 1 pin
+
+    if (buffer_size < REQUIRED_SIZE) {
+        return 0; // Buffer too small
+    }
+
+    size_t offset = 0;
+
+    // Message type (u8)
+    buffer[offset++] = MESSAGE_TYPE_DEACTIVATE_BLDC_PROFILE;
+
+    // pin (u8)
+    buffer[offset++] = pin;
+
+    return offset;
+}
+
+bool DeactivateBLDCProfile::decode(const uint8_t* buffer, size_t length)
+{
+    constexpr size_t REQUIRED_SIZE = 2;
+
+    if (length < REQUIRED_SIZE) {
+        return false; // Not enough data
+    }
+
+    if (buffer[0] != MESSAGE_TYPE_DEACTIVATE_BLDC_PROFILE) {
+        return false; // Wrong message type
+    }
+
+    size_t offset = 1;
+
+    // pin (u8)
+    pin = buffer[offset++];
+
+    return true;
+}
+
 // Message implementation (for generic decoding)
 
 bool Message::decode(const uint8_t* buffer, size_t length)
@@ -512,6 +749,21 @@ bool Message::decode(const uint8_t* buffer, size_t length)
 
     case MESSAGE_TYPE_SET_OUTPUT:
         return set_output.decode(buffer, length);
+
+    case MESSAGE_TYPE_RETRY_CALIBRATION:
+        return retry_calibration.decode(buffer, length);
+
+    case MESSAGE_TYPE_CALIBRATION_ERROR:
+        return calibration_error.decode(buffer, length);
+
+    case MESSAGE_TYPE_ENCODER_ERROR:
+        return encoder_error.decode(buffer, length);
+
+    case MESSAGE_TYPE_LOAD_BLDC_PROFILE:
+        return load_bldc_profile.decode(buffer, length);
+
+    case MESSAGE_TYPE_DEACTIVATE_BLDC_PROFILE:
+        return deactivate_bldc_profile.decode(buffer, length);
 
     default:
         return false; // Unknown message type
