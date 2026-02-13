@@ -252,7 +252,7 @@ bool BLDCLever::loadProfile(
     }
 
     // Initialize state
-    current_detent_index_ = 0;
+    current_detent_index_ = 255;  // Invalid index to force initial detection
     last_reported_detent_ = 0;
     detent_changed_ = false;
 
@@ -268,13 +268,32 @@ bool BLDCLever::loadProfile(
 // Private helper methods (stubs for now - will be implemented in later tasks)
 
 void BLDCLever::updateDetentState() {
-    // Stub: Will be implemented in Task 13
-    // This will:
-    // - Read current encoder position
-    // - Find closest detent
-    // - Check if in linear range
-    // - Update current_detent_index_
-    // - Set detent_changed_ flag if needed
+    if (encoder_ == nullptr || !profile_active_) {
+        return;
+    }
+
+    // Read current encoder position
+    // In real SimpleFOC, this would be encoder_->getAngle() * counts_per_rev
+    // For our mock, we need to read the raw position
+    #ifdef UNIT_TEST
+    current_encoder_position_ = static_cast<uint16_t>(encoder_->getPosition());
+    #else
+    // Real hardware: convert angle to position within calibrated range
+    float angle = encoder_->getAngle();
+    uint32_t range = max_encoder_position_ - min_encoder_position_;
+    current_encoder_position_ = min_encoder_position_ +
+        static_cast<uint16_t>((angle / 6.28318f) * range);
+    #endif
+
+    // Find closest detent
+    uint8_t closest_detent = findClosestDetent();
+
+    // Check if detent changed
+    if (closest_detent != current_detent_index_) {
+        current_detent_index_ = closest_detent;
+        last_reported_detent_ = closest_detent;
+        detent_changed_ = true;
+    }
 }
 
 float BLDCLever::calculateTargetTorque() {
@@ -298,9 +317,33 @@ uint16_t BLDCLever::percentToEncoderPosition(uint8_t percent) const {
 }
 
 uint8_t BLDCLever::findClosestDetent() const {
-    // Stub: Will be implemented in Task 13
-    // This will find the detent closest to current_encoder_position_
-    return 0;
+    if (detents_ == nullptr || num_detents_ == 0) {
+        return 0;
+    }
+
+    // Linear search for closest detent
+    uint8_t closest_index = 0;
+    uint32_t min_distance = 0xFFFFFFFF;
+
+    for (uint8_t i = 0; i < num_detents_; i++) {
+        // Convert detent position percent to encoder position
+        uint16_t detent_pos = percentToEncoderPosition(detents_[i].position_percent);
+
+        // Calculate distance (handle wraparound)
+        uint32_t distance;
+        if (current_encoder_position_ >= detent_pos) {
+            distance = current_encoder_position_ - detent_pos;
+        } else {
+            distance = detent_pos - current_encoder_position_;
+        }
+
+        if (distance < min_distance) {
+            min_distance = distance;
+            closest_index = i;
+        }
+    }
+
+    return closest_index;
 }
 
 bool BLDCLever::isInLinearRange(uint8_t& start_detent, uint8_t& end_detent) const {

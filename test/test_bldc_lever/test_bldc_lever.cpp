@@ -83,6 +83,48 @@ void test_load_profile() {
     TEST_ASSERT_TRUE(lever.isProfileActive());
 }
 
+void test_detent_state_tracking() {
+    BLDCLever lever(BoardProfiles::SIMPLEFOC_SHIELD_V2_MEGA);
+    lever.begin();
+    lever.runCalibration();
+
+    // Create 3 detents at 0%, 50%, 100%
+    BLDC::DetentConfig detents[3];
+    detents[0].position_percent = 0;
+    detents[0].engagement_strength = 100;
+    detents[0].hold_strength = 150;
+    detents[0].exit_strength = 100;
+    detents[0].spring_back_target = 255;
+
+    detents[1].position_percent = 50;
+    detents[1].engagement_strength = 100;
+    detents[1].hold_strength = 150;
+    detents[1].exit_strength = 100;
+    detents[1].spring_back_target = 255;
+
+    detents[2].position_percent = 100;
+    detents[2].engagement_strength = 100;
+    detents[2].hold_strength = 150;
+    detents[2].exit_strength = 100;
+    detents[2].spring_back_target = 255;
+
+    lever.loadProfile(detents, 3, nullptr, 0);
+
+    // No reading should be available initially (no detent change yet)
+    Reading reading = lever.getReading();
+    TEST_ASSERT_FALSE(reading.has_value);
+
+    // Trigger motor update to detect initial detent
+    lever.updateMotor();
+
+    // Should now have a reading (initial detent detected)
+    reading = lever.getReading();
+    TEST_ASSERT_TRUE(reading.has_value);
+    TEST_ASSERT_EQUAL(InputType::BLDCLever, reading.type);
+    // Should report detent 0 (closest to position 0)
+    TEST_ASSERT_EQUAL(0, reading.value);
+}
+
 void setUp() {}
 void tearDown() {}
 
@@ -91,5 +133,6 @@ int main() {
     RUN_TEST(test_bldc_lever_construction);
     RUN_TEST(test_calibration_success);
     RUN_TEST(test_load_profile);
+    RUN_TEST(test_detent_state_tracking);
     return UNITY_END();
 }

@@ -13,6 +13,7 @@ public:
     float getAngle() { return angle_; }
     int32_t getFullRotations() { return position_ / 16384; }
     float getMechanicalAngle() { return angle_; }
+    int32_t getPosition() { return position_; }
 
     // Mock control methods
     void setPosition(int32_t pos) { position_ = pos; angle_ = (pos % 16384) / 16384.0f * 6.28318f; }
