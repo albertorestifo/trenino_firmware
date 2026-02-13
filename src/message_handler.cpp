@@ -1,4 +1,6 @@
 #include "message_handler.h"
+#include "bldc_lever.h"
+#include "bldc_manager.h"
 #include "config_manager.h"
 #include "heartbeat.h"
 #include "output_manager.h"
@@ -57,6 +59,18 @@ void onPacketReceived(const uint8_t* buffer, size_t size)
         handleConfigure(msg.configure);
     } else if (msg.isSetOutput()) {
         handleSetOutput(msg.set_output);
+    } else if (msg.isRetryCalibration()) {
+        // Find BLDC lever by pin
+        Sensor::ISensor* sensor = SensorManager::getSensorByPin(msg.retry_calibration.pin);
+        if (sensor != nullptr && sensor->getType() == Sensor::InputType::BLDCLever) {
+            Sensor::BLDCLever* bldc = static_cast<Sensor::BLDCLever*>(sensor);
+            if (bldc->runCalibration()) {
+                sendConfigurationStored(ConfigManager::getCurrentConfigId());
+            } else {
+                sendCalibrationError(msg.retry_calibration.pin,
+                                   static_cast<uint8_t>(bldc->getLastCalibrationError()));
+            }
+        }
     }
 }
 

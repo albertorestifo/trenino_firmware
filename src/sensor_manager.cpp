@@ -134,4 +134,14 @@ uint8_t getSensorCount()
     return g_sensor_count;
 }
 
+Sensor::ISensor* getSensorByPin(uint8_t pin)
+{
+    for (uint8_t i = 0; i < g_sensor_count; i++) {
+        if (g_sensors[i] != nullptr && g_sensors[i]->getPin() == pin) {
+            return g_sensors[i];
+        }
+    }
+    return nullptr;
+}
+
 } // namespace SensorManager

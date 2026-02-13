@@ -30,4 +30,8 @@ bool getNextReading(Sensor::Reading& reading);
 // Get number of active sensors
 uint8_t getSensorCount();
 
+// Get sensor by pin number
+// Returns nullptr if not found
+Sensor::ISensor* getSensorByPin(uint8_t pin);
+
 } // namespace SensorManager
