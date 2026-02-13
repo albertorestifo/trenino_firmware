@@ -1,3 +1,4 @@
+#include "bldc_manager.h"
 #include "config_manager.h"
 #include "message_handler.h"
 #include "output_manager.h"
@@ -20,6 +21,7 @@ void setup()
     // Initialize subsystems
     ConfigManager::init();
     SensorManager::init();
+    BLDCManager::init();
     OutputManager::init();
     MessageHandler::init(&g_packet_serial);
 
@@ -34,13 +36,14 @@ void loop()
     // Update packet serial (processes incoming packets)
     g_packet_serial.update();
 
+    // Update motor control at 1kHz
+    BLDCManager::updateMotorControl();
+
     // Update message handler (handles timeouts, etc.)
     MessageHandler::update();
 
-    // Control scan rate: delay to achieve ~100 Hz scan rate
-    // This makes MIN_GAP_SCANS = 200 equal to ~2 seconds
-    // analogRead() takes ~100us, so we add 10ms delay for ~100 Hz total
-    delay(10);
+    // Control loop rate: delay to achieve ~1 kHz loop rate for motor control
+    delay(1);
 }
 
 // Packet received callback - delegates to message handler
