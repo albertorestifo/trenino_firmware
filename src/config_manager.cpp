@@ -186,6 +186,11 @@ void storeToEEPROM(uint32_t config_id, const InputConfig* inputs, uint8_t num_in
             }
             break;
         }
+
+        case Protocol::INPUT_TYPE_BLDC_LEVER:
+            eeprom_put(addr, inputs[i].bldc.board_profile);
+            addr += sizeof(uint8_t);
+            break;
         }
     }
 
@@ -261,6 +266,11 @@ bool loadFromEEPROM()
             }
             break;
         }
+
+        case Protocol::INPUT_TYPE_BLDC_LEVER:
+            eeprom_get(addr, g_current_inputs[i].bldc.board_profile);
+            addr += sizeof(uint8_t);
+            break;
 
         default:
             return false; // Unknown input type
