@@ -28,6 +28,11 @@ All messages start with a 1-byte message type.
 | InputValue | 5 | Device → Host | Sensor reading |
 | Heartbeat | 6 | Device → Host | Keep-alive |
 | SetOutput | 7 | Host → Device | Control an output pin |
+| RetryCalibration | 8 | Host → Device | Retry BLDC calibration |
+| CalibrationError | 9 | Device → Host | BLDC calibration failed |
+| EncoderError | 10 | Device → Host | BLDC encoder error |
+| LoadBLDCProfile | 11 | Host → Device | Load BLDC detent profile |
+| DeactivateBLDCProfile | 12 | Host → Device | Deactivate BLDC profile |
 
 ## Message Definitions
 
@@ -65,7 +70,7 @@ The message uses a discriminated union based on `input_type`.
 | config_id | Unique configuration identifier |
 | total_parts | Total number of inputs to configure |
 | part_number | This input's index (0-based) |
-| input_type | 0 = Analog, 1 = Button, 2 = Matrix |
+| input_type | 0 = Analog, 1 = Button, 2 = Matrix, 3 = BLDC Lever |
 
 **Analog Payload (input_type = 0)**
 
@@ -103,6 +108,16 @@ The message uses a discriminated union based on `input_type`.
 | col_pins | Array of column pin numbers |
 
 Matrix buttons are reported using virtual pins: `pin = 128 + (row * num_cols + col)`
+
+**BLDC Lever Payload (input_type = 3)**
+
+```
+[board_profile: u8]
+```
+
+| Field | Description |
+|-------|-------------|
+| board_profile | 0 = SimpleFOCShield v2 on Mega 2560 |
 
 ### ConfigurationStored (3)
 
@@ -144,6 +159,50 @@ Sent periodically to indicate device is alive.
 | value | 0 = OFF (LOW), 1 = ON (HIGH) |
 
 Controls an output pin directly. The device automatically configures the pin as OUTPUT on first use. No acknowledgment is sent (fire-and-forget for low latency).
+
+### RetryCalibration (8)
+
+```
+[type: u8 = 8] [pin: u8]
+```
+
+### CalibrationError (9)
+
+```
+[type: u8 = 9] [pin: u8] [error_code: u8]
+```
+
+Error codes: 0=timeout, 1=range_too_small, 2=encoder_error
+
+### EncoderError (10)
+
+```
+[type: u8 = 10] [pin: u8]
+```
+
+### LoadBLDCProfile (11)
+
+```
+[type: u8 = 11] [pin: u8] [num_detents: u8] [num_linear_ranges: u8]
+[detent_data: 5 bytes × num_detents]
+[range_data: 3 bytes × num_linear_ranges]
+```
+
+Detent data (5 bytes each):
+```
+[position: u8] [engagement: u8] [hold: u8] [exit: u8] [spring_back: u8]
+```
+
+Range data (3 bytes each):
+```
+[start_detent: u8] [end_detent: u8] [damping: u8]
+```
+
+### DeactivateBLDCProfile (12)
+
+```
+[type: u8 = 12] [pin: u8]
+```
 
 ## Configuration Sequence
 

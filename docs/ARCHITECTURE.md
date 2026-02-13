@@ -10,7 +10,15 @@ src/
 ├── config_manager.h/cpp  # Configuration and EEPROM persistence
 ├── sensor_manager.h/cpp  # Sensor lifecycle management
 ├── sensor.h              # ISensor interface
-└── analog_sensor.h/cpp   # Analog input implementation
+├── analog_sensor.h/cpp   # Analog input implementation
+├── bldc_lever.h/cpp      # BLDC motor haptic lever implementation
+├── bldc_manager.h/cpp    # Motor control coordination (1kHz updates)
+├── bldc_config.h         # Detent and calibration config structures
+└── board_profiles.h      # Hardware pin mappings
+
+BLDC levers use two-level configuration:
+- Hardware config (EEPROM): board profile, triggers auto-calibration
+- Runtime profile (volatile): detent positions, strengths, spring-back
 ```
 
 ## Data Flow
@@ -28,7 +36,7 @@ src/
 loop() {
     PacketSerial.update()     // Process incoming messages
     MessageHandler.update()   // Check timeouts, scan sensors, send readings
-    delay(10)                 // ~100 Hz scan rate
+    delay(1)                  // 1 kHz scan rate (for motor control)
 }
 ```
 
