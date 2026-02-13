@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- BLDC haptic lever support with SimpleFOC library
+- Configurable virtual detents with variable strengths
+- Two-level configuration: hardware (EEPROM) + runtime profiles (volatile)
+- Auto-calibration to find physical endstops
+- Spring-back behavior between detents
+- Linear ranges with damping
+- Board profile system (SimpleFOCShield v2 on Mega 2560)
+- New message types: LoadBLDCProfile, DeactivateBLDCProfile, RetryCalibration, CalibrationError, EncoderError
+- Main loop now runs at 1kHz (was 10Hz) for smooth motor control
+
+### Changed
+- Main loop delay reduced from 10ms to 1ms for motor control responsiveness
+
 ## [2.2.1] - 2026-01-31
 
 ### Added
