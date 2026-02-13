@@ -297,12 +297,37 @@ void BLDCLever::updateDetentState() {
 }
 
 float BLDCLever::calculateTargetTorque() {
-    // Stub: Will be implemented in Task 14
-    // This will calculate torque based on:
-    // - Current position relative to detents
-    // - Detent strengths (engagement, hold, exit)
-    // - Linear range damping
-    return 0.0f;
+    if (detents_ == nullptr || num_detents_ == 0 || current_detent_index_ >= num_detents_) {
+        return 0.0f;
+    }
+
+    // TODO: Proper engagement/exit/spring-back logic will be added during hardware tuning
+    // For now, use simplified proportional spring model:
+    // - Apply torque proportional to distance from current detent
+    // - Torque strength based on detent hold_strength
+
+    // Get current detent position
+    uint16_t detent_pos = percentToEncoderPosition(detents_[current_detent_index_].position_percent);
+
+    // Calculate distance from detent (signed)
+    int32_t distance = static_cast<int32_t>(current_encoder_position_) - static_cast<int32_t>(detent_pos);
+
+    // Calculate proportional torque
+    // Scale: hold_strength of 255 = max torque at max distance
+    // Normalize to -1.0 to 1.0 range for SimpleFOC
+    float max_distance = (max_encoder_position_ - min_encoder_position_) / 10.0f;  // 10% of range
+    if (max_distance < 1.0f) max_distance = 1.0f;
+
+    float normalized_distance = static_cast<float>(distance) / max_distance;
+    // Clamp to reasonable range
+    if (normalized_distance > 1.0f) normalized_distance = 1.0f;
+    if (normalized_distance < -1.0f) normalized_distance = -1.0f;
+
+    // Scale by hold strength (0-255 -> 0-1.0)
+    float strength_scale = detents_[current_detent_index_].hold_strength / 255.0f;
+
+    // Return torque (negative = pull back to detent)
+    return -normalized_distance * strength_scale;
 }
 
 uint16_t BLDCLever::percentToEncoderPosition(uint8_t percent) const {
