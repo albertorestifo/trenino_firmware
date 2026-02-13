@@ -118,6 +118,13 @@ void onPacketReceived(const uint8_t* buffer, size_t size)
         if (ranges != nullptr) {
             delete[] ranges;
         }
+    } else if (msg.isDeactivateBLDCProfile()) {
+        Sensor::ISensor* sensor = SensorManager::getSensorByPin(msg.deactivate_bldc_profile.pin);
+        if (sensor != nullptr && sensor->getType() == Sensor::InputType::BLDCLever) {
+            Sensor::BLDCLever* bldc = static_cast<Sensor::BLDCLever*>(sensor);
+            bldc->deactivateProfile();
+            // No response - fire and forget
+        }
     }
 }
 
