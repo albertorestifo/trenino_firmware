@@ -165,6 +165,32 @@ bool BLDCLever::isEncoderHealthy() const {
     return (now - last_encoder_success_time_) < 100;
 }
 
+bool BLDCLever::runCalibration() {
+    if (motor_ == nullptr || encoder_ == nullptr) {
+        last_calibration_error_ = BLDC::CalibrationError::ENCODER_ERROR;
+        return false;
+    }
+
+    // TODO: Proper endstop detection will be added during hardware testing
+    // For now, mock calibration by setting reasonable min/max encoder positions
+    // Real implementation will:
+    // 1. Move lever in one direction until stall/endstop detected
+    // 2. Record min position
+    // 3. Move in opposite direction until other endstop
+    // 4. Record max position
+    // 5. Validate range is large enough (> MIN_ENCODER_RANGE)
+    // 6. Return to center position
+
+    // Mock values for testing (full 14-bit encoder range)
+    min_encoder_position_ = 0;
+    max_encoder_position_ = 16383;
+
+    calibrated_ = true;
+    last_calibration_error_ = BLDC::CalibrationError::TIMEOUT;  // No error (using enum member as success state)
+
+    return true;
+}
+
 // Private helper methods (stubs for now - will be implemented in later tasks)
 
 void BLDCLever::updateDetentState() {

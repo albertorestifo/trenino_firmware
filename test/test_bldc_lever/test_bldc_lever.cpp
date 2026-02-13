@@ -43,11 +43,22 @@ void test_bldc_lever_construction() {
     TEST_ASSERT_FALSE(lever.isProfileActive());
 }
 
+void test_calibration_success() {
+    BLDCLever lever(BoardProfiles::SIMPLEFOC_SHIELD_V2_MEGA);
+    lever.begin();
+
+    bool result = lever.runCalibration();
+
+    TEST_ASSERT_TRUE(result);
+    TEST_ASSERT_TRUE(lever.isCalibrated());
+}
+
 void setUp() {}
 void tearDown() {}
 
 int main() {
     UNITY_BEGIN();
     RUN_TEST(test_bldc_lever_construction);
+    RUN_TEST(test_calibration_success);
     return UNITY_END();
 }
