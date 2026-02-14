@@ -112,12 +112,24 @@ Matrix buttons are reported using virtual pins: `pin = 128 + (row * num_cols + c
 **BLDC Lever Payload (input_type = 3)**
 
 ```
-[board_profile: u8]
+[motor_pin_a: u8] [motor_pin_b: u8] [motor_pin_c: u8]
+[motor_enable_a: u8] [motor_enable_b: u8]
+[encoder_cs: u8] [pole_pairs: u8]
+[voltage: u8] [current_limit: u8] [encoder_bits: u8]
 ```
 
 | Field | Description |
 |-------|-------------|
-| board_profile | 0 = SimpleFOCShield v2 on Mega 2560 |
+| motor_pin_a | PWM phase A pin |
+| motor_pin_b | PWM phase B pin |
+| motor_pin_c | PWM phase C pin |
+| motor_enable_a | Enable pin A |
+| motor_enable_b | Enable pin B |
+| encoder_cs | SPI chip select pin for magnetic encoder |
+| pole_pairs | Motor pole pairs (e.g. 11 for typical gimbal motor) |
+| voltage | Supply voltage in 0.1V units (e.g. 120 = 12.0V) |
+| current_limit | Max current in 0.1A units (0 = no limit) |
+| encoder_bits | Encoder resolution in bits (e.g. 14 for AS5047D) |
 
 ### ConfigurationStored (3)
 
