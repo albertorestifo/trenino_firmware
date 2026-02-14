@@ -67,7 +67,17 @@ bool applyConfiguration(const ConfigManager::InputConfig* inputs, uint8_t input_
             break;
 
         case Protocol::INPUT_TYPE_BLDC_LEVER:
-            sensor = new Sensor::BLDCLever(config.bldc.board_profile);
+            sensor = new Sensor::BLDCLever(
+                config.bldc.motor_pin_a,
+                config.bldc.motor_pin_b,
+                config.bldc.motor_pin_c,
+                config.bldc.motor_enable_a,
+                config.bldc.motor_enable_b,
+                config.bldc.encoder_cs,
+                config.bldc.pole_pairs,
+                config.bldc.voltage,
+                config.bldc.current_limit,
+                config.bldc.encoder_bits);
             break;
 
         default:
