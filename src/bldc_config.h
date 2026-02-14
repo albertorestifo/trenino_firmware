@@ -7,17 +7,23 @@ namespace BLDC {
 // Configuration for a single detent
 struct DetentConfig {
     uint8_t position_percent;      // 0-100% of calibrated range
-    uint8_t engagement_strength;   // 0-255: torque to click in
-    uint8_t hold_strength;         // 0-255: torque to stay in
-    uint8_t exit_strength;         // 0-255: torque to click out
-    uint8_t spring_back_target;    // Detent index to return to, or 255 = none
+    uint8_t detent_strength;       // 0-255: overall detent torque strength
 
     DetentConfig()
         : position_percent(0)
-        , engagement_strength(0)
-        , hold_strength(0)
-        , exit_strength(0)
-        , spring_back_target(255)
+        , detent_strength(0)
+    {
+    }
+};
+
+// Profile-level haptic parameters
+struct ProfileConfig {
+    uint8_t snap_point;            // 50-150: percentage of detent width where snap occurs
+    uint8_t endstop_strength;      // 0-255: virtual endstop torque
+
+    ProfileConfig()
+        : snap_point(70)
+        , endstop_strength(200)
     {
     }
 };
@@ -51,5 +57,29 @@ constexpr uint32_t CALIBRATION_STALL_TIMEOUT_MS = 5000;  // 5 second stall timeo
 // Motor control constants
 constexpr float CALIBRATION_SPEED = 0.1f;  // 10% speed during calibration
 constexpr float CALIBRATION_TORQUE = 0.5f;  // Low torque for calibration
+
+// PD controller constants
+constexpr float P_SCALE_FACTOR = 4.0f;
+
+constexpr float D_LOWER_FACTOR = 0.08f;
+constexpr float D_UPPER_FACTOR = 0.02f;
+constexpr float D_WIDTH_LOWER_DEG = 3.0f;
+constexpr float D_WIDTH_UPPER_DEG = 8.0f;
+
+constexpr float DEAD_ZONE_FRACTION = 0.2f;
+constexpr float DEAD_ZONE_MAX_DEG = 1.0f;
+
+constexpr float VELOCITY_LPF_ALPHA = 0.1f;
+constexpr float MAX_SAFE_VELOCITY = 60.0f;
+
+constexpr float IDLE_VELOCITY_EWMA_ALPHA = 0.001f;
+constexpr float IDLE_VELOCITY_THRESHOLD = 0.05f;
+constexpr uint32_t IDLE_CORRECTION_DELAY_MS = 500;
+constexpr float IDLE_CORRECTION_MAX_DEG = 5.0f;
+constexpr float IDLE_CORRECTION_RATE_ALPHA = 0.0005f;
+
+constexpr float DAMPING_SCALE = 1.0f;
+
+constexpr float LEVER_ARC_DEGREES = 90.0f;
 
 } // namespace BLDC
