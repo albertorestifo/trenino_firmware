@@ -31,6 +31,7 @@ public:
     MotionControlType controller = Type_angle;
     float voltage_power_supply = 12.0f;
     int sensor_direction = 1;
+    float current_limit = 0.0f;
     float shaft_angle = 0.0f;
 
 private:

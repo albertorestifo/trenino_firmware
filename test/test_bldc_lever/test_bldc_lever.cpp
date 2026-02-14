@@ -1,5 +1,4 @@
 #include "bldc_lever.h"
-#include "board_profiles.h"
 
 using namespace Sensor;
 
@@ -9,42 +8,35 @@ unsigned long millis() {
     return mock_millis_value;
 }
 
-void pinMode(uint8_t pin, uint8_t mode) {
-    // Stub - not used in these tests
-}
-
-int analogRead(uint8_t pin) {
-    // Stub - not used in these tests
-    return 0;
-}
-
-int digitalRead(uint8_t pin) {
-    // Stub - not used in these tests
-    return 0;
-}
-
-void digitalWrite(uint8_t pin, uint8_t val) {
-    // Stub - not used in these tests
-}
-
-void delayMicroseconds(unsigned int us) {
-    // Stub - not used in these tests
-}
+void pinMode(uint8_t pin, uint8_t mode) {}
+int analogRead(uint8_t pin) { return 0; }
+int digitalRead(uint8_t pin) { return 0; }
+void digitalWrite(uint8_t pin, uint8_t val) {}
+void delayMicroseconds(unsigned int us) {}
 
 // Include implementation after mocks are defined
 #include "../../src/bldc_lever.cpp"
 #include <unity.h>
 
 void test_bldc_lever_construction() {
-    BLDCLever lever(BoardProfiles::SIMPLEFOC_SHIELD_V2_MEGA);
+    BLDCLever lever(5, 6, 9, 7, 8, 10, 11, 120, 0, 14);
 
     TEST_ASSERT_EQUAL(InputType::BLDCLever, lever.getType());
+    TEST_ASSERT_EQUAL_UINT8(10, lever.getPin());  // encoder_cs is the identifying pin
     TEST_ASSERT_FALSE(lever.isCalibrated());
     TEST_ASSERT_FALSE(lever.isProfileActive());
 }
 
+void test_bldc_lever_custom_params() {
+    // Different hardware: 7 pole pairs, 24V, 3A limit, 12-bit encoder
+    BLDCLever lever(3, 5, 6, 7, 8, 15, 7, 240, 30, 12);
+
+    TEST_ASSERT_EQUAL(InputType::BLDCLever, lever.getType());
+    TEST_ASSERT_EQUAL_UINT8(15, lever.getPin());  // encoder_cs pin
+}
+
 void test_calibration_success() {
-    BLDCLever lever(BoardProfiles::SIMPLEFOC_SHIELD_V2_MEGA);
+    BLDCLever lever(5, 6, 9, 7, 8, 10, 11, 120, 0, 14);
     lever.begin();
 
     bool result = lever.runCalibration();
@@ -54,7 +46,7 @@ void test_calibration_success() {
 }
 
 void test_load_profile() {
-    BLDCLever lever(BoardProfiles::SIMPLEFOC_SHIELD_V2_MEGA);
+    BLDCLever lever(5, 6, 9, 7, 8, 10, 11, 120, 0, 14);
     lever.begin();
     lever.runCalibration();
 
@@ -63,7 +55,7 @@ void test_load_profile() {
     detents[0].engagement_strength = 100;
     detents[0].hold_strength = 150;
     detents[0].exit_strength = 100;
-    detents[0].spring_back_target = 255;  // No spring-back
+    detents[0].spring_back_target = 255;
 
     detents[1].position_percent = 50;
     detents[1].engagement_strength = 100;
@@ -84,11 +76,10 @@ void test_load_profile() {
 }
 
 void test_detent_state_tracking() {
-    BLDCLever lever(BoardProfiles::SIMPLEFOC_SHIELD_V2_MEGA);
+    BLDCLever lever(5, 6, 9, 7, 8, 10, 11, 120, 0, 14);
     lever.begin();
     lever.runCalibration();
 
-    // Create 3 detents at 0%, 50%, 100%
     BLDC::DetentConfig detents[3];
     detents[0].position_percent = 0;
     detents[0].engagement_strength = 100;
@@ -110,18 +101,14 @@ void test_detent_state_tracking() {
 
     lever.loadProfile(detents, 3, nullptr, 0);
 
-    // No reading should be available initially (no detent change yet)
     Reading reading = lever.getReading();
     TEST_ASSERT_FALSE(reading.has_value);
 
-    // Trigger motor update to detect initial detent
     lever.updateMotor();
 
-    // Should now have a reading (initial detent detected)
     reading = lever.getReading();
     TEST_ASSERT_TRUE(reading.has_value);
     TEST_ASSERT_EQUAL(InputType::BLDCLever, reading.type);
-    // Should report detent 0 (closest to position 0)
     TEST_ASSERT_EQUAL(0, reading.value);
 }
 
@@ -131,6 +118,7 @@ void tearDown() {}
 int main() {
     UNITY_BEGIN();
     RUN_TEST(test_bldc_lever_construction);
+    RUN_TEST(test_bldc_lever_custom_params);
     RUN_TEST(test_calibration_success);
     RUN_TEST(test_load_profile);
     RUN_TEST(test_detent_state_tracking);

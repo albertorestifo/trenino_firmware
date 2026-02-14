@@ -1,5 +1,4 @@
 #include "bldc_lever.h"
-#include "board_profiles.h"
 
 // Only include real SimpleFOC on hardware targets
 #ifndef UNIT_TEST
@@ -14,9 +13,21 @@
 
 namespace Sensor {
 
-BLDCLever::BLDCLever(uint8_t board_profile)
-    : board_profile_(board_profile)
-    , pin_(0)  // Will be set based on board profile
+BLDCLever::BLDCLever(uint8_t motor_pin_a, uint8_t motor_pin_b, uint8_t motor_pin_c,
+                     uint8_t motor_enable_a, uint8_t motor_enable_b,
+                     uint8_t encoder_cs, uint8_t pole_pairs,
+                     uint8_t voltage, uint8_t current_limit, uint8_t encoder_bits)
+    : motor_pin_a_(motor_pin_a)
+    , motor_pin_b_(motor_pin_b)
+    , motor_pin_c_(motor_pin_c)
+    , motor_enable_a_(motor_enable_a)
+    , motor_enable_b_(motor_enable_b)
+    , encoder_cs_(encoder_cs)
+    , pole_pairs_(pole_pairs)
+    , voltage_(voltage)
+    , current_limit_(current_limit)
+    , encoder_bits_(encoder_bits)
+    , pin_(encoder_cs)
     , motor_(nullptr)
     , encoder_(nullptr)
     , calibrated_(false)
@@ -35,12 +46,6 @@ BLDCLever::BLDCLever(uint8_t board_profile)
     , detent_changed_(false)
     , last_encoder_success_time_(0)
 {
-    // Set virtual pin based on board profile
-    // Use encoder CS pin as the identifying pin
-    uint8_t cs_pin;
-    if (BoardProfiles::getEncoderCS(board_profile_, cs_pin)) {
-        pin_ = cs_pin;
-    }
 }
 
 BLDCLever::~BLDCLever() {
@@ -66,34 +71,24 @@ BLDCLever::~BLDCLever() {
 }
 
 void BLDCLever::begin() {
-    // Get hardware pin configuration
-    uint8_t pin_a, pin_b, pin_c;
-    if (!BoardProfiles::getMotorPins(board_profile_, pin_a, pin_b, pin_c)) {
-        return;  // Invalid board profile
-    }
-
-    uint8_t enable_a, enable_b;
-    if (!BoardProfiles::getEnablePins(board_profile_, enable_a, enable_b)) {
-        return;  // Invalid board profile
-    }
-
-    uint8_t cs_pin;
-    if (!BoardProfiles::getEncoderCS(board_profile_, cs_pin)) {
-        return;  // Invalid board profile
-    }
-
-    // Initialize encoder (AS5047D: 14-bit = 16384 CPR, SPI mode 1)
-    encoder_ = new MagneticSensorSPI(cs_pin, 14, 0x3FFF);
+    // Initialize encoder using configured params
+    uint16_t encoder_mask = (1 << encoder_bits_) - 1;
+    encoder_ = new MagneticSensorSPI(encoder_cs_, encoder_bits_, encoder_mask);
     encoder_->init();
 
-    // Initialize motor (11 pole pairs for typical gimbal motor)
-    motor_ = new BLDCMotor(11, pin_a, pin_b, pin_c, enable_a);
+    // Initialize motor with configured params
+    motor_ = new BLDCMotor(pole_pairs_, motor_pin_a_, motor_pin_b_, motor_pin_c_, motor_enable_a_);
     motor_->linkSensor(encoder_);
 
     // Configure motor
-    motor_->voltage_power_supply = 12.0f;
-    motor_->controller = Type_torque;  // Torque control mode
+    motor_->voltage_power_supply = voltage_ / 10.0f;
+    motor_->controller = Type_torque;
     motor_->sensor_direction = 1;
+
+    // Set current limit if specified
+    if (current_limit_ > 0) {
+        motor_->current_limit = current_limit_ / 10.0f;
+    }
 
     // Initialize motor
     motor_->init();

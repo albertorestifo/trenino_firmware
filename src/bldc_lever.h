@@ -13,7 +13,10 @@ namespace Sensor {
 class BLDCLever : public ISensor {
 public:
     // Constructor
-    BLDCLever(uint8_t board_profile);
+    BLDCLever(uint8_t motor_pin_a, uint8_t motor_pin_b, uint8_t motor_pin_c,
+              uint8_t motor_enable_a, uint8_t motor_enable_b,
+              uint8_t encoder_cs, uint8_t pole_pairs,
+              uint8_t voltage, uint8_t current_limit, uint8_t encoder_bits);
 
     // Destructor
     ~BLDCLever() override;
@@ -60,8 +63,17 @@ public:
 
 private:
     // Hardware configuration
-    uint8_t board_profile_;
-    uint8_t pin_;  // Virtual pin for reporting (derived from board profile)
+    uint8_t motor_pin_a_;
+    uint8_t motor_pin_b_;
+    uint8_t motor_pin_c_;
+    uint8_t motor_enable_a_;
+    uint8_t motor_enable_b_;
+    uint8_t encoder_cs_;
+    uint8_t pole_pairs_;
+    uint8_t voltage_;        // 0.1V units
+    uint8_t current_limit_;  // 0.1A units (0 = no limit)
+    uint8_t encoder_bits_;
+    uint8_t pin_;  // Virtual pin for reporting (= encoder_cs_)
 
     // SimpleFOC objects (heap-allocated to avoid header dependency)
     BLDCMotor* motor_;
