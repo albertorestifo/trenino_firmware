@@ -41,11 +41,13 @@ void test_load_bldc_profile_header() {
     msg_out.pin = 100;
     msg_out.num_detents = 5;
     msg_out.num_linear_ranges = 2;
+    msg_out.snap_point = 70;
+    msg_out.endstop_strength = 200;
 
     uint8_t buffer[16];
     size_t len = msg_out.encode(buffer, sizeof(buffer));
 
-    TEST_ASSERT_EQUAL_UINT8(4, len);
+    TEST_ASSERT_EQUAL_UINT8(6, len);
 
     Protocol::LoadBLDCProfile msg_in;
     bool result = msg_in.decode(buffer, len);
@@ -54,6 +56,8 @@ void test_load_bldc_profile_header() {
     TEST_ASSERT_EQUAL_UINT8(100, msg_in.pin);
     TEST_ASSERT_EQUAL_UINT8(5, msg_in.num_detents);
     TEST_ASSERT_EQUAL_UINT8(2, msg_in.num_linear_ranges);
+    TEST_ASSERT_EQUAL_UINT8(70, msg_in.snap_point);
+    TEST_ASSERT_EQUAL_UINT8(200, msg_in.endstop_strength);
 }
 
 void test_configure_bldc_lever_encode() {

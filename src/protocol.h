@@ -213,6 +213,8 @@ struct LoadBLDCProfile {
     uint8_t pin;
     uint8_t num_detents;
     uint8_t num_linear_ranges;
+    uint8_t snap_point;          // 50-150 -> 0.50-1.50 hysteresis threshold
+    uint8_t endstop_strength;    // 0-255: virtual endstop P gain
     // Followed by detent data and range data in subsequent bytes
 
     // Encode to buffer (returns number of bytes written, 0 on error)

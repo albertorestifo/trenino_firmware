@@ -74,8 +74,13 @@ void onPacketReceived(const uint8_t* buffer, size_t size)
         }
     } else if (msg.isLoadBLDCProfile()) {
         // Parse detents and ranges from buffer
-        // Buffer format: [message_type][pin][num_detents][num_linear_ranges][detent_data...][range_data...]
-        size_t offset = 4; // After message_type + pin + num_detents + num_linear_ranges
+        // Buffer format: [message_type][pin][num_detents][num_linear_ranges][snap_point][endstop_strength][detent_data...][range_data...]
+        size_t offset = 6; // After header (message_type + pin + num_detents + num_linear_ranges + snap_point + endstop_strength)
+
+        // Build profile config from header fields
+        BLDC::ProfileConfig profile_config;
+        profile_config.snap_point = msg.load_bldc_profile.snap_point;
+        profile_config.endstop_strength = msg.load_bldc_profile.endstop_strength;
 
         // Allocate temporary arrays
         BLDC::DetentConfig* detents = new BLDC::DetentConfig[msg.load_bldc_profile.num_detents];
@@ -84,13 +89,10 @@ void onPacketReceived(const uint8_t* buffer, size_t size)
             ranges = new BLDC::LinearRangeConfig[msg.load_bldc_profile.num_linear_ranges];
         }
 
-        // Parse detents (5 bytes each)
-        for (uint8_t i = 0; i < msg.load_bldc_profile.num_detents && offset + 5 <= size; i++) {
+        // Parse detents (2 bytes each: position_percent + detent_strength)
+        for (uint8_t i = 0; i < msg.load_bldc_profile.num_detents && offset + 2 <= size; i++) {
             detents[i].position_percent = buffer[offset++];
-            detents[i].engagement_strength = buffer[offset++];
-            detents[i].hold_strength = buffer[offset++];
-            detents[i].exit_strength = buffer[offset++];
-            detents[i].spring_back_target = buffer[offset++];
+            detents[i].detent_strength = buffer[offset++];
         }
 
         // Parse linear ranges (3 bytes each)
@@ -104,7 +106,7 @@ void onPacketReceived(const uint8_t* buffer, size_t size)
         Sensor::ISensor* sensor = SensorManager::getSensorByPin(msg.load_bldc_profile.pin);
         if (sensor != nullptr && sensor->getType() == Sensor::InputType::BLDCLever) {
             Sensor::BLDCLever* bldc = static_cast<Sensor::BLDCLever*>(sensor);
-            if (bldc->loadProfile(detents, msg.load_bldc_profile.num_detents, ranges, msg.load_bldc_profile.num_linear_ranges)) {
+            if (bldc->loadProfile(detents, msg.load_bldc_profile.num_detents, ranges, msg.load_bldc_profile.num_linear_ranges, profile_config)) {
                 sendConfigurationStored(0); // Success
             } else {
                 sendConfigurationError(0); // Validation failed

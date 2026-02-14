@@ -643,7 +643,7 @@ bool EncoderError::decode(const uint8_t* buffer, size_t length)
 
 size_t LoadBLDCProfile::encode(uint8_t* buffer, size_t buffer_size) const
 {
-    constexpr size_t REQUIRED_SIZE = 4; // 1 type + 1 pin + 1 num_detents + 1 num_linear_ranges
+    constexpr size_t REQUIRED_SIZE = 6; // 1 type + 1 pin + 1 num_detents + 1 num_linear_ranges + 1 snap_point + 1 endstop_strength
 
     if (buffer_size < REQUIRED_SIZE) {
         return 0; // Buffer too small
@@ -663,12 +663,18 @@ size_t LoadBLDCProfile::encode(uint8_t* buffer, size_t buffer_size) const
     // num_linear_ranges (u8)
     buffer[offset++] = num_linear_ranges;
 
+    // snap_point (u8)
+    buffer[offset++] = snap_point;
+
+    // endstop_strength (u8)
+    buffer[offset++] = endstop_strength;
+
     return offset;
 }
 
 bool LoadBLDCProfile::decode(const uint8_t* buffer, size_t length)
 {
-    constexpr size_t REQUIRED_SIZE = 4;
+    constexpr size_t REQUIRED_SIZE = 6;
 
     if (length < REQUIRED_SIZE) {
         return false; // Not enough data
@@ -688,6 +694,12 @@ bool LoadBLDCProfile::decode(const uint8_t* buffer, size_t length)
 
     // num_linear_ranges (u8)
     num_linear_ranges = buffer[offset++];
+
+    // snap_point (u8)
+    snap_point = buffer[offset++];
+
+    // endstop_strength (u8)
+    endstop_strength = buffer[offset++];
 
     return true;
 }
