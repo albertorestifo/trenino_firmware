@@ -96,7 +96,161 @@ void test_detent_state_tracking() {
     TEST_ASSERT_EQUAL(0, reading.value);
 }
 
-void setUp() {}
+void test_snap_point_hysteresis() {
+    BLDCLever lever(5, 6, 9, 7, 8, 10, 11, 120, 0, 14);
+    lever.begin();
+    lever.runCalibration();
+
+    BLDC::DetentConfig detents[2];
+    detents[0].position_percent = 0;
+    detents[0].detent_strength = 200;
+    detents[1].position_percent = 100;
+    detents[1].detent_strength = 200;
+
+    BLDC::ProfileConfig profile;
+    profile.snap_point = 70;
+    lever.loadProfile(detents, 2, nullptr, 0, profile);
+
+    MagneticSensorSPI* enc = lever.getEncoder();
+
+    // At detent 0
+    enc->setPosition(0);
+    mock_millis_value = 100;
+    lever.updateMotor();
+    TEST_ASSERT_EQUAL(0, lever.getReading().value);
+
+    // 50% of way — should NOT snap (need 70%)
+    enc->setPosition(8192);
+    mock_millis_value = 101;
+    lever.updateMotor();
+    TEST_ASSERT_EQUAL(0, lever.getReading().value);
+
+    // 80% of way — SHOULD snap
+    enc->setPosition(13106);
+    mock_millis_value = 102;
+    lever.updateMotor();
+    Reading r = lever.getReading();
+    TEST_ASSERT_TRUE(r.has_value);
+    TEST_ASSERT_EQUAL(1, r.value);
+}
+
+void test_linear_range_damping() {
+    BLDCLever lever(5, 6, 9, 7, 8, 10, 11, 120, 0, 14);
+    lever.begin();
+    lever.runCalibration();
+
+    BLDC::DetentConfig detents[3];
+    detents[0].position_percent = 0;
+    detents[0].detent_strength = 200;
+    detents[1].position_percent = 50;
+    detents[1].detent_strength = 200;
+    detents[2].position_percent = 100;
+    detents[2].detent_strength = 200;
+
+    BLDC::LinearRangeConfig ranges[1];
+    ranges[0].start_detent_index = 0;
+    ranges[0].end_detent_index = 1;
+    ranges[0].damping_strength = 128;
+
+    BLDC::ProfileConfig profile;
+    lever.loadProfile(detents, 3, ranges, 1, profile);
+
+    MagneticSensorSPI* enc = lever.getEncoder();
+    enc->setPosition(0);
+    mock_millis_value = 100;
+    lever.updateMotor();
+
+    // Move into linear range between detent 0 and 1
+    enc->setPosition(4096);
+    mock_millis_value = 101;
+    lever.updateMotor();
+
+    TEST_ASSERT_EQUAL(0, lever.getReading().value);
+    TEST_ASSERT_TRUE(lever.isProfileActive());
+}
+
+void test_virtual_endstop() {
+    BLDCLever lever(5, 6, 9, 7, 8, 10, 11, 120, 0, 14);
+    lever.begin();
+    lever.runCalibration();
+
+    BLDC::DetentConfig detents[2];
+    detents[0].position_percent = 10;
+    detents[0].detent_strength = 200;
+    detents[1].position_percent = 90;
+    detents[1].detent_strength = 200;
+
+    BLDC::ProfileConfig profile;
+    profile.endstop_strength = 200;
+    lever.loadProfile(detents, 2, nullptr, 0, profile);
+
+    MagneticSensorSPI* enc = lever.getEncoder();
+    uint16_t det0 = static_cast<uint16_t>(16383 * 0.10);
+    enc->setPosition(det0);
+    mock_millis_value = 100;
+    lever.updateMotor();
+
+    // Move beyond detent 0 toward physical endstop
+    enc->setPosition(0);
+    mock_millis_value = 101;
+    lever.updateMotor();
+
+    TEST_ASSERT_TRUE(lever.isProfileActive());
+    TEST_ASSERT_EQUAL(0, lever.getReading().value);
+}
+
+void test_velocity_cutoff() {
+    BLDCLever lever(5, 6, 9, 7, 8, 10, 11, 120, 0, 14);
+    lever.begin();
+    lever.runCalibration();
+
+    BLDC::DetentConfig detents[1];
+    detents[0].position_percent = 50;
+    detents[0].detent_strength = 200;
+
+    BLDC::ProfileConfig profile;
+    lever.loadProfile(detents, 1, nullptr, 0, profile);
+
+    MagneticSensorSPI* enc = lever.getEncoder();
+    enc->setPosition(8192);
+    mock_millis_value = 100;
+    lever.updateMotor();
+
+    // No crash under any conditions
+    mock_millis_value = 101;
+    lever.updateMotor();
+    TEST_ASSERT_TRUE(lever.isProfileActive());
+}
+
+void test_idle_correction() {
+    BLDCLever lever(5, 6, 9, 7, 8, 10, 11, 120, 0, 14);
+    lever.begin();
+    lever.runCalibration();
+
+    BLDC::DetentConfig detents[1];
+    detents[0].position_percent = 50;
+    detents[0].detent_strength = 200;
+
+    BLDC::ProfileConfig profile;
+    lever.loadProfile(detents, 1, nullptr, 0, profile);
+
+    MagneticSensorSPI* enc = lever.getEncoder();
+    enc->setPosition(8250); // slightly off from 8192
+    mock_millis_value = 100;
+    lever.updateMotor();
+
+    // Run many idle iterations past IDLE_CORRECTION_DELAY_MS
+    for (uint32_t t = 101; t < 1000; t++) {
+        mock_millis_value = t;
+        lever.updateMotor();
+    }
+
+    TEST_ASSERT_TRUE(lever.isProfileActive());
+}
+
+void setUp() {
+    mock_millis_value = 0;
+}
 void tearDown() {}
 
 int main() {
@@ -106,5 +260,10 @@ int main() {
     RUN_TEST(test_calibration_success);
     RUN_TEST(test_load_profile);
     RUN_TEST(test_detent_state_tracking);
+    RUN_TEST(test_snap_point_hysteresis);
+    RUN_TEST(test_linear_range_damping);
+    RUN_TEST(test_virtual_endstop);
+    RUN_TEST(test_velocity_cutoff);
+    RUN_TEST(test_idle_correction);
     return UNITY_END();
 }

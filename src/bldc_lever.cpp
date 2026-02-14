@@ -147,6 +147,18 @@ void BLDCLever::updateMotor() {
     // Update FOC control loop
     motor_->loopFOC();
 
+    // Read encoder position (centralised here, not in updateDetentState)
+    #ifdef UNIT_TEST
+    current_encoder_position_ = static_cast<uint16_t>(encoder_->getPosition());
+    #else
+    float angle = encoder_->getAngle();
+    uint32_t range = max_encoder_position_ - min_encoder_position_;
+    current_encoder_position_ = min_encoder_position_ + static_cast<uint16_t>((angle / 6.28318f) * range);
+    #endif
+
+    updateVelocity();
+    updateIdleCorrection();
+
     if (profile_active_) {
         // Update detent state based on current position
         updateDetentState();
@@ -192,6 +204,10 @@ bool BLDCLever::runCalibration() {
 
     calibrated_ = true;
     last_calibration_error_ = BLDC::CalibrationError::TIMEOUT;  // No error (using enum member as success state)
+
+    // Compute ticks per degree from calibrated range
+    uint32_t range = max_encoder_position_ - min_encoder_position_;
+    ticks_per_degree_ = static_cast<float>(range) / BLDC::LEVER_ARC_DEGREES;
 
     return true;
 }
@@ -271,72 +287,103 @@ bool BLDCLever::loadProfile(
         motor_->enable();
     }
 
+    // PD gains will be computed on first updateDetentState() call
+    // (current_detent_index_ == 255 triggers initial detection)
+
     return true;
 }
 
 // Private helper methods (stubs for now - will be implemented in later tasks)
 
 void BLDCLever::updateDetentState() {
-    if (encoder_ == nullptr || !profile_active_) {
+    if (!profile_active_ || detents_ == nullptr || num_detents_ == 0) {
         return;
     }
 
-    // Read current encoder position
-    // In real SimpleFOC, this would be encoder_->getAngle() * counts_per_rev
-    // For our mock, we need to read the raw position
-    #ifdef UNIT_TEST
-    current_encoder_position_ = static_cast<uint16_t>(encoder_->getPosition());
-    #else
-    // Real hardware: convert angle to position within calibrated range
-    float angle = encoder_->getAngle();
-    uint32_t range = max_encoder_position_ - min_encoder_position_;
-    current_encoder_position_ = min_encoder_position_ +
-        static_cast<uint16_t>((angle / 6.28318f) * range);
-    #endif
-
-    // Find closest detent
-    uint8_t closest_detent = findClosestDetent();
-
-    // Check if detent changed
-    if (closest_detent != current_detent_index_) {
-        current_detent_index_ = closest_detent;
-        last_reported_detent_ = closest_detent;
+    // First call or invalid index: find closest detent and initialize
+    if (current_detent_index_ >= num_detents_) {
+        current_detent_index_ = findClosestDetent();
+        last_reported_detent_ = current_detent_index_;
         detent_changed_ = true;
+        detent_center_offset_ = 0.0f;
+        recalculatePDGains();
+        return;
+    }
+
+    float snap_fraction = profile_config_.snap_point / 100.0f;
+    float current_pos = static_cast<float>(percentToEncoderPosition(detents_[current_detent_index_].position_percent));
+    float pos = static_cast<float>(current_encoder_position_);
+
+    // Check snap to higher neighbor
+    if (current_detent_index_ < num_detents_ - 1) {
+        float next_pos = static_cast<float>(percentToEncoderPosition(detents_[current_detent_index_ + 1].position_percent));
+        float threshold = current_pos + (next_pos - current_pos) * snap_fraction;
+        if (pos > threshold) {
+            current_detent_index_ = current_detent_index_ + 1;
+            last_reported_detent_ = current_detent_index_;
+            detent_changed_ = true;
+            detent_center_offset_ = 0.0f;
+            recalculatePDGains();
+            return;
+        }
+    }
+
+    // Check snap to lower neighbor
+    if (current_detent_index_ > 0) {
+        float prev_pos = static_cast<float>(percentToEncoderPosition(detents_[current_detent_index_ - 1].position_percent));
+        float threshold = current_pos - (current_pos - prev_pos) * snap_fraction;
+        if (pos < threshold) {
+            current_detent_index_ = current_detent_index_ - 1;
+            last_reported_detent_ = current_detent_index_;
+            detent_changed_ = true;
+            detent_center_offset_ = 0.0f;
+            recalculatePDGains();
+            return;
+        }
     }
 }
 
 float BLDCLever::calculateTargetTorque() {
-    if (detents_ == nullptr || num_detents_ == 0 || current_detent_index_ >= num_detents_) {
-        return 0.0f;
+    if (detents_ == nullptr || num_detents_ == 0) return 0.0f;
+
+    // Safety cutoff
+    float abs_vel = current_velocity_ > 0 ? current_velocity_ : -current_velocity_;
+    if (abs_vel > BLDC::MAX_SAFE_VELOCITY) return 0.0f;
+
+    float position = static_cast<float>(current_encoder_position_);
+    float detent_center = getDetentCenter();
+    float angle_error = position - detent_center;
+
+    // Out of bounds check
+    float first_pos = static_cast<float>(percentToEncoderPosition(detents_[0].position_percent));
+    float last_pos = static_cast<float>(percentToEncoderPosition(detents_[num_detents_ - 1].position_percent));
+    bool out_of_bounds = position < first_pos || position > last_pos;
+
+    float p_gain = current_p_gain_;
+    if (out_of_bounds) {
+        p_gain = (profile_config_.endstop_strength / 255.0f) * BLDC::P_SCALE_FACTOR;
+        if (position < first_pos) angle_error = position - first_pos;
+        else angle_error = position - last_pos;
     }
 
-    // TODO: Proper PD controller will be added in Task 6
-    // For now, use simplified proportional spring model:
-    // - Apply torque proportional to distance from current detent
-    // - Torque strength based on detent_strength
+    // Linear range check
+    uint8_t range_index;
+    bool in_range = isInLinearRange(range_index);
+    if (in_range && !out_of_bounds) {
+        float damping = linear_ranges_[range_index].damping_strength / 255.0f;
+        return -damping * current_velocity_ * BLDC::DAMPING_SCALE;
+    }
 
-    // Get current detent position
-    uint16_t detent_pos = percentToEncoderPosition(detents_[current_detent_index_].position_percent);
+    // Dead zone
+    float dz_adj = 0.0f;
+    if (!out_of_bounds) {
+        if (angle_error > current_dead_zone_) dz_adj = current_dead_zone_;
+        else if (angle_error < -current_dead_zone_) dz_adj = -current_dead_zone_;
+        else dz_adj = angle_error;
+    }
 
-    // Calculate distance from detent (signed)
-    int32_t distance = static_cast<int32_t>(current_encoder_position_) - static_cast<int32_t>(detent_pos);
-
-    // Calculate proportional torque
-    // Scale: detent_strength of 255 = max torque at max distance
-    // Normalize to -1.0 to 1.0 range for SimpleFOC
-    float max_distance = (max_encoder_position_ - min_encoder_position_) / 10.0f;  // 10% of range
-    if (max_distance < 1.0f) max_distance = 1.0f;
-
-    float normalized_distance = static_cast<float>(distance) / max_distance;
-    // Clamp to reasonable range
-    if (normalized_distance > 1.0f) normalized_distance = 1.0f;
-    if (normalized_distance < -1.0f) normalized_distance = -1.0f;
-
-    // Scale by detent strength (0-255 -> 0-1.0)
-    float strength_scale = detents_[current_detent_index_].detent_strength / 255.0f;
-
-    // Return torque (negative = pull back to detent)
-    return -normalized_distance * strength_scale;
+    float pid_input = -(angle_error - dz_adj);
+    return p_gain * pid_input + current_d_gain_ * (-current_velocity_);
 }
 
 uint16_t BLDCLever::percentToEncoderPosition(uint8_t percent) const {
@@ -381,8 +428,36 @@ uint8_t BLDCLever::findClosestDetent() const {
 }
 
 bool BLDCLever::isInLinearRange(uint8_t& range_index) const {
-    // Stub: Will be implemented in Task 8
-    // This will check if current position is in a linear range
+    if (linear_ranges_ == nullptr || num_linear_ranges_ == 0 || detents_ == nullptr) {
+        return false;
+    }
+
+    for (uint8_t i = 0; i < num_linear_ranges_; i++) {
+        uint8_t start_idx = linear_ranges_[i].start_detent_index;
+        uint8_t end_idx = linear_ranges_[i].end_detent_index;
+
+        if (start_idx >= num_detents_ || end_idx >= num_detents_) continue;
+
+        float start_pos = static_cast<float>(percentToEncoderPosition(detents_[start_idx].position_percent));
+        float end_pos = static_cast<float>(percentToEncoderPosition(detents_[end_idx].position_percent));
+
+        // Ensure start < end
+        if (start_pos > end_pos) {
+            float tmp = start_pos;
+            start_pos = end_pos;
+            end_pos = tmp;
+        }
+
+        float pos = static_cast<float>(current_encoder_position_);
+
+        // Position must be between the range endpoints AND current detent must be one of the endpoints
+        if (pos >= start_pos && pos <= end_pos &&
+            (current_detent_index_ == start_idx || current_detent_index_ == end_idx)) {
+            range_index = i;
+            return true;
+        }
+    }
+
     return false;
 }
 
@@ -420,14 +495,110 @@ bool BLDCLever::validateProfile() const {
 
 // PD controller helper stubs (will be implemented in later tasks)
 
-void BLDCLever::recalculatePDGains() {}
+void BLDCLever::recalculatePDGains() {
+    if (detents_ == nullptr || num_detents_ == 0 || current_detent_index_ >= num_detents_) {
+        current_p_gain_ = 0.0f;
+        current_d_gain_ = 0.0f;
+        current_dead_zone_ = 0.0f;
+        return;
+    }
 
-void BLDCLever::updateVelocity() {}
+    float strength = detents_[current_detent_index_].detent_strength / 255.0f;
 
-void BLDCLever::updateIdleCorrection() {}
+    // P gain
+    current_p_gain_ = strength * BLDC::P_SCALE_FACTOR;
 
-float BLDCLever::getDetentWidth(uint8_t detent_index) const { return 0.0f; }
+    // D gain: piecewise interpolation based on detent width in degrees
+    float detent_width_ticks = getDetentWidth(current_detent_index_);
+    float detent_width_deg = (ticks_per_degree_ > 0.0f) ? (detent_width_ticks / ticks_per_degree_) : 0.0f;
 
-float BLDCLever::getDetentCenter() const { return 0.0f; }
+    if (detent_width_deg <= BLDC::D_WIDTH_LOWER_DEG) {
+        current_d_gain_ = strength * BLDC::D_LOWER_FACTOR;
+    } else if (detent_width_deg >= BLDC::D_WIDTH_UPPER_DEG) {
+        current_d_gain_ = strength * BLDC::D_UPPER_FACTOR;
+    } else {
+        // Linear interpolation
+        float t = (detent_width_deg - BLDC::D_WIDTH_LOWER_DEG) / (BLDC::D_WIDTH_UPPER_DEG - BLDC::D_WIDTH_LOWER_DEG);
+        float d_factor = BLDC::D_LOWER_FACTOR + t * (BLDC::D_UPPER_FACTOR - BLDC::D_LOWER_FACTOR);
+        current_d_gain_ = strength * d_factor;
+    }
+
+    // Dead zone
+    float dz_from_fraction = detent_width_ticks * BLDC::DEAD_ZONE_FRACTION;
+    float dz_max = ticks_per_degree_ * BLDC::DEAD_ZONE_MAX_DEG;
+    current_dead_zone_ = (dz_from_fraction < dz_max) ? dz_from_fraction : dz_max;
+}
+
+void BLDCLever::updateVelocity() {
+    uint32_t now = millis();
+    uint32_t dt_ms = now - prev_update_time_;
+    if (dt_ms > 0 && prev_update_time_ > 0) {
+        float dt = dt_ms / 1000.0f;
+        float raw_velocity = (static_cast<float>(current_encoder_position_) - prev_position_) / dt;
+        current_velocity_ = current_velocity_ * (1.0f - BLDC::VELOCITY_LPF_ALPHA)
+                          + raw_velocity * BLDC::VELOCITY_LPF_ALPHA;
+    }
+    prev_position_ = static_cast<float>(current_encoder_position_);
+    prev_update_time_ = now;
+}
+
+void BLDCLever::updateIdleCorrection() {
+    if (!profile_active_ || detents_ == nullptr || current_detent_index_ >= num_detents_) return;
+
+    float abs_vel = current_velocity_ > 0 ? current_velocity_ : -current_velocity_;
+    velocity_ewma_ = velocity_ewma_ * (1.0f - BLDC::IDLE_VELOCITY_EWMA_ALPHA) + abs_vel * BLDC::IDLE_VELOCITY_EWMA_ALPHA;
+
+    uint32_t now = millis();
+    if (velocity_ewma_ > BLDC::IDLE_VELOCITY_THRESHOLD) { idle_start_time_ = now; return; }
+    if ((now - idle_start_time_) < BLDC::IDLE_CORRECTION_DELAY_MS) return;
+
+    float nominal = static_cast<float>(percentToEncoderPosition(detents_[current_detent_index_].position_percent));
+    float angle = static_cast<float>(current_encoder_position_) - nominal;
+    float max_angle = ticks_per_degree_ * BLDC::IDLE_CORRECTION_MAX_DEG;
+    if (angle > max_angle || angle < -max_angle) return;
+
+    float error = static_cast<float>(current_encoder_position_) - nominal - detent_center_offset_;
+    detent_center_offset_ += error * BLDC::IDLE_CORRECTION_RATE_ALPHA;
+}
+
+float BLDCLever::getDetentWidth(uint8_t detent_index) const {
+    if (detents_ == nullptr || num_detents_ == 0 || detent_index >= num_detents_) {
+        return 0.0f;
+    }
+
+    // For single-detent profiles, return the full calibrated range
+    if (num_detents_ == 1) {
+        return static_cast<float>(max_encoder_position_ - min_encoder_position_);
+    }
+
+    float current_pos = static_cast<float>(percentToEncoderPosition(detents_[detent_index].position_percent));
+    float min_distance = static_cast<float>(max_encoder_position_ - min_encoder_position_);
+
+    // Check distance to left neighbor
+    if (detent_index > 0) {
+        float neighbor_pos = static_cast<float>(percentToEncoderPosition(detents_[detent_index - 1].position_percent));
+        float dist = current_pos - neighbor_pos;
+        if (dist < 0.0f) dist = -dist;
+        if (dist < min_distance) min_distance = dist;
+    }
+
+    // Check distance to right neighbor
+    if (detent_index < num_detents_ - 1) {
+        float neighbor_pos = static_cast<float>(percentToEncoderPosition(detents_[detent_index + 1].position_percent));
+        float dist = neighbor_pos - current_pos;
+        if (dist < 0.0f) dist = -dist;
+        if (dist < min_distance) min_distance = dist;
+    }
+
+    return min_distance;
+}
+
+float BLDCLever::getDetentCenter() const {
+    if (detents_ == nullptr || num_detents_ == 0 || current_detent_index_ >= num_detents_) {
+        return static_cast<float>(current_encoder_position_);
+    }
+    float nominal = static_cast<float>(percentToEncoderPosition(detents_[current_detent_index_].position_percent));
+    return nominal + detent_center_offset_;
+}
 
 } // namespace Sensor
