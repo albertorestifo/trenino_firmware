@@ -188,7 +188,25 @@ void storeToEEPROM(uint32_t config_id, const InputConfig* inputs, uint8_t num_in
         }
 
         case Protocol::INPUT_TYPE_BLDC_LEVER:
-            eeprom_put(addr, inputs[i].bldc.board_profile);
+            eeprom_put(addr, inputs[i].bldc.motor_pin_a);
+            addr += sizeof(uint8_t);
+            eeprom_put(addr, inputs[i].bldc.motor_pin_b);
+            addr += sizeof(uint8_t);
+            eeprom_put(addr, inputs[i].bldc.motor_pin_c);
+            addr += sizeof(uint8_t);
+            eeprom_put(addr, inputs[i].bldc.motor_enable_a);
+            addr += sizeof(uint8_t);
+            eeprom_put(addr, inputs[i].bldc.motor_enable_b);
+            addr += sizeof(uint8_t);
+            eeprom_put(addr, inputs[i].bldc.encoder_cs);
+            addr += sizeof(uint8_t);
+            eeprom_put(addr, inputs[i].bldc.pole_pairs);
+            addr += sizeof(uint8_t);
+            eeprom_put(addr, inputs[i].bldc.voltage);
+            addr += sizeof(uint8_t);
+            eeprom_put(addr, inputs[i].bldc.current_limit);
+            addr += sizeof(uint8_t);
+            eeprom_put(addr, inputs[i].bldc.encoder_bits);
             addr += sizeof(uint8_t);
             break;
         }
@@ -268,7 +286,25 @@ bool loadFromEEPROM()
         }
 
         case Protocol::INPUT_TYPE_BLDC_LEVER:
-            eeprom_get(addr, g_current_inputs[i].bldc.board_profile);
+            eeprom_get(addr, g_current_inputs[i].bldc.motor_pin_a);
+            addr += sizeof(uint8_t);
+            eeprom_get(addr, g_current_inputs[i].bldc.motor_pin_b);
+            addr += sizeof(uint8_t);
+            eeprom_get(addr, g_current_inputs[i].bldc.motor_pin_c);
+            addr += sizeof(uint8_t);
+            eeprom_get(addr, g_current_inputs[i].bldc.motor_enable_a);
+            addr += sizeof(uint8_t);
+            eeprom_get(addr, g_current_inputs[i].bldc.motor_enable_b);
+            addr += sizeof(uint8_t);
+            eeprom_get(addr, g_current_inputs[i].bldc.encoder_cs);
+            addr += sizeof(uint8_t);
+            eeprom_get(addr, g_current_inputs[i].bldc.pole_pairs);
+            addr += sizeof(uint8_t);
+            eeprom_get(addr, g_current_inputs[i].bldc.voltage);
+            addr += sizeof(uint8_t);
+            eeprom_get(addr, g_current_inputs[i].bldc.current_limit);
+            addr += sizeof(uint8_t);
+            eeprom_get(addr, g_current_inputs[i].bldc.encoder_bits);
             addr += sizeof(uint8_t);
             break;
 

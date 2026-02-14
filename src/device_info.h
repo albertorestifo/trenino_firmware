@@ -8,5 +8,5 @@ constexpr uint8_t DEVICE_VERSION_MINOR = 2;
 constexpr uint8_t DEVICE_VERSION_PATCH = 1;
 
 // EEPROM format version - increment when EEPROM layout changes
-// Version 2: Added button and matrix input types with union-based storage
-constexpr uint8_t EEPROM_FORMAT_VERSION = 2;
+// Version 3: BLDC lever uses explicit hardware params instead of board_profile
+constexpr uint8_t EEPROM_FORMAT_VERSION = 3;
