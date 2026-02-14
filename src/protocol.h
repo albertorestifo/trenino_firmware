@@ -89,7 +89,16 @@ struct Configure {
 
         // INPUT_TYPE_BLDC_LEVER
         struct {
-            uint8_t board_profile;
+            uint8_t motor_pin_a;
+            uint8_t motor_pin_b;
+            uint8_t motor_pin_c;
+            uint8_t motor_enable_a;
+            uint8_t motor_enable_b;
+            uint8_t encoder_cs;
+            uint8_t pole_pairs;
+            uint8_t voltage;        // 0.1V units (e.g. 120 = 12.0V)
+            uint8_t current_limit;  // 0.1A units (0 = no limit)
+            uint8_t encoder_bits;   // Encoder resolution (e.g. 14 for AS5047D)
         } bldc_lever;
     };
 
