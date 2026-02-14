@@ -40,7 +40,8 @@ public:
         const BLDC::DetentConfig* detents,
         uint8_t num_detents,
         const BLDC::LinearRangeConfig* ranges,
-        uint8_t num_ranges
+        uint8_t num_ranges,
+        const BLDC::ProfileConfig& profile_config
     );
 
     // Deactivate current profile and enter freewheel state
@@ -60,6 +61,11 @@ public:
 
     // Check if encoder communication is working
     bool isEncoderHealthy() const;
+
+#ifdef UNIT_TEST
+    MagneticSensorSPI* getEncoder() { return encoder_; }
+    BLDCMotor* getMotor() { return motor_; }
+#endif
 
 private:
     // Hardware configuration
@@ -91,6 +97,7 @@ private:
     uint8_t num_detents_;
     BLDC::LinearRangeConfig* linear_ranges_;
     uint8_t num_linear_ranges_;
+    BLDC::ProfileConfig profile_config_;
 
     // State tracking
     uint8_t current_detent_index_;
@@ -98,6 +105,24 @@ private:
     uint8_t last_reported_detent_;
     uint32_t last_report_time_;
     bool detent_changed_;
+
+    // PD controller state - velocity tracking
+    float prev_position_;
+    float current_velocity_;
+    uint32_t prev_update_time_;
+
+    // PD controller state - idle correction
+    float velocity_ewma_;
+    uint32_t idle_start_time_;
+    float detent_center_offset_;
+
+    // PD controller state - computed gains
+    float current_p_gain_;
+    float current_d_gain_;
+    float current_dead_zone_;
+
+    // Derived from calibration
+    float ticks_per_degree_;
 
     // Encoder health
     uint32_t last_encoder_success_time_;
@@ -107,8 +132,15 @@ private:
     float calculateTargetTorque();
     uint16_t percentToEncoderPosition(uint8_t percent) const;
     uint8_t findClosestDetent() const;
-    bool isInLinearRange(uint8_t& start_detent, uint8_t& end_detent) const;
+    bool isInLinearRange(uint8_t& range_index) const;
     bool validateProfile() const;
+
+    // PD controller helpers
+    void recalculatePDGains();
+    void updateVelocity();
+    void updateIdleCorrection();
+    float getDetentWidth(uint8_t detent_index) const;
+    float getDetentCenter() const;
 };
 
 } // namespace Sensor

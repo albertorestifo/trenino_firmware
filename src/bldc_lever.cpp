@@ -44,6 +44,16 @@ BLDCLever::BLDCLever(uint8_t motor_pin_a, uint8_t motor_pin_b, uint8_t motor_pin
     , last_reported_detent_(0)
     , last_report_time_(0)
     , detent_changed_(false)
+    , prev_position_(0.0f)
+    , current_velocity_(0.0f)
+    , prev_update_time_(0)
+    , velocity_ewma_(0.0f)
+    , idle_start_time_(0)
+    , detent_center_offset_(0.0f)
+    , current_p_gain_(0.0f)
+    , current_d_gain_(0.0f)
+    , current_dead_zone_(0.0f)
+    , ticks_per_degree_(0.0f)
     , last_encoder_success_time_(0)
 {
 }
@@ -190,7 +200,8 @@ bool BLDCLever::loadProfile(
     const BLDC::DetentConfig* detents,
     uint8_t num_detents,
     const BLDC::LinearRangeConfig* ranges,
-    uint8_t num_ranges
+    uint8_t num_ranges,
+    const BLDC::ProfileConfig& profile_config
 ) {
     if (!calibrated_) {
         return false;  // Must calibrate before loading profile
@@ -251,6 +262,9 @@ bool BLDCLever::loadProfile(
     last_reported_detent_ = 0;
     detent_changed_ = false;
 
+    // Store profile config
+    profile_config_ = profile_config;
+
     // Enable profile and motor
     profile_active_ = true;
     if (motor_ != nullptr) {
@@ -296,10 +310,10 @@ float BLDCLever::calculateTargetTorque() {
         return 0.0f;
     }
 
-    // TODO: Proper engagement/exit/spring-back logic will be added during hardware tuning
+    // TODO: Proper PD controller will be added in Task 6
     // For now, use simplified proportional spring model:
     // - Apply torque proportional to distance from current detent
-    // - Torque strength based on detent hold_strength
+    // - Torque strength based on detent_strength
 
     // Get current detent position
     uint16_t detent_pos = percentToEncoderPosition(detents_[current_detent_index_].position_percent);
@@ -308,7 +322,7 @@ float BLDCLever::calculateTargetTorque() {
     int32_t distance = static_cast<int32_t>(current_encoder_position_) - static_cast<int32_t>(detent_pos);
 
     // Calculate proportional torque
-    // Scale: hold_strength of 255 = max torque at max distance
+    // Scale: detent_strength of 255 = max torque at max distance
     // Normalize to -1.0 to 1.0 range for SimpleFOC
     float max_distance = (max_encoder_position_ - min_encoder_position_) / 10.0f;  // 10% of range
     if (max_distance < 1.0f) max_distance = 1.0f;
@@ -318,8 +332,8 @@ float BLDCLever::calculateTargetTorque() {
     if (normalized_distance > 1.0f) normalized_distance = 1.0f;
     if (normalized_distance < -1.0f) normalized_distance = -1.0f;
 
-    // Scale by hold strength (0-255 -> 0-1.0)
-    float strength_scale = detents_[current_detent_index_].hold_strength / 255.0f;
+    // Scale by detent strength (0-255 -> 0-1.0)
+    float strength_scale = detents_[current_detent_index_].detent_strength / 255.0f;
 
     // Return torque (negative = pull back to detent)
     return -normalized_distance * strength_scale;
@@ -366,8 +380,8 @@ uint8_t BLDCLever::findClosestDetent() const {
     return closest_index;
 }
 
-bool BLDCLever::isInLinearRange(uint8_t& start_detent, uint8_t& end_detent) const {
-    // Stub: Will be implemented in Task 13
+bool BLDCLever::isInLinearRange(uint8_t& range_index) const {
+    // Stub: Will be implemented in Task 8
     // This will check if current position is in a linear range
     return false;
 }
@@ -381,12 +395,6 @@ bool BLDCLever::validateProfile() const {
     for (uint8_t i = 0; i < num_detents_; i++) {
         // Position must be 0-100%
         if (detents_[i].position_percent > 100) {
-            return false;
-        }
-
-        // If spring-back is specified, target must be valid detent index
-        if (detents_[i].spring_back_target != 255 &&
-            detents_[i].spring_back_target >= num_detents_) {
             return false;
         }
     }
@@ -409,5 +417,17 @@ bool BLDCLever::validateProfile() const {
 
     return true;
 }
+
+// PD controller helper stubs (will be implemented in later tasks)
+
+void BLDCLever::recalculatePDGains() {}
+
+void BLDCLever::updateVelocity() {}
+
+void BLDCLever::updateIdleCorrection() {}
+
+float BLDCLever::getDetentWidth(uint8_t detent_index) const { return 0.0f; }
+
+float BLDCLever::getDetentCenter() const { return 0.0f; }
 
 } // namespace Sensor

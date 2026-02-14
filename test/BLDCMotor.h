@@ -33,6 +33,7 @@ public:
     int sensor_direction = 1;
     float current_limit = 0.0f;
     float shaft_angle = 0.0f;
+    float shaft_velocity = 0.0f;
 
 private:
     uint8_t pole_pairs_;

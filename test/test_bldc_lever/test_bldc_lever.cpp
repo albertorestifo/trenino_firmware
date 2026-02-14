@@ -52,24 +52,16 @@ void test_load_profile() {
 
     BLDC::DetentConfig detents[3];
     detents[0].position_percent = 0;
-    detents[0].engagement_strength = 100;
-    detents[0].hold_strength = 150;
-    detents[0].exit_strength = 100;
-    detents[0].spring_back_target = 255;
+    detents[0].detent_strength = 150;
 
     detents[1].position_percent = 50;
-    detents[1].engagement_strength = 100;
-    detents[1].hold_strength = 150;
-    detents[1].exit_strength = 100;
-    detents[1].spring_back_target = 255;
+    detents[1].detent_strength = 150;
 
     detents[2].position_percent = 100;
-    detents[2].engagement_strength = 100;
-    detents[2].hold_strength = 150;
-    detents[2].exit_strength = 100;
-    detents[2].spring_back_target = 255;
+    detents[2].detent_strength = 150;
 
-    bool result = lever.loadProfile(detents, 3, nullptr, 0);
+    BLDC::ProfileConfig profile;
+    bool result = lever.loadProfile(detents, 3, nullptr, 0, profile);
 
     TEST_ASSERT_TRUE(result);
     TEST_ASSERT_TRUE(lever.isProfileActive());
@@ -82,24 +74,16 @@ void test_detent_state_tracking() {
 
     BLDC::DetentConfig detents[3];
     detents[0].position_percent = 0;
-    detents[0].engagement_strength = 100;
-    detents[0].hold_strength = 150;
-    detents[0].exit_strength = 100;
-    detents[0].spring_back_target = 255;
+    detents[0].detent_strength = 150;
 
     detents[1].position_percent = 50;
-    detents[1].engagement_strength = 100;
-    detents[1].hold_strength = 150;
-    detents[1].exit_strength = 100;
-    detents[1].spring_back_target = 255;
+    detents[1].detent_strength = 150;
 
     detents[2].position_percent = 100;
-    detents[2].engagement_strength = 100;
-    detents[2].hold_strength = 150;
-    detents[2].exit_strength = 100;
-    detents[2].spring_back_target = 255;
+    detents[2].detent_strength = 150;
 
-    lever.loadProfile(detents, 3, nullptr, 0);
+    BLDC::ProfileConfig profile;
+    lever.loadProfile(detents, 3, nullptr, 0, profile);
 
     Reading reading = lever.getReading();
     TEST_ASSERT_FALSE(reading.has_value);
