@@ -2,7 +2,7 @@
 
 #include <stdint.h>
 
-namespace Sensor {
+namespace Sensors {
     class BLDCLever; // Forward declaration
 }
 
@@ -12,10 +12,10 @@ namespace BLDCManager {
 void init();
 
 // Register a BLDC lever for motor control updates
-void registerLever(Sensor::BLDCLever* lever);
+void registerLever(Sensors::BLDCLever* lever);
 
 // Unregister a BLDC lever
-void unregisterLever(Sensor::BLDCLever* lever);
+void unregisterLever(Sensors::BLDCLever* lever);
 
 // Update all registered levers' motor control (called at 1kHz from main loop)
 void updateMotorControl();

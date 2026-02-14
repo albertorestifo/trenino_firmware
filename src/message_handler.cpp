@@ -62,9 +62,9 @@ void onPacketReceived(const uint8_t* buffer, size_t size)
         handleSetOutput(msg.set_output);
     } else if (msg.isRetryCalibration()) {
         // Find BLDC lever by pin
-        Sensor::ISensor* sensor = SensorManager::getSensorByPin(msg.retry_calibration.pin);
-        if (sensor != nullptr && sensor->getType() == Sensor::InputType::BLDCLever) {
-            Sensor::BLDCLever* bldc = static_cast<Sensor::BLDCLever*>(sensor);
+        Sensors::ISensor* sensor = SensorManager::getSensorByPin(msg.retry_calibration.pin);
+        if (sensor != nullptr && sensor->getType() == Sensors::InputType::BLDCLever) {
+            Sensors::BLDCLever* bldc = static_cast<Sensors::BLDCLever*>(sensor);
             if (bldc->runCalibration()) {
                 sendConfigurationStored(ConfigManager::getCurrentConfigId());
             } else {
@@ -78,15 +78,15 @@ void onPacketReceived(const uint8_t* buffer, size_t size)
         size_t offset = 6; // After header (message_type + pin + num_detents + num_linear_ranges + snap_point + endstop_strength)
 
         // Build profile config from header fields
-        BLDC::ProfileConfig profile_config;
+        BLDCConfig::ProfileConfig profile_config;
         profile_config.snap_point = msg.load_bldc_profile.snap_point;
         profile_config.endstop_strength = msg.load_bldc_profile.endstop_strength;
 
         // Allocate temporary arrays
-        BLDC::DetentConfig* detents = new BLDC::DetentConfig[msg.load_bldc_profile.num_detents];
-        BLDC::LinearRangeConfig* ranges = nullptr;
+        BLDCConfig::DetentConfig* detents = new BLDCConfig::DetentConfig[msg.load_bldc_profile.num_detents];
+        BLDCConfig::LinearRangeConfig* ranges = nullptr;
         if (msg.load_bldc_profile.num_linear_ranges > 0) {
-            ranges = new BLDC::LinearRangeConfig[msg.load_bldc_profile.num_linear_ranges];
+            ranges = new BLDCConfig::LinearRangeConfig[msg.load_bldc_profile.num_linear_ranges];
         }
 
         // Parse detents (2 bytes each: position_percent + detent_strength)
@@ -103,9 +103,9 @@ void onPacketReceived(const uint8_t* buffer, size_t size)
         }
 
         // Find BLDC lever and load profile
-        Sensor::ISensor* sensor = SensorManager::getSensorByPin(msg.load_bldc_profile.pin);
-        if (sensor != nullptr && sensor->getType() == Sensor::InputType::BLDCLever) {
-            Sensor::BLDCLever* bldc = static_cast<Sensor::BLDCLever*>(sensor);
+        Sensors::ISensor* sensor = SensorManager::getSensorByPin(msg.load_bldc_profile.pin);
+        if (sensor != nullptr && sensor->getType() == Sensors::InputType::BLDCLever) {
+            Sensors::BLDCLever* bldc = static_cast<Sensors::BLDCLever*>(sensor);
             if (bldc->loadProfile(detents, msg.load_bldc_profile.num_detents, ranges, msg.load_bldc_profile.num_linear_ranges, profile_config)) {
                 sendConfigurationStored(0); // Success
             } else {
@@ -121,9 +121,9 @@ void onPacketReceived(const uint8_t* buffer, size_t size)
             delete[] ranges;
         }
     } else if (msg.isDeactivateBLDCProfile()) {
-        Sensor::ISensor* sensor = SensorManager::getSensorByPin(msg.deactivate_bldc_profile.pin);
-        if (sensor != nullptr && sensor->getType() == Sensor::InputType::BLDCLever) {
-            Sensor::BLDCLever* bldc = static_cast<Sensor::BLDCLever*>(sensor);
+        Sensors::ISensor* sensor = SensorManager::getSensorByPin(msg.deactivate_bldc_profile.pin);
+        if (sensor != nullptr && sensor->getType() == Sensors::InputType::BLDCLever) {
+            Sensors::BLDCLever* bldc = static_cast<Sensors::BLDCLever*>(sensor);
             bldc->deactivateProfile();
             // No response - fire and forget
         }
@@ -144,7 +144,7 @@ void update()
     SensorManager::scan();
 
     // Check for sensor readings and send them
-    Sensor::Reading reading;
+    Sensors::Reading reading;
     while (SensorManager::getNextReading(reading)) {
         sendInputValue(reading);
     }
@@ -208,7 +208,7 @@ void sendConfigurationError(uint32_t config_id)
     sendMessage(error);
 }
 
-void sendInputValue(const Sensor::Reading& reading)
+void sendInputValue(const Sensors::Reading& reading)
 {
     Protocol::InputValue input_value;
     input_value.pin = reading.pin;

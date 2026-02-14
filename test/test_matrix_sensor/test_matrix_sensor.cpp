@@ -60,7 +60,7 @@ void delayMicroseconds(unsigned int us)
 #include "../../src/matrix_sensor.cpp"
 #include <unity.h>
 
-using namespace Sensor;
+using namespace Sensors;
 
 // Helper to reset mock state
 void resetMockState()

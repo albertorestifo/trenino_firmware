@@ -1,6 +1,6 @@
 #include "bldc_lever.h"
 
-using namespace Sensor;
+using namespace Sensors;
 
 // Mock Arduino functions
 static unsigned long mock_millis_value = 0;
@@ -50,7 +50,7 @@ void test_load_profile() {
     lever.begin();
     lever.runCalibration();
 
-    BLDC::DetentConfig detents[3];
+    BLDCConfig::DetentConfig detents[3];
     detents[0].position_percent = 0;
     detents[0].detent_strength = 150;
 
@@ -60,7 +60,7 @@ void test_load_profile() {
     detents[2].position_percent = 100;
     detents[2].detent_strength = 150;
 
-    BLDC::ProfileConfig profile;
+    BLDCConfig::ProfileConfig profile;
     bool result = lever.loadProfile(detents, 3, nullptr, 0, profile);
 
     TEST_ASSERT_TRUE(result);
@@ -72,7 +72,7 @@ void test_detent_state_tracking() {
     lever.begin();
     lever.runCalibration();
 
-    BLDC::DetentConfig detents[3];
+    BLDCConfig::DetentConfig detents[3];
     detents[0].position_percent = 0;
     detents[0].detent_strength = 150;
 
@@ -82,7 +82,7 @@ void test_detent_state_tracking() {
     detents[2].position_percent = 100;
     detents[2].detent_strength = 150;
 
-    BLDC::ProfileConfig profile;
+    BLDCConfig::ProfileConfig profile;
     lever.loadProfile(detents, 3, nullptr, 0, profile);
 
     Reading reading = lever.getReading();
@@ -101,13 +101,13 @@ void test_snap_point_hysteresis() {
     lever.begin();
     lever.runCalibration();
 
-    BLDC::DetentConfig detents[2];
+    BLDCConfig::DetentConfig detents[2];
     detents[0].position_percent = 0;
     detents[0].detent_strength = 200;
     detents[1].position_percent = 100;
     detents[1].detent_strength = 200;
 
-    BLDC::ProfileConfig profile;
+    BLDCConfig::ProfileConfig profile;
     profile.snap_point = 70;
     lever.loadProfile(detents, 2, nullptr, 0, profile);
 
@@ -139,7 +139,7 @@ void test_linear_range_damping() {
     lever.begin();
     lever.runCalibration();
 
-    BLDC::DetentConfig detents[3];
+    BLDCConfig::DetentConfig detents[3];
     detents[0].position_percent = 0;
     detents[0].detent_strength = 200;
     detents[1].position_percent = 50;
@@ -147,12 +147,12 @@ void test_linear_range_damping() {
     detents[2].position_percent = 100;
     detents[2].detent_strength = 200;
 
-    BLDC::LinearRangeConfig ranges[1];
+    BLDCConfig::LinearRangeConfig ranges[1];
     ranges[0].start_detent_index = 0;
     ranges[0].end_detent_index = 1;
     ranges[0].damping_strength = 128;
 
-    BLDC::ProfileConfig profile;
+    BLDCConfig::ProfileConfig profile;
     lever.loadProfile(detents, 3, ranges, 1, profile);
 
     MagneticSensorSPI* enc = lever.getEncoder();
@@ -174,13 +174,13 @@ void test_virtual_endstop() {
     lever.begin();
     lever.runCalibration();
 
-    BLDC::DetentConfig detents[2];
+    BLDCConfig::DetentConfig detents[2];
     detents[0].position_percent = 10;
     detents[0].detent_strength = 200;
     detents[1].position_percent = 90;
     detents[1].detent_strength = 200;
 
-    BLDC::ProfileConfig profile;
+    BLDCConfig::ProfileConfig profile;
     profile.endstop_strength = 200;
     lever.loadProfile(detents, 2, nullptr, 0, profile);
 
@@ -204,11 +204,11 @@ void test_velocity_cutoff() {
     lever.begin();
     lever.runCalibration();
 
-    BLDC::DetentConfig detents[1];
+    BLDCConfig::DetentConfig detents[1];
     detents[0].position_percent = 50;
     detents[0].detent_strength = 200;
 
-    BLDC::ProfileConfig profile;
+    BLDCConfig::ProfileConfig profile;
     lever.loadProfile(detents, 1, nullptr, 0, profile);
 
     MagneticSensorSPI* enc = lever.getEncoder();
@@ -227,11 +227,11 @@ void test_idle_correction() {
     lever.begin();
     lever.runCalibration();
 
-    BLDC::DetentConfig detents[1];
+    BLDCConfig::DetentConfig detents[1];
     detents[0].position_percent = 50;
     detents[0].detent_strength = 200;
 
-    BLDC::ProfileConfig profile;
+    BLDCConfig::ProfileConfig profile;
     lever.loadProfile(detents, 1, nullptr, 0, profile);
 
     MagneticSensorSPI* enc = lever.getEncoder();
@@ -254,7 +254,7 @@ void test_full_detent_traversal() {
     lever.runCalibration();
 
     // 4 detents: 0%, 33%, 66%, 100%
-    BLDC::DetentConfig detents[4];
+    BLDCConfig::DetentConfig detents[4];
     detents[0].position_percent = 0;
     detents[0].detent_strength = 200;
     detents[1].position_percent = 33;
@@ -264,7 +264,7 @@ void test_full_detent_traversal() {
     detents[3].position_percent = 100;
     detents[3].detent_strength = 200;
 
-    BLDC::ProfileConfig profile;
+    BLDCConfig::ProfileConfig profile;
     profile.snap_point = 55;  // transition just past midpoint
     profile.endstop_strength = 200;
 

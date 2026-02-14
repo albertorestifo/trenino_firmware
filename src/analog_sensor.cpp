@@ -1,6 +1,6 @@
 #include "analog_sensor.h"
 
-namespace Sensor {
+namespace Sensors {
 
 AnalogSensor::AnalogSensor(uint8_t pin_number, uint8_t sensitivity_level)
     : pin(pin_number)
@@ -78,4 +78,4 @@ bool AnalogSensor::shouldSend()
     return delta > DEAD_ZONE;
 }
 
-} // namespace Sensor
+} // namespace Sensors

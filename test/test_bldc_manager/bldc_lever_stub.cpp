@@ -3,11 +3,11 @@
 
 #include "bldc_lever.h"
 
-namespace Sensor {
+namespace Sensors {
 
 // Minimal stub - only updateMotor() is called by BLDCManager
 void BLDCLever::updateMotor() {
     // Stub - do nothing
 }
 
-} // namespace Sensor
+} // namespace Sensors

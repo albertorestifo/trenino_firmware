@@ -7,8 +7,11 @@
 // Forward declarations for SimpleFOC (avoid including heavy headers in tests)
 class BLDCMotor;
 class MagneticSensorSPI;
+#ifndef UNIT_TEST
+class BLDCDriver3PWM;
+#endif
 
-namespace Sensor {
+namespace Sensors {
 
 class BLDCLever : public ISensor {
 public:
@@ -37,11 +40,11 @@ public:
     // Load a detent profile (replaces any existing profile)
     // Returns true on success, false if validation fails
     bool loadProfile(
-        const BLDC::DetentConfig* detents,
+        const BLDCConfig::DetentConfig* detents,
         uint8_t num_detents,
-        const BLDC::LinearRangeConfig* ranges,
+        const BLDCConfig::LinearRangeConfig* ranges,
         uint8_t num_ranges,
-        const BLDC::ProfileConfig& profile_config
+        const BLDCConfig::ProfileConfig& profile_config
     );
 
     // Deactivate current profile and enter freewheel state
@@ -57,7 +60,7 @@ public:
     bool isProfileActive() const { return profile_active_; }
 
     // Get last calibration error (if calibration failed)
-    BLDC::CalibrationError getLastCalibrationError() const { return last_calibration_error_; }
+    BLDCConfig::CalibrationError getLastCalibrationError() const { return last_calibration_error_; }
 
     // Check if encoder communication is working
     bool isEncoderHealthy() const;
@@ -84,20 +87,23 @@ private:
     // SimpleFOC objects (heap-allocated to avoid header dependency)
     BLDCMotor* motor_;
     MagneticSensorSPI* encoder_;
+#ifndef UNIT_TEST
+    BLDCDriver3PWM* driver_;
+#endif
 
     // Calibration data
     bool calibrated_;
     uint16_t min_encoder_position_;
     uint16_t max_encoder_position_;
-    BLDC::CalibrationError last_calibration_error_;
+    BLDCConfig::CalibrationError last_calibration_error_;
 
     // Active profile
     bool profile_active_;
-    BLDC::DetentConfig* detents_;
+    BLDCConfig::DetentConfig* detents_;
     uint8_t num_detents_;
-    BLDC::LinearRangeConfig* linear_ranges_;
+    BLDCConfig::LinearRangeConfig* linear_ranges_;
     uint8_t num_linear_ranges_;
-    BLDC::ProfileConfig profile_config_;
+    BLDCConfig::ProfileConfig profile_config_;
 
     // State tracking
     uint8_t current_detent_index_;
@@ -143,4 +149,4 @@ private:
     float getDetentCenter() const;
 };
 
-} // namespace Sensor
+} // namespace Sensors

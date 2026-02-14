@@ -35,7 +35,7 @@ void digitalWrite(uint8_t pin, uint8_t val)
 #include "../../src/button_sensor.cpp"
 #include <unity.h>
 
-using namespace Sensor;
+using namespace Sensors;
 
 // Helper to set mock digital value
 void setMockDigitalValue(int value)

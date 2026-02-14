@@ -2,7 +2,7 @@
 
 #include <stdint.h>
 
-namespace BLDC {
+namespace BLDCConfig {
 
 // Configuration for a single detent
 struct DetentConfig {
@@ -82,4 +82,4 @@ constexpr float DAMPING_SCALE = 1.0f;
 
 constexpr float LEVER_ARC_DEGREES = 90.0f;
 
-} // namespace BLDC
+} // namespace BLDCConfig

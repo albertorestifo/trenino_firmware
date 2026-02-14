@@ -3,7 +3,7 @@
 #include "sensor.h"
 #include <Arduino.h>
 
-namespace Sensor {
+namespace Sensors {
 
 // Analog sensor implementation
 // Uses EMA (Exponential Moving Average) for smoothing
@@ -41,4 +41,4 @@ private:
     uint16_t computeMinSendInterval() const;
 };
 
-} // namespace Sensor
+} // namespace Sensors

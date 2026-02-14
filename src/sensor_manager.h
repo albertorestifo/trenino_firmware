@@ -25,13 +25,13 @@ void scan();
 // Check if any sensor has a reading to report
 // Returns true if a reading is available
 // Populates the reading parameter with the sensor reading
-bool getNextReading(Sensor::Reading& reading);
+bool getNextReading(Sensors::Reading& reading);
 
 // Get number of active sensors
 uint8_t getSensorCount();
 
 // Get sensor by pin number
 // Returns nullptr if not found
-Sensor::ISensor* getSensorByPin(uint8_t pin);
+Sensors::ISensor* getSensorByPin(uint8_t pin);
 
 } // namespace SensorManager

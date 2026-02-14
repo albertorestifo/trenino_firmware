@@ -11,7 +11,7 @@
 
 #include "Arduino.h"
 
-namespace Sensor {
+namespace Sensors {
 
 BLDCLever::BLDCLever(uint8_t motor_pin_a, uint8_t motor_pin_b, uint8_t motor_pin_c,
                      uint8_t motor_enable_a, uint8_t motor_enable_b,
@@ -30,10 +30,13 @@ BLDCLever::BLDCLever(uint8_t motor_pin_a, uint8_t motor_pin_b, uint8_t motor_pin
     , pin_(encoder_cs)
     , motor_(nullptr)
     , encoder_(nullptr)
+#ifndef UNIT_TEST
+    , driver_(nullptr)
+#endif
     , calibrated_(false)
     , min_encoder_position_(0)
     , max_encoder_position_(0)
-    , last_calibration_error_(BLDC::CalibrationError::TIMEOUT)
+    , last_calibration_error_(BLDCConfig::CalibrationError::TIMEOUT)
     , profile_active_(false)
     , detents_(nullptr)
     , num_detents_(0)
@@ -68,6 +71,12 @@ BLDCLever::~BLDCLever() {
         delete encoder_;
         encoder_ = nullptr;
     }
+#ifndef UNIT_TEST
+    if (driver_ != nullptr) {
+        delete driver_;
+        driver_ = nullptr;
+    }
+#endif
 
     // Clean up profile data
     if (detents_ != nullptr) {
@@ -81,28 +90,37 @@ BLDCLever::~BLDCLever() {
 }
 
 void BLDCLever::begin() {
-    // Initialize encoder using configured params
+#ifndef UNIT_TEST
+    // Hardware path: real SimpleFOC API
+    encoder_ = new MagneticSensorSPI(encoder_cs_, encoder_bits_, 0x3FFF);
+    encoder_->init();
+
+    driver_ = new BLDCDriver3PWM(motor_pin_a_, motor_pin_b_, motor_pin_c_, motor_enable_a_);
+    driver_->voltage_power_supply = voltage_ / 10.0f;
+    driver_->init();
+
+    motor_ = new BLDCMotor(pole_pairs_);
+    motor_->linkSensor(encoder_);
+    motor_->linkDriver(driver_);
+    motor_->controller = MotionControlType::torque;
+    motor_->voltage_limit = voltage_ / 10.0f;
+    if (current_limit_ > 0) {
+        motor_->current_limit = current_limit_ / 10.0f;
+    }
+    motor_->init();
+    motor_->initFOC();
+#else
+    // Mock path for unit tests
     uint16_t encoder_mask = (1 << encoder_bits_) - 1;
     encoder_ = new MagneticSensorSPI(encoder_cs_, encoder_bits_, encoder_mask);
     encoder_->init();
 
-    // Initialize motor with configured params
     motor_ = new BLDCMotor(pole_pairs_, motor_pin_a_, motor_pin_b_, motor_pin_c_, motor_enable_a_);
     motor_->linkSensor(encoder_);
-
-    // Configure motor
-    motor_->voltage_power_supply = voltage_ / 10.0f;
     motor_->controller = Type_torque;
-    motor_->sensor_direction = 1;
-
-    // Set current limit if specified
-    if (current_limit_ > 0) {
-        motor_->current_limit = current_limit_ / 10.0f;
-    }
-
-    // Initialize motor
     motor_->init();
     motor_->initFOC();
+#endif
 
     last_encoder_success_time_ = millis();
 }
@@ -141,20 +159,20 @@ void BLDCLever::updateMotor() {
         return;
     }
 
-    // Update encoder reading
+    // Update encoder reading and FOC control loop
+#ifdef UNIT_TEST
     encoder_->update();
-
-    // Update FOC control loop
+#endif
     motor_->loopFOC();
 
     // Read encoder position (centralised here, not in updateDetentState)
-    #ifdef UNIT_TEST
-    current_encoder_position_ = static_cast<uint16_t>(encoder_->getPosition());
-    #else
+#ifndef UNIT_TEST
     float angle = encoder_->getAngle();
     uint32_t range = max_encoder_position_ - min_encoder_position_;
     current_encoder_position_ = min_encoder_position_ + static_cast<uint16_t>((angle / 6.28318f) * range);
-    #endif
+#else
+    current_encoder_position_ = static_cast<uint16_t>(encoder_->getPosition());
+#endif
 
     updateVelocity();
     updateIdleCorrection();
@@ -184,7 +202,7 @@ bool BLDCLever::isEncoderHealthy() const {
 
 bool BLDCLever::runCalibration() {
     if (motor_ == nullptr || encoder_ == nullptr) {
-        last_calibration_error_ = BLDC::CalibrationError::ENCODER_ERROR;
+        last_calibration_error_ = BLDCConfig::CalibrationError::ENCODER_ERROR;
         return false;
     }
 
@@ -203,21 +221,21 @@ bool BLDCLever::runCalibration() {
     max_encoder_position_ = 16383;
 
     calibrated_ = true;
-    last_calibration_error_ = BLDC::CalibrationError::TIMEOUT;  // No error (using enum member as success state)
+    last_calibration_error_ = BLDCConfig::CalibrationError::TIMEOUT;  // No error (using enum member as success state)
 
     // Compute ticks per degree from calibrated range
     uint32_t range = max_encoder_position_ - min_encoder_position_;
-    ticks_per_degree_ = static_cast<float>(range) / BLDC::LEVER_ARC_DEGREES;
+    ticks_per_degree_ = static_cast<float>(range) / BLDCConfig::LEVER_ARC_DEGREES;
 
     return true;
 }
 
 bool BLDCLever::loadProfile(
-    const BLDC::DetentConfig* detents,
+    const BLDCConfig::DetentConfig* detents,
     uint8_t num_detents,
-    const BLDC::LinearRangeConfig* ranges,
+    const BLDCConfig::LinearRangeConfig* ranges,
     uint8_t num_ranges,
-    const BLDC::ProfileConfig& profile_config
+    const BLDCConfig::ProfileConfig& profile_config
 ) {
     if (!calibrated_) {
         return false;  // Must calibrate before loading profile
@@ -241,7 +259,7 @@ bool BLDCLever::loadProfile(
     }
 
     // Allocate and copy detents
-    detents_ = new BLDC::DetentConfig[num_detents];
+    detents_ = new BLDCConfig::DetentConfig[num_detents];
     for (uint8_t i = 0; i < num_detents; i++) {
         detents_[i] = detents[i];
     }
@@ -249,7 +267,7 @@ bool BLDCLever::loadProfile(
 
     // Allocate and copy ranges if provided
     if (ranges != nullptr && num_ranges > 0) {
-        linear_ranges_ = new BLDC::LinearRangeConfig[num_ranges];
+        linear_ranges_ = new BLDCConfig::LinearRangeConfig[num_ranges];
         for (uint8_t i = 0; i < num_ranges; i++) {
             linear_ranges_[i] = ranges[i];
         }
@@ -348,7 +366,7 @@ float BLDCLever::calculateTargetTorque() {
 
     // Safety cutoff
     float abs_vel = current_velocity_ > 0 ? current_velocity_ : -current_velocity_;
-    if (abs_vel > BLDC::MAX_SAFE_VELOCITY) return 0.0f;
+    if (abs_vel > BLDCConfig::MAX_SAFE_VELOCITY) return 0.0f;
 
     float position = static_cast<float>(current_encoder_position_);
     float detent_center = getDetentCenter();
@@ -361,7 +379,7 @@ float BLDCLever::calculateTargetTorque() {
 
     float p_gain = current_p_gain_;
     if (out_of_bounds) {
-        p_gain = (profile_config_.endstop_strength / 255.0f) * BLDC::P_SCALE_FACTOR;
+        p_gain = (profile_config_.endstop_strength / 255.0f) * BLDCConfig::P_SCALE_FACTOR;
         if (position < first_pos) angle_error = position - first_pos;
         else angle_error = position - last_pos;
     }
@@ -371,7 +389,7 @@ float BLDCLever::calculateTargetTorque() {
     bool in_range = isInLinearRange(range_index);
     if (in_range && !out_of_bounds) {
         float damping = linear_ranges_[range_index].damping_strength / 255.0f;
-        return -damping * current_velocity_ * BLDC::DAMPING_SCALE;
+        return -damping * current_velocity_ * BLDCConfig::DAMPING_SCALE;
     }
 
     // Dead zone
@@ -506,26 +524,26 @@ void BLDCLever::recalculatePDGains() {
     float strength = detents_[current_detent_index_].detent_strength / 255.0f;
 
     // P gain
-    current_p_gain_ = strength * BLDC::P_SCALE_FACTOR;
+    current_p_gain_ = strength * BLDCConfig::P_SCALE_FACTOR;
 
     // D gain: piecewise interpolation based on detent width in degrees
     float detent_width_ticks = getDetentWidth(current_detent_index_);
     float detent_width_deg = (ticks_per_degree_ > 0.0f) ? (detent_width_ticks / ticks_per_degree_) : 0.0f;
 
-    if (detent_width_deg <= BLDC::D_WIDTH_LOWER_DEG) {
-        current_d_gain_ = strength * BLDC::D_LOWER_FACTOR;
-    } else if (detent_width_deg >= BLDC::D_WIDTH_UPPER_DEG) {
-        current_d_gain_ = strength * BLDC::D_UPPER_FACTOR;
+    if (detent_width_deg <= BLDCConfig::D_WIDTH_LOWER_DEG) {
+        current_d_gain_ = strength * BLDCConfig::D_LOWER_FACTOR;
+    } else if (detent_width_deg >= BLDCConfig::D_WIDTH_UPPER_DEG) {
+        current_d_gain_ = strength * BLDCConfig::D_UPPER_FACTOR;
     } else {
         // Linear interpolation
-        float t = (detent_width_deg - BLDC::D_WIDTH_LOWER_DEG) / (BLDC::D_WIDTH_UPPER_DEG - BLDC::D_WIDTH_LOWER_DEG);
-        float d_factor = BLDC::D_LOWER_FACTOR + t * (BLDC::D_UPPER_FACTOR - BLDC::D_LOWER_FACTOR);
+        float t = (detent_width_deg - BLDCConfig::D_WIDTH_LOWER_DEG) / (BLDCConfig::D_WIDTH_UPPER_DEG - BLDCConfig::D_WIDTH_LOWER_DEG);
+        float d_factor = BLDCConfig::D_LOWER_FACTOR + t * (BLDCConfig::D_UPPER_FACTOR - BLDCConfig::D_LOWER_FACTOR);
         current_d_gain_ = strength * d_factor;
     }
 
     // Dead zone
-    float dz_from_fraction = detent_width_ticks * BLDC::DEAD_ZONE_FRACTION;
-    float dz_max = ticks_per_degree_ * BLDC::DEAD_ZONE_MAX_DEG;
+    float dz_from_fraction = detent_width_ticks * BLDCConfig::DEAD_ZONE_FRACTION;
+    float dz_max = ticks_per_degree_ * BLDCConfig::DEAD_ZONE_MAX_DEG;
     current_dead_zone_ = (dz_from_fraction < dz_max) ? dz_from_fraction : dz_max;
 }
 
@@ -535,8 +553,8 @@ void BLDCLever::updateVelocity() {
     if (dt_ms > 0 && prev_update_time_ > 0) {
         float dt = dt_ms / 1000.0f;
         float raw_velocity = (static_cast<float>(current_encoder_position_) - prev_position_) / dt;
-        current_velocity_ = current_velocity_ * (1.0f - BLDC::VELOCITY_LPF_ALPHA)
-                          + raw_velocity * BLDC::VELOCITY_LPF_ALPHA;
+        current_velocity_ = current_velocity_ * (1.0f - BLDCConfig::VELOCITY_LPF_ALPHA)
+                          + raw_velocity * BLDCConfig::VELOCITY_LPF_ALPHA;
     }
     prev_position_ = static_cast<float>(current_encoder_position_);
     prev_update_time_ = now;
@@ -546,19 +564,19 @@ void BLDCLever::updateIdleCorrection() {
     if (!profile_active_ || detents_ == nullptr || current_detent_index_ >= num_detents_) return;
 
     float abs_vel = current_velocity_ > 0 ? current_velocity_ : -current_velocity_;
-    velocity_ewma_ = velocity_ewma_ * (1.0f - BLDC::IDLE_VELOCITY_EWMA_ALPHA) + abs_vel * BLDC::IDLE_VELOCITY_EWMA_ALPHA;
+    velocity_ewma_ = velocity_ewma_ * (1.0f - BLDCConfig::IDLE_VELOCITY_EWMA_ALPHA) + abs_vel * BLDCConfig::IDLE_VELOCITY_EWMA_ALPHA;
 
     uint32_t now = millis();
-    if (velocity_ewma_ > BLDC::IDLE_VELOCITY_THRESHOLD) { idle_start_time_ = now; return; }
-    if ((now - idle_start_time_) < BLDC::IDLE_CORRECTION_DELAY_MS) return;
+    if (velocity_ewma_ > BLDCConfig::IDLE_VELOCITY_THRESHOLD) { idle_start_time_ = now; return; }
+    if ((now - idle_start_time_) < BLDCConfig::IDLE_CORRECTION_DELAY_MS) return;
 
     float nominal = static_cast<float>(percentToEncoderPosition(detents_[current_detent_index_].position_percent));
     float angle = static_cast<float>(current_encoder_position_) - nominal;
-    float max_angle = ticks_per_degree_ * BLDC::IDLE_CORRECTION_MAX_DEG;
+    float max_angle = ticks_per_degree_ * BLDCConfig::IDLE_CORRECTION_MAX_DEG;
     if (angle > max_angle || angle < -max_angle) return;
 
     float error = static_cast<float>(current_encoder_position_) - nominal - detent_center_offset_;
-    detent_center_offset_ += error * BLDC::IDLE_CORRECTION_RATE_ALPHA;
+    detent_center_offset_ += error * BLDCConfig::IDLE_CORRECTION_RATE_ALPHA;
 }
 
 float BLDCLever::getDetentWidth(uint8_t detent_index) const {
@@ -601,4 +619,4 @@ float BLDCLever::getDetentCenter() const {
     return nominal + detent_center_offset_;
 }
 
-} // namespace Sensor
+} // namespace Sensors

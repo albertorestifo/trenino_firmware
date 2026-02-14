@@ -2,7 +2,7 @@
 
 #include <stdint.h>
 
-namespace Sensor {
+namespace Sensors {
 
 // Input types (matches protocol INPUT_TYPE_* constants)
 enum class InputType : uint8_t {
@@ -58,4 +58,4 @@ public:
     virtual uint8_t getPin() const = 0;
 };
 
-} // namespace Sensor
+} // namespace Sensors

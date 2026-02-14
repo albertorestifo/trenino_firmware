@@ -34,7 +34,7 @@ void sendMessage(const T& message);
 void sendIdentityResponse(uint32_t request_id, uint32_t config_id);
 void sendConfigurationStored(uint32_t config_id);
 void sendConfigurationError(uint32_t config_id);
-void sendInputValue(const Sensor::Reading& reading);
+void sendInputValue(const Sensors::Reading& reading);
 void sendHeartbeat();
 void sendCalibrationError(uint8_t pin, uint8_t error_code);
 void sendEncoderError(uint8_t pin);

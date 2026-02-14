@@ -7,7 +7,7 @@ namespace BLDCManager {
 constexpr uint8_t MAX_LEVERS = 4;
 
 // Array of registered levers
-static Sensor::BLDCLever* g_levers[MAX_LEVERS];
+static Sensors::BLDCLever* g_levers[MAX_LEVERS];
 static uint8_t g_lever_count = 0;
 
 void init() {
@@ -17,7 +17,7 @@ void init() {
     g_lever_count = 0;
 }
 
-void registerLever(Sensor::BLDCLever* lever) {
+void registerLever(Sensors::BLDCLever* lever) {
     if (lever == nullptr) return;
     if (g_lever_count >= MAX_LEVERS) return;
 
@@ -29,7 +29,7 @@ void registerLever(Sensor::BLDCLever* lever) {
     g_levers[g_lever_count++] = lever;
 }
 
-void unregisterLever(Sensor::BLDCLever* lever) {
+void unregisterLever(Sensors::BLDCLever* lever) {
     if (lever == nullptr) return;
 
     // Find and remove

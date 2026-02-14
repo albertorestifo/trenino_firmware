@@ -3,7 +3,7 @@
 #include "sensor.h"
 #include <Arduino.h>
 
-namespace Sensor {
+namespace Sensors {
 
 // Matrix sensor implementation
 // Uses row/column scanning with per-button debouncing
@@ -75,4 +75,4 @@ private:
     uint8_t virtualPin(uint8_t button_index) const { return VIRTUAL_PIN_BASE + button_index; }
 };
 
-} // namespace Sensor
+} // namespace Sensors

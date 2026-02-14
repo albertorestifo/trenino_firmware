@@ -3,7 +3,7 @@
 #include "sensor.h"
 #include <Arduino.h>
 
-namespace Sensor {
+namespace Sensors {
 
 // Button sensor implementation
 // Uses counter-based debouncing and reports edge events (press/release)
@@ -30,4 +30,4 @@ public:
     uint8_t getPin() const override { return pin; }
 };
 
-} // namespace Sensor
+} // namespace Sensors

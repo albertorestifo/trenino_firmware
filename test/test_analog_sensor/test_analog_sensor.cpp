@@ -25,7 +25,7 @@ int analogRead(uint8_t pin)
 #include "../../src/analog_sensor.cpp"
 #include <unity.h>
 
-using namespace Sensor;
+using namespace Sensors;
 
 // Helper to set mock analog value
 void setMockAnalogValue(uint16_t value)
