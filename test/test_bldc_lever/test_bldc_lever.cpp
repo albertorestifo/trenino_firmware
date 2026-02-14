@@ -248,6 +248,66 @@ void test_idle_correction() {
     TEST_ASSERT_TRUE(lever.isProfileActive());
 }
 
+void test_full_detent_traversal() {
+    BLDCLever lever(5, 6, 9, 7, 8, 10, 11, 120, 0, 14);
+    lever.begin();
+    lever.runCalibration();
+
+    // 4 detents: 0%, 33%, 66%, 100%
+    BLDC::DetentConfig detents[4];
+    detents[0].position_percent = 0;
+    detents[0].detent_strength = 200;
+    detents[1].position_percent = 33;
+    detents[1].detent_strength = 150;
+    detents[2].position_percent = 66;
+    detents[2].detent_strength = 150;
+    detents[3].position_percent = 100;
+    detents[3].detent_strength = 200;
+
+    BLDC::ProfileConfig profile;
+    profile.snap_point = 55;  // transition just past midpoint
+    profile.endstop_strength = 200;
+
+    lever.loadProfile(detents, 4, nullptr, 0, profile);
+
+    MagneticSensorSPI* enc = lever.getEncoder();
+
+    // Start at detent 0
+    enc->setPosition(0);
+    mock_millis_value = 100;
+    lever.updateMotor();
+    TEST_ASSERT_EQUAL(0, lever.getReading().value);
+
+    // Move to 60% of way to detent 1 (above snap_point of 0.55)
+    // Detent 1 at 33% = position 5406. 60% of 5406 = 3244
+    enc->setPosition(3244);
+    mock_millis_value = 101;
+    lever.updateMotor();
+    TEST_ASSERT_EQUAL(1, lever.getReading().value); // snapped to detent 1
+
+    // Move toward detent 2 (66% = 10813)
+    // Distance from detent 1 (5406) to detent 2 (10813) = 5407
+    // 55% of 5407 = 2974, so threshold at 5406 + 2974 = 8380
+    enc->setPosition(8500);
+    mock_millis_value = 102;
+    lever.updateMotor();
+    TEST_ASSERT_EQUAL(2, lever.getReading().value); // snapped to detent 2
+
+    // Move to detent 3 (100% = 16383)
+    enc->setPosition(15000);
+    mock_millis_value = 103;
+    lever.updateMotor();
+    TEST_ASSERT_EQUAL(3, lever.getReading().value); // snapped to detent 3
+
+    // Move back — need to cross snap threshold going backward
+    // From detent 3 (16383) back toward detent 2 (10813)
+    // Distance = 5570, 55% = 3064, threshold at 16383 - 3064 = 13319
+    enc->setPosition(13000);
+    mock_millis_value = 104;
+    lever.updateMotor();
+    TEST_ASSERT_EQUAL(2, lever.getReading().value); // snapped back to detent 2
+}
+
 void setUp() {
     mock_millis_value = 0;
 }
@@ -265,5 +325,6 @@ int main() {
     RUN_TEST(test_virtual_endstop);
     RUN_TEST(test_velocity_cutoff);
     RUN_TEST(test_idle_correction);
+    RUN_TEST(test_full_detent_traversal);
     return UNITY_END();
 }

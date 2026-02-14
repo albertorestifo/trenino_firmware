@@ -196,16 +196,27 @@ Error codes: 0=timeout, 1=range_too_small, 2=encoder_error
 
 ```
 [type: u8 = 11] [pin: u8] [num_detents: u8] [num_linear_ranges: u8]
-[detent_data: 5 bytes × num_detents]
-[range_data: 3 bytes × num_linear_ranges]
+[snap_point: u8] [endstop_strength: u8]
+[detent_data: 2 bytes x num_detents]
+[range_data: 3 bytes x num_linear_ranges]
 ```
 
-Detent data (5 bytes each):
+| Field | Description |
+|-------|-------------|
+| snap_point | Hysteresis threshold (50-150 maps to 0.50-1.50). Must travel this fraction of the distance to next detent before transitioning. |
+| endstop_strength | Virtual endstop resistance (0-255). Motor pushes back beyond first/last detent. |
+
+Detent data (2 bytes each):
 ```
-[position: u8] [engagement: u8] [hold: u8] [exit: u8] [spring_back: u8]
+[position_percent: u8] [detent_strength: u8]
 ```
 
-Range data (3 bytes each):
+| Field | Description |
+|-------|-------------|
+| position_percent | 0-100% of calibrated lever range |
+| detent_strength | 0-255: haptic detent strength (scales PD gains) |
+
+Range data (3 bytes each, unchanged):
 ```
 [start_detent: u8] [end_detent: u8] [damping: u8]
 ```

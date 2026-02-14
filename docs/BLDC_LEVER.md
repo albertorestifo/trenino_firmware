@@ -24,8 +24,8 @@ Configure once via standard `Configure` message (INPUT_TYPE_BLDC_LEVER = 3):
 
 Loaded via `LoadBLDCProfile` message when train/scenario starts:
 - Detent positions (0-100% of calibrated range)
-- Engagement/hold/exit strengths per detent
-- Spring-back targets (which detent to return to on release)
+- Detent strength per detent (scales PD controller gains)
+- Snap point hysteresis and virtual endstop strength
 - Linear ranges with damping between detents
 
 Profile can be changed instantly without recalibration.
