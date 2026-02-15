@@ -278,7 +278,7 @@ bool BLDCLever::loadProfile(
     }
 
     // Validate profile
-    if (!validateProfile()) {
+    if (!validateProfile(profile_config)) {
         // Clean up on validation failure
         delete[] detents_;
         detents_ = nullptr;
@@ -311,7 +311,7 @@ bool BLDCLever::loadProfile(
     return true;
 }
 
-// Private helper methods (stubs for now - will be implemented in later tasks)
+// Private helper methods
 
 void BLDCLever::updateDetentState() {
     if (!profile_active_ || detents_ == nullptr || num_detents_ == 0) {
@@ -469,7 +469,7 @@ bool BLDCLever::isInLinearRange(uint8_t& range_index) const {
         float pos = static_cast<float>(current_encoder_position_);
 
         // Position must be between the range endpoints AND current detent must be one of the endpoints
-        if (pos >= start_pos && pos <= end_pos &&
+        if (pos > start_pos && pos < end_pos &&
             (current_detent_index_ == start_idx || current_detent_index_ == end_idx)) {
             range_index = i;
             return true;
@@ -479,7 +479,7 @@ bool BLDCLever::isInLinearRange(uint8_t& range_index) const {
     return false;
 }
 
-bool BLDCLever::validateProfile() const {
+bool BLDCLever::validateProfile(const BLDCConfig::ProfileConfig& profile_config) const {
     if (detents_ == nullptr || num_detents_ == 0) {
         return false;
     }
@@ -490,6 +490,18 @@ bool BLDCLever::validateProfile() const {
         if (detents_[i].position_percent > 100) {
             return false;
         }
+    }
+
+    // Validate monotonic ordering of detent positions
+    for (uint8_t i = 1; i < num_detents_; i++) {
+        if (detents_[i].position_percent <= detents_[i - 1].position_percent) {
+            return false;
+        }
+    }
+
+    // Validate snap_point range (50-150, maps to 0.50-1.50)
+    if (profile_config.snap_point < 50 || profile_config.snap_point > 150) {
+        return false;
     }
 
     // Validate linear ranges if present
@@ -551,7 +563,7 @@ void BLDCLever::updateVelocity() {
     uint32_t now = millis();
     uint32_t dt_ms = now - prev_update_time_;
     if (dt_ms > 0 && prev_update_time_ > 0) {
-        float dt = dt_ms / 1000.0f;
+        float dt = static_cast<float>(dt_ms);
         float raw_velocity = (static_cast<float>(current_encoder_position_) - prev_position_) / dt;
         current_velocity_ = current_velocity_ * (1.0f - BLDCConfig::VELOCITY_LPF_ALPHA)
                           + raw_velocity * BLDCConfig::VELOCITY_LPF_ALPHA;

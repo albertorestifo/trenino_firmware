@@ -139,7 +139,7 @@ private:
     uint16_t percentToEncoderPosition(uint8_t percent) const;
     uint8_t findClosestDetent() const;
     bool isInLinearRange(uint8_t& range_index) const;
-    bool validateProfile() const;
+    bool validateProfile(const BLDCConfig::ProfileConfig& profile_config) const;
 
     // PD controller helpers
     void recalculatePDGains();
