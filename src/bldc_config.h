@@ -58,6 +58,22 @@ constexpr uint32_t CALIBRATION_STALL_TIMEOUT_MS = 5000;  // 5 second stall timeo
 constexpr float CALIBRATION_SPEED = 0.1f;  // 10% speed during calibration
 constexpr float CALIBRATION_TORQUE = 0.5f;  // Low torque for calibration
 
+// Stall detection constants
+constexpr float STALL_THRESHOLD_RAD = 0.01f;        // ~0.57 deg movement threshold
+constexpr uint32_t STALL_CONFIRM_MS = 300;           // Sustained no-movement to confirm stall
+constexpr uint32_t STALL_SETTLE_MS = 200;            // Ignore stalls during motor acceleration
+constexpr uint32_t STALL_SAMPLE_INTERVAL_MS = 10;    // 100Hz sampling for stall detection
+
+// Centering P-controller constants
+constexpr float CENTER_P_GAIN = 2.0f;
+constexpr float CENTER_TOLERANCE_RAD = 0.02f;        // ~1.1 degrees
+constexpr uint32_t CENTER_SETTLE_MS = 200;
+constexpr uint32_t CENTER_TIMEOUT_MS = 5000;
+constexpr float CENTER_MAX_TORQUE = 0.3f;
+
+// Minimum physical arc (radians) for valid calibration (~5 degrees)
+constexpr float MIN_CALIBRATION_ARC_RAD = 0.0873f;
+
 // PD controller constants
 constexpr float P_SCALE_FACTOR = 4.0f;
 

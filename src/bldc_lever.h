@@ -95,6 +95,8 @@ private:
     uint16_t min_encoder_position_;
     uint16_t max_encoder_position_;
     BLDCConfig::CalibrationError last_calibration_error_;
+    float calibration_angle_min_;   // Raw encoder angle (rad) at first endstop
+    float calibration_angle_max_;   // Raw encoder angle (rad) at second endstop
 
     // Active profile
     bool profile_active_;
@@ -146,6 +148,10 @@ private:
     void updateIdleCorrection();
     float getDetentWidth(uint8_t detent_index) const;
     float getDetentCenter() const;
+
+    // Calibration helpers (hardware-only, stubs under UNIT_TEST)
+    bool driveToStall(float torque, float& stall_angle);
+    bool driveToCenter(float center_angle);
 };
 
 } // namespace Sensors
