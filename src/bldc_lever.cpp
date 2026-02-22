@@ -14,14 +14,13 @@
 namespace Sensors {
 
 BLDCLever::BLDCLever(uint8_t motor_pin_a, uint8_t motor_pin_b, uint8_t motor_pin_c,
-                     uint8_t motor_enable_a, uint8_t motor_enable_b,
+                     uint8_t motor_enable,
                      uint8_t encoder_cs, uint8_t pole_pairs,
                      uint8_t voltage, uint8_t current_limit, uint8_t encoder_bits)
     : motor_pin_a_(motor_pin_a)
     , motor_pin_b_(motor_pin_b)
     , motor_pin_c_(motor_pin_c)
-    , motor_enable_a_(motor_enable_a)
-    , motor_enable_b_(motor_enable_b)
+    , motor_enable_(motor_enable)
     , encoder_cs_(encoder_cs)
     , pole_pairs_(pole_pairs)
     , voltage_(voltage)
@@ -95,7 +94,7 @@ void BLDCLever::begin() {
     encoder_ = new MagneticSensorSPI(encoder_cs_, encoder_bits_, 0x3FFF);
     encoder_->init();
 
-    driver_ = new BLDCDriver3PWM(motor_pin_a_, motor_pin_b_, motor_pin_c_, motor_enable_a_);
+    driver_ = new BLDCDriver3PWM(motor_pin_a_, motor_pin_b_, motor_pin_c_, motor_enable_);
     driver_->voltage_power_supply = voltage_ / 10.0f;
     driver_->init();
 
@@ -115,7 +114,7 @@ void BLDCLever::begin() {
     encoder_ = new MagneticSensorSPI(encoder_cs_, encoder_bits_, encoder_mask);
     encoder_->init();
 
-    motor_ = new BLDCMotor(pole_pairs_, motor_pin_a_, motor_pin_b_, motor_pin_c_, motor_enable_a_);
+    motor_ = new BLDCMotor(pole_pairs_, motor_pin_a_, motor_pin_b_, motor_pin_c_, motor_enable_);
     motor_->linkSensor(encoder_);
     motor_->controller = Type_torque;
     motor_->init();

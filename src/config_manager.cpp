@@ -194,9 +194,7 @@ void storeToEEPROM(uint32_t config_id, const InputConfig* inputs, uint8_t num_in
             addr += sizeof(uint8_t);
             eeprom_put(addr, inputs[i].bldc.motor_pin_c);
             addr += sizeof(uint8_t);
-            eeprom_put(addr, inputs[i].bldc.motor_enable_a);
-            addr += sizeof(uint8_t);
-            eeprom_put(addr, inputs[i].bldc.motor_enable_b);
+            eeprom_put(addr, inputs[i].bldc.motor_enable);
             addr += sizeof(uint8_t);
             eeprom_put(addr, inputs[i].bldc.encoder_cs);
             addr += sizeof(uint8_t);
@@ -292,9 +290,7 @@ bool loadFromEEPROM()
             addr += sizeof(uint8_t);
             eeprom_get(addr, g_current_inputs[i].bldc.motor_pin_c);
             addr += sizeof(uint8_t);
-            eeprom_get(addr, g_current_inputs[i].bldc.motor_enable_a);
-            addr += sizeof(uint8_t);
-            eeprom_get(addr, g_current_inputs[i].bldc.motor_enable_b);
+            eeprom_get(addr, g_current_inputs[i].bldc.motor_enable);
             addr += sizeof(uint8_t);
             eeprom_get(addr, g_current_inputs[i].bldc.encoder_cs);
             addr += sizeof(uint8_t);

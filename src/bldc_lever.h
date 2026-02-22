@@ -17,7 +17,7 @@ class BLDCLever : public ISensor {
 public:
     // Constructor
     BLDCLever(uint8_t motor_pin_a, uint8_t motor_pin_b, uint8_t motor_pin_c,
-              uint8_t motor_enable_a, uint8_t motor_enable_b,
+              uint8_t motor_enable,
               uint8_t encoder_cs, uint8_t pole_pairs,
               uint8_t voltage, uint8_t current_limit, uint8_t encoder_bits);
 
@@ -75,8 +75,7 @@ private:
     uint8_t motor_pin_a_;
     uint8_t motor_pin_b_;
     uint8_t motor_pin_c_;
-    uint8_t motor_enable_a_;
-    uint8_t motor_enable_b_;
+    uint8_t motor_enable_;
     uint8_t encoder_cs_;
     uint8_t pole_pairs_;
     uint8_t voltage_;        // 0.1V units

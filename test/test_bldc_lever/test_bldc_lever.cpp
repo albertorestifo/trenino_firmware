@@ -19,7 +19,7 @@ void delayMicroseconds(unsigned int us) {}
 #include <unity.h>
 
 void test_bldc_lever_construction() {
-    BLDCLever lever(5, 6, 9, 7, 8, 10, 11, 120, 0, 14);
+    BLDCLever lever(5, 6, 9, 7, 10, 11, 120, 0, 14);
 
     TEST_ASSERT_EQUAL(InputType::BLDCLever, lever.getType());
     TEST_ASSERT_EQUAL_UINT8(10, lever.getPin());  // encoder_cs is the identifying pin
@@ -29,14 +29,14 @@ void test_bldc_lever_construction() {
 
 void test_bldc_lever_custom_params() {
     // Different hardware: 7 pole pairs, 24V, 3A limit, 12-bit encoder
-    BLDCLever lever(3, 5, 6, 7, 8, 15, 7, 240, 30, 12);
+    BLDCLever lever(3, 5, 6, 7, 15, 7, 240, 30, 12);
 
     TEST_ASSERT_EQUAL(InputType::BLDCLever, lever.getType());
     TEST_ASSERT_EQUAL_UINT8(15, lever.getPin());  // encoder_cs pin
 }
 
 void test_calibration_success() {
-    BLDCLever lever(5, 6, 9, 7, 8, 10, 11, 120, 0, 14);
+    BLDCLever lever(5, 6, 9, 7, 10, 11, 120, 0, 14);
     lever.begin();
 
     bool result = lever.runCalibration();
@@ -46,7 +46,7 @@ void test_calibration_success() {
 }
 
 void test_load_profile() {
-    BLDCLever lever(5, 6, 9, 7, 8, 10, 11, 120, 0, 14);
+    BLDCLever lever(5, 6, 9, 7, 10, 11, 120, 0, 14);
     lever.begin();
     lever.runCalibration();
 
@@ -68,7 +68,7 @@ void test_load_profile() {
 }
 
 void test_detent_state_tracking() {
-    BLDCLever lever(5, 6, 9, 7, 8, 10, 11, 120, 0, 14);
+    BLDCLever lever(5, 6, 9, 7, 10, 11, 120, 0, 14);
     lever.begin();
     lever.runCalibration();
 
@@ -97,7 +97,7 @@ void test_detent_state_tracking() {
 }
 
 void test_snap_point_hysteresis() {
-    BLDCLever lever(5, 6, 9, 7, 8, 10, 11, 120, 0, 14);
+    BLDCLever lever(5, 6, 9, 7, 10, 11, 120, 0, 14);
     lever.begin();
     lever.runCalibration();
 
@@ -135,7 +135,7 @@ void test_snap_point_hysteresis() {
 }
 
 void test_linear_range_damping() {
-    BLDCLever lever(5, 6, 9, 7, 8, 10, 11, 120, 0, 14);
+    BLDCLever lever(5, 6, 9, 7, 10, 11, 120, 0, 14);
     lever.begin();
     lever.runCalibration();
 
@@ -170,7 +170,7 @@ void test_linear_range_damping() {
 }
 
 void test_virtual_endstop() {
-    BLDCLever lever(5, 6, 9, 7, 8, 10, 11, 120, 0, 14);
+    BLDCLever lever(5, 6, 9, 7, 10, 11, 120, 0, 14);
     lever.begin();
     lever.runCalibration();
 
@@ -200,7 +200,7 @@ void test_virtual_endstop() {
 }
 
 void test_velocity_cutoff() {
-    BLDCLever lever(5, 6, 9, 7, 8, 10, 11, 120, 0, 14);
+    BLDCLever lever(5, 6, 9, 7, 10, 11, 120, 0, 14);
     lever.begin();
     lever.runCalibration();
 
@@ -223,7 +223,7 @@ void test_velocity_cutoff() {
 }
 
 void test_idle_correction() {
-    BLDCLever lever(5, 6, 9, 7, 8, 10, 11, 120, 0, 14);
+    BLDCLever lever(5, 6, 9, 7, 10, 11, 120, 0, 14);
     lever.begin();
     lever.runCalibration();
 
@@ -249,7 +249,7 @@ void test_idle_correction() {
 }
 
 void test_full_detent_traversal() {
-    BLDCLever lever(5, 6, 9, 7, 8, 10, 11, 120, 0, 14);
+    BLDCLever lever(5, 6, 9, 7, 10, 11, 120, 0, 14);
     lever.begin();
     lever.runCalibration();
 

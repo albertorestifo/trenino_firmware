@@ -144,8 +144,7 @@ void test_store_and_load_bldc_lever() {
     inputs[0].bldc.motor_pin_a = 5;
     inputs[0].bldc.motor_pin_b = 6;
     inputs[0].bldc.motor_pin_c = 9;
-    inputs[0].bldc.motor_enable_a = 7;
-    inputs[0].bldc.motor_enable_b = 8;
+    inputs[0].bldc.motor_enable = 7;
     inputs[0].bldc.encoder_cs = 10;
     inputs[0].bldc.pole_pairs = 11;
     inputs[0].bldc.voltage = 120;
@@ -163,8 +162,7 @@ void test_store_and_load_bldc_lever() {
     TEST_ASSERT_EQUAL_UINT8(5, loaded[0].bldc.motor_pin_a);
     TEST_ASSERT_EQUAL_UINT8(6, loaded[0].bldc.motor_pin_b);
     TEST_ASSERT_EQUAL_UINT8(9, loaded[0].bldc.motor_pin_c);
-    TEST_ASSERT_EQUAL_UINT8(7, loaded[0].bldc.motor_enable_a);
-    TEST_ASSERT_EQUAL_UINT8(8, loaded[0].bldc.motor_enable_b);
+    TEST_ASSERT_EQUAL_UINT8(7, loaded[0].bldc.motor_enable);
     TEST_ASSERT_EQUAL_UINT8(10, loaded[0].bldc.encoder_cs);
     TEST_ASSERT_EQUAL_UINT8(11, loaded[0].bldc.pole_pairs);
     TEST_ASSERT_EQUAL_UINT8(120, loaded[0].bldc.voltage);

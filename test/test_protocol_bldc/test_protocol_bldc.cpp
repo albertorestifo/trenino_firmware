@@ -69,8 +69,7 @@ void test_configure_bldc_lever_encode() {
     cfg.bldc_lever.motor_pin_a = 5;
     cfg.bldc_lever.motor_pin_b = 6;
     cfg.bldc_lever.motor_pin_c = 9;
-    cfg.bldc_lever.motor_enable_a = 7;
-    cfg.bldc_lever.motor_enable_b = 8;
+    cfg.bldc_lever.motor_enable = 7;
     cfg.bldc_lever.encoder_cs = 10;
     cfg.bldc_lever.pole_pairs = 11;
     cfg.bldc_lever.voltage = 120;       // 12.0V
@@ -80,20 +79,19 @@ void test_configure_bldc_lever_encode() {
     uint8_t buffer[64];
     size_t size = cfg.encode(buffer, sizeof(buffer));
 
-    // header(8) + 10 payload bytes = 18
-    TEST_ASSERT_EQUAL(18, size);
+    // header(8) + 9 payload bytes = 17
+    TEST_ASSERT_EQUAL(17, size);
     TEST_ASSERT_EQUAL_UINT8(Protocol::MESSAGE_TYPE_CONFIGURE, buffer[0]);
     TEST_ASSERT_EQUAL_UINT8(Protocol::INPUT_TYPE_BLDC_LEVER, buffer[7]);
     TEST_ASSERT_EQUAL_UINT8(5, buffer[8]);    // motor_pin_a
     TEST_ASSERT_EQUAL_UINT8(6, buffer[9]);    // motor_pin_b
     TEST_ASSERT_EQUAL_UINT8(9, buffer[10]);   // motor_pin_c
-    TEST_ASSERT_EQUAL_UINT8(7, buffer[11]);   // motor_enable_a
-    TEST_ASSERT_EQUAL_UINT8(8, buffer[12]);   // motor_enable_b
-    TEST_ASSERT_EQUAL_UINT8(10, buffer[13]);  // encoder_cs
-    TEST_ASSERT_EQUAL_UINT8(11, buffer[14]);  // pole_pairs
-    TEST_ASSERT_EQUAL_UINT8(120, buffer[15]); // voltage
-    TEST_ASSERT_EQUAL_UINT8(0, buffer[16]);   // current_limit
-    TEST_ASSERT_EQUAL_UINT8(14, buffer[17]);  // encoder_bits
+    TEST_ASSERT_EQUAL_UINT8(7, buffer[11]);   // motor_enable
+    TEST_ASSERT_EQUAL_UINT8(10, buffer[12]);  // encoder_cs
+    TEST_ASSERT_EQUAL_UINT8(11, buffer[13]);  // pole_pairs
+    TEST_ASSERT_EQUAL_UINT8(120, buffer[14]); // voltage
+    TEST_ASSERT_EQUAL_UINT8(0, buffer[15]);   // current_limit
+    TEST_ASSERT_EQUAL_UINT8(14, buffer[16]);  // encoder_bits
 }
 
 void test_configure_bldc_lever_decode() {
@@ -104,7 +102,7 @@ void test_configure_bldc_lever_decode() {
         0x00,                     // part_number
         Protocol::INPUT_TYPE_BLDC_LEVER,
         5, 6, 9,                  // motor pins A/B/C
-        7, 8,                     // enable pins A/B
+        7,                        // enable pin
         10,                       // encoder_cs
         11,                       // pole_pairs
         120,                      // voltage (12.0V)
@@ -120,8 +118,7 @@ void test_configure_bldc_lever_decode() {
     TEST_ASSERT_EQUAL_UINT8(5, cfg.bldc_lever.motor_pin_a);
     TEST_ASSERT_EQUAL_UINT8(6, cfg.bldc_lever.motor_pin_b);
     TEST_ASSERT_EQUAL_UINT8(9, cfg.bldc_lever.motor_pin_c);
-    TEST_ASSERT_EQUAL_UINT8(7, cfg.bldc_lever.motor_enable_a);
-    TEST_ASSERT_EQUAL_UINT8(8, cfg.bldc_lever.motor_enable_b);
+    TEST_ASSERT_EQUAL_UINT8(7, cfg.bldc_lever.motor_enable);
     TEST_ASSERT_EQUAL_UINT8(10, cfg.bldc_lever.encoder_cs);
     TEST_ASSERT_EQUAL_UINT8(11, cfg.bldc_lever.pole_pairs);
     TEST_ASSERT_EQUAL_UINT8(120, cfg.bldc_lever.voltage);
@@ -138,8 +135,7 @@ void test_configure_bldc_lever_roundtrip() {
     original.bldc_lever.motor_pin_a = 3;
     original.bldc_lever.motor_pin_b = 5;
     original.bldc_lever.motor_pin_c = 6;
-    original.bldc_lever.motor_enable_a = 7;
-    original.bldc_lever.motor_enable_b = 8;
+    original.bldc_lever.motor_enable = 7;
     original.bldc_lever.encoder_cs = 10;
     original.bldc_lever.pole_pairs = 7;
     original.bldc_lever.voltage = 240;       // 24.0V
@@ -156,8 +152,7 @@ void test_configure_bldc_lever_roundtrip() {
     TEST_ASSERT_EQUAL_UINT8(original.bldc_lever.motor_pin_a, decoded.bldc_lever.motor_pin_a);
     TEST_ASSERT_EQUAL_UINT8(original.bldc_lever.motor_pin_b, decoded.bldc_lever.motor_pin_b);
     TEST_ASSERT_EQUAL_UINT8(original.bldc_lever.motor_pin_c, decoded.bldc_lever.motor_pin_c);
-    TEST_ASSERT_EQUAL_UINT8(original.bldc_lever.motor_enable_a, decoded.bldc_lever.motor_enable_a);
-    TEST_ASSERT_EQUAL_UINT8(original.bldc_lever.motor_enable_b, decoded.bldc_lever.motor_enable_b);
+    TEST_ASSERT_EQUAL_UINT8(original.bldc_lever.motor_enable, decoded.bldc_lever.motor_enable);
     TEST_ASSERT_EQUAL_UINT8(original.bldc_lever.encoder_cs, decoded.bldc_lever.encoder_cs);
     TEST_ASSERT_EQUAL_UINT8(original.bldc_lever.pole_pairs, decoded.bldc_lever.pole_pairs);
     TEST_ASSERT_EQUAL_UINT8(original.bldc_lever.voltage, decoded.bldc_lever.voltage);
@@ -171,7 +166,7 @@ void test_configure_bldc_lever_decode_insufficient_data() {
         0x01, 0x00, 0x00, 0x00,
         0x01, 0x00,
         Protocol::INPUT_TYPE_BLDC_LEVER,
-        5, 6, 9  // Only 3 bytes, need 10
+        5, 6, 9  // Only 3 bytes, need 9
     };
 
     Protocol::Configure cfg;

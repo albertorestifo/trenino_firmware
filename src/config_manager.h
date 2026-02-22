@@ -67,8 +67,7 @@ struct InputConfig {
             uint8_t motor_pin_a;
             uint8_t motor_pin_b;
             uint8_t motor_pin_c;
-            uint8_t motor_enable_a;
-            uint8_t motor_enable_b;
+            uint8_t motor_enable;
             uint8_t encoder_cs;
             uint8_t pole_pairs;
             uint8_t voltage;
@@ -157,8 +156,7 @@ public:
             inputs[cfg.part_number].bldc.motor_pin_a = cfg.bldc_lever.motor_pin_a;
             inputs[cfg.part_number].bldc.motor_pin_b = cfg.bldc_lever.motor_pin_b;
             inputs[cfg.part_number].bldc.motor_pin_c = cfg.bldc_lever.motor_pin_c;
-            inputs[cfg.part_number].bldc.motor_enable_a = cfg.bldc_lever.motor_enable_a;
-            inputs[cfg.part_number].bldc.motor_enable_b = cfg.bldc_lever.motor_enable_b;
+            inputs[cfg.part_number].bldc.motor_enable = cfg.bldc_lever.motor_enable;
             inputs[cfg.part_number].bldc.encoder_cs = cfg.bldc_lever.encoder_cs;
             inputs[cfg.part_number].bldc.pole_pairs = cfg.bldc_lever.pole_pairs;
             inputs[cfg.part_number].bldc.voltage = cfg.bldc_lever.voltage;

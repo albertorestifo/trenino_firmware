@@ -92,8 +92,7 @@ struct Configure {
             uint8_t motor_pin_a;
             uint8_t motor_pin_b;
             uint8_t motor_pin_c;
-            uint8_t motor_enable_a;
-            uint8_t motor_enable_b;
+            uint8_t motor_enable;
             uint8_t encoder_cs;
             uint8_t pole_pairs;
             uint8_t voltage;        // 0.1V units (e.g. 120 = 12.0V)
