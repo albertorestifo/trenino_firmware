@@ -27,6 +27,13 @@ void init()
 
 bool applyConfiguration(const ConfigManager::InputConfig* inputs, uint8_t input_count)
 {
+    // Unregister any BLDC levers from BLDCManager before deleting
+    for (uint8_t i = 0; i < g_sensor_count; i++) {
+        if (g_sensors[i] != nullptr && g_sensors[i]->getType() == Sensors::InputType::BLDCLever) {
+            BLDCManager::unregisterLever(static_cast<Sensors::BLDCLever*>(g_sensors[i]));
+        }
+    }
+
     // Clear existing sensors
     for (uint8_t i = 0; i < MAX_SENSORS; i++) {
         if (g_sensors[i] != nullptr) {
