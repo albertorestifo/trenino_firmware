@@ -508,94 +508,6 @@ bool SetOutput::decode(const uint8_t* buffer, size_t length)
     return true;
 }
 
-// RetryCalibration implementation
-
-size_t RetryCalibration::encode(uint8_t* buffer, size_t buffer_size) const
-{
-    constexpr size_t REQUIRED_SIZE = 2; // 1 type + 1 pin
-
-    if (buffer_size < REQUIRED_SIZE) {
-        return 0; // Buffer too small
-    }
-
-    size_t offset = 0;
-
-    // Message type (u8)
-    buffer[offset++] = MESSAGE_TYPE_RETRY_CALIBRATION;
-
-    // pin (u8)
-    buffer[offset++] = pin;
-
-    return offset;
-}
-
-bool RetryCalibration::decode(const uint8_t* buffer, size_t length)
-{
-    constexpr size_t REQUIRED_SIZE = 2;
-
-    if (length < REQUIRED_SIZE) {
-        return false; // Not enough data
-    }
-
-    if (buffer[0] != MESSAGE_TYPE_RETRY_CALIBRATION) {
-        return false; // Wrong message type
-    }
-
-    size_t offset = 1;
-
-    // pin (u8)
-    pin = buffer[offset++];
-
-    return true;
-}
-
-// CalibrationError implementation
-
-size_t CalibrationError::encode(uint8_t* buffer, size_t buffer_size) const
-{
-    constexpr size_t REQUIRED_SIZE = 3; // 1 type + 1 pin + 1 error_code
-
-    if (buffer_size < REQUIRED_SIZE) {
-        return 0; // Buffer too small
-    }
-
-    size_t offset = 0;
-
-    // Message type (u8)
-    buffer[offset++] = MESSAGE_TYPE_CALIBRATION_ERROR;
-
-    // pin (u8)
-    buffer[offset++] = pin;
-
-    // error_code (u8)
-    buffer[offset++] = error_code;
-
-    return offset;
-}
-
-bool CalibrationError::decode(const uint8_t* buffer, size_t length)
-{
-    constexpr size_t REQUIRED_SIZE = 3;
-
-    if (length < REQUIRED_SIZE) {
-        return false; // Not enough data
-    }
-
-    if (buffer[0] != MESSAGE_TYPE_CALIBRATION_ERROR) {
-        return false; // Wrong message type
-    }
-
-    size_t offset = 1;
-
-    // pin (u8)
-    pin = buffer[offset++];
-
-    // error_code (u8)
-    error_code = buffer[offset++];
-
-    return true;
-}
-
 // EncoderError implementation
 
 size_t EncoderError::encode(uint8_t* buffer, size_t buffer_size) const
@@ -641,7 +553,7 @@ bool EncoderError::decode(const uint8_t* buffer, size_t length)
 
 size_t LoadBLDCProfile::encode(uint8_t* buffer, size_t buffer_size) const
 {
-    constexpr size_t REQUIRED_SIZE = 6; // 1 type + 1 pin + 1 num_detents + 1 num_linear_ranges + 1 snap_point + 1 endstop_strength
+    constexpr size_t REQUIRED_SIZE = 10; // 1 type + 1 pin + 1 num_detents + 1 num_linear_ranges + 1 snap_point + 1 endstop_strength + 2 position_start + 2 position_end
 
     if (buffer_size < REQUIRED_SIZE) {
         return 0; // Buffer too small
@@ -667,12 +579,20 @@ size_t LoadBLDCProfile::encode(uint8_t* buffer, size_t buffer_size) const
     // endstop_strength (u8)
     buffer[offset++] = endstop_strength;
 
+    // position_start (i16) - little endian
+    buffer[offset++] = (position_start >> 0) & 0xFF;
+    buffer[offset++] = (position_start >> 8) & 0xFF;
+
+    // position_end (i16) - little endian
+    buffer[offset++] = (position_end >> 0) & 0xFF;
+    buffer[offset++] = (position_end >> 8) & 0xFF;
+
     return offset;
 }
 
 bool LoadBLDCProfile::decode(const uint8_t* buffer, size_t length)
 {
-    constexpr size_t REQUIRED_SIZE = 6;
+    constexpr size_t REQUIRED_SIZE = 10;
 
     if (length < REQUIRED_SIZE) {
         return false; // Not enough data
@@ -698,6 +618,14 @@ bool LoadBLDCProfile::decode(const uint8_t* buffer, size_t length)
 
     // endstop_strength (u8)
     endstop_strength = buffer[offset++];
+
+    // position_start (i16) - little endian
+    position_start = (int16_t)(((uint16_t)buffer[offset + 0] << 0) | ((uint16_t)buffer[offset + 1] << 8));
+    offset += 2;
+
+    // position_end (i16) - little endian
+    position_end = (int16_t)(((uint16_t)buffer[offset + 0] << 0) | ((uint16_t)buffer[offset + 1] << 8));
+    offset += 2;
 
     return true;
 }
@@ -777,12 +705,6 @@ bool Message::decode(const uint8_t* buffer, size_t length)
 
     case MESSAGE_TYPE_SET_OUTPUT:
         return set_output.decode(buffer, length);
-
-    case MESSAGE_TYPE_RETRY_CALIBRATION:
-        return retry_calibration.decode(buffer, length);
-
-    case MESSAGE_TYPE_CALIBRATION_ERROR:
-        return calibration_error.decode(buffer, length);
 
     case MESSAGE_TYPE_ENCODER_ERROR:
         return encoder_error.decode(buffer, length);

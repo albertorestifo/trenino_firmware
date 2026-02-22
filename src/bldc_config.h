@@ -42,38 +42,6 @@ struct LinearRangeConfig {
     }
 };
 
-// Calibration error codes
-enum CalibrationError : uint8_t {
-    TIMEOUT = 0,
-    RANGE_TOO_SMALL = 1,
-    ENCODER_ERROR = 2
-};
-
-// Calibration constants
-constexpr uint16_t MIN_ENCODER_RANGE = 1000;  // Minimum encoder ticks between endstops
-constexpr uint32_t CALIBRATION_TIMEOUT_MS = 30000;  // 30 second timeout
-constexpr uint32_t CALIBRATION_STALL_TIMEOUT_MS = 5000;  // 5 second stall timeout
-
-// Motor control constants
-constexpr float CALIBRATION_SPEED = 0.1f;  // 10% speed during calibration
-constexpr float CALIBRATION_TORQUE = 0.5f;  // Low torque for calibration
-
-// Stall detection constants
-constexpr float STALL_THRESHOLD_RAD = 0.01f;        // ~0.57 deg movement threshold
-constexpr uint32_t STALL_CONFIRM_MS = 300;           // Sustained no-movement to confirm stall
-constexpr uint32_t STALL_SETTLE_MS = 200;            // Ignore stalls during motor acceleration
-constexpr uint32_t STALL_SAMPLE_INTERVAL_MS = 10;    // 100Hz sampling for stall detection
-
-// Centering P-controller constants
-constexpr float CENTER_P_GAIN = 2.0f;
-constexpr float CENTER_TOLERANCE_RAD = 0.02f;        // ~1.1 degrees
-constexpr uint32_t CENTER_SETTLE_MS = 200;
-constexpr uint32_t CENTER_TIMEOUT_MS = 5000;
-constexpr float CENTER_MAX_TORQUE = 0.3f;
-
-// Minimum physical arc (radians) for valid calibration (~5 degrees)
-constexpr float MIN_CALIBRATION_ARC_RAD = 0.0873f;
-
 // PD controller constants
 constexpr float P_SCALE_FACTOR = 4.0f;
 
@@ -95,7 +63,5 @@ constexpr float IDLE_CORRECTION_MAX_DEG = 5.0f;
 constexpr float IDLE_CORRECTION_RATE_ALPHA = 0.0005f;
 
 constexpr float DAMPING_SCALE = 1.0f;
-
-constexpr float LEVER_ARC_DEGREES = 90.0f;
 
 } // namespace BLDCConfig

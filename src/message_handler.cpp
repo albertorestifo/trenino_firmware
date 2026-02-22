@@ -60,22 +60,9 @@ void onPacketReceived(const uint8_t* buffer, size_t size)
         handleConfigure(msg.configure);
     } else if (msg.isSetOutput()) {
         handleSetOutput(msg.set_output);
-    } else if (msg.isRetryCalibration()) {
-        // Find BLDC lever by pin
-        Sensors::ISensor* sensor = SensorManager::getSensorByPin(msg.retry_calibration.pin);
-        if (sensor != nullptr && sensor->getType() == Sensors::InputType::BLDCLever) {
-            Sensors::BLDCLever* bldc = static_cast<Sensors::BLDCLever*>(sensor);
-            if (bldc->runCalibration()) {
-                sendConfigurationStored(ConfigManager::getCurrentConfigId());
-            } else {
-                sendCalibrationError(msg.retry_calibration.pin,
-                                   static_cast<uint8_t>(bldc->getLastCalibrationError()));
-            }
-        }
     } else if (msg.isLoadBLDCProfile()) {
-        // Parse detents and ranges from buffer
-        // Buffer format: [message_type][pin][num_detents][num_linear_ranges][snap_point][endstop_strength][detent_data...][range_data...]
-        size_t offset = 6; // After header (message_type + pin + num_detents + num_linear_ranges + snap_point + endstop_strength)
+        // Buffer format: [msg_type][pin][num_detents][num_linear_ranges][snap_point][endstop_strength][pos_start_lo][pos_start_hi][pos_end_lo][pos_end_hi][detent_data...][range_data...]
+        size_t offset = 10; // After header (10 bytes with position bounds)
 
         // Build profile config from header fields
         BLDCConfig::ProfileConfig profile_config;
@@ -106,7 +93,12 @@ void onPacketReceived(const uint8_t* buffer, size_t size)
         Sensors::ISensor* sensor = SensorManager::getSensorByPin(msg.load_bldc_profile.pin);
         if (sensor != nullptr && sensor->getType() == Sensors::InputType::BLDCLever) {
             Sensors::BLDCLever* bldc = static_cast<Sensors::BLDCLever*>(sensor);
-            if (bldc->loadProfile(detents, msg.load_bldc_profile.num_detents, ranges, msg.load_bldc_profile.num_linear_ranges, profile_config)) {
+            if (bldc->loadProfile(
+                    msg.load_bldc_profile.position_start,
+                    msg.load_bldc_profile.position_end,
+                    detents, msg.load_bldc_profile.num_detents,
+                    ranges, msg.load_bldc_profile.num_linear_ranges,
+                    profile_config)) {
                 sendConfigurationStored(0); // Success
             } else {
                 sendConfigurationError(0); // Validation failed
@@ -235,15 +227,6 @@ void sendHeartbeat()
         // Note: We don't call notifyMessageSent here because the heartbeat
         // manager already knows it sent a heartbeat via its callback
     }
-}
-
-void sendCalibrationError(uint8_t pin, uint8_t error_code)
-{
-    Protocol::CalibrationError msg;
-    msg.pin = pin;
-    msg.error_code = error_code;
-
-    sendMessage(msg);
 }
 
 void sendEncoderError(uint8_t pin)

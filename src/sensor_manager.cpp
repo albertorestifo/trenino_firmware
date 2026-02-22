@@ -94,18 +94,10 @@ bool applyConfiguration(const ConfigManager::InputConfig* inputs, uint8_t input_
         if (sensor != nullptr) {
             sensor->begin();
 
-            // Special handling for BLDC levers - run calibration and register
+            // Register BLDC levers with BLDCManager for motor updates
             if (config.input_type == Protocol::INPUT_TYPE_BLDC_LEVER) {
                 Sensors::BLDCLever* bldc = static_cast<Sensors::BLDCLever*>(sensor);
-                if (bldc->runCalibration()) {
-                    // Register with BLDCManager
-                    BLDCManager::registerLever(bldc);
-                } else {
-                    // Calibration failed - send error
-                    MessageHandler::sendCalibrationError(
-                        bldc->getPin(),
-                        static_cast<uint8_t>(bldc->getLastCalibrationError()));
-                }
+                BLDCManager::registerLever(bldc);
             }
 
             g_sensors[g_sensor_count++] = sensor;

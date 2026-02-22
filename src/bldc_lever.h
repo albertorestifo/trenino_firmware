@@ -33,13 +33,11 @@ public:
 
     // BLDC-specific methods
 
-    // Run calibration to find endstops (blocking, ~10-30 seconds)
-    // Returns true on success, false on failure
-    bool runCalibration();
-
-    // Load a detent profile (replaces any existing profile)
+    // Load a detent profile with position bounds from host calibration
+    // position_start/end in milliradians define the lever travel range
     // Returns true on success, false if validation fails
     bool loadProfile(
+        int16_t position_start_mrad, int16_t position_end_mrad,
         const BLDCConfig::DetentConfig* detents,
         uint8_t num_detents,
         const BLDCConfig::LinearRangeConfig* ranges,
@@ -53,14 +51,8 @@ public:
     // Update motor control (called by BLDCManager at 1kHz)
     void updateMotor();
 
-    // Get calibration status
-    bool isCalibrated() const { return calibrated_; }
-
     // Get profile active status
     bool isProfileActive() const { return profile_active_; }
-
-    // Get last calibration error (if calibration failed)
-    BLDCConfig::CalibrationError getLastCalibrationError() const { return last_calibration_error_; }
 
     // Check if encoder communication is working
     bool isEncoderHealthy() const;
@@ -90,13 +82,16 @@ private:
     BLDCDriver3PWM* driver_;
 #endif
 
-    // Calibration data
-    bool calibrated_;
+    // Position bounds (from host calibration via loadProfile)
+    bool position_bounds_set_;
     uint16_t min_encoder_position_;
     uint16_t max_encoder_position_;
-    BLDCConfig::CalibrationError last_calibration_error_;
-    float calibration_angle_min_;   // Raw encoder angle (rad) at first endstop
-    float calibration_angle_max_;   // Raw encoder angle (rad) at second endstop
+    float position_start_rad_;     // Encoder angle (rad) at 0%
+    float position_end_rad_;       // Encoder angle (rad) at 100%
+
+    // Raw encoder reporting (before profile loaded)
+    int16_t current_angle_mrad_;
+    uint32_t last_raw_report_time_;
 
     // Active profile
     bool profile_active_;
@@ -149,9 +144,6 @@ private:
     float getDetentWidth(uint8_t detent_index) const;
     float getDetentCenter() const;
 
-    // Calibration helpers (hardware-only, stubs under UNIT_TEST)
-    bool driveToStall(float torque, float& stall_angle);
-    bool driveToCenter(float center_angle);
 };
 
 } // namespace Sensors

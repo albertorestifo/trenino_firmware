@@ -18,12 +18,25 @@ void delayMicroseconds(unsigned int us) {}
 #include "../../src/bldc_lever.cpp"
 #include <unity.h>
 
+// Position bounds for tests: 0 to ~6.283 rad = 0 to 6283 mrad
+// This maps the full encoder range (0..16383) to the full 2*pi arc
+static const int16_t TEST_POS_START = 0;
+static const int16_t TEST_POS_END = 6283;
+
+// Helper to load profile with default position bounds
+static bool loadProfileWithBounds(BLDCLever& lever,
+    const BLDCConfig::DetentConfig* detents, uint8_t num_detents,
+    const BLDCConfig::LinearRangeConfig* ranges, uint8_t num_ranges,
+    const BLDCConfig::ProfileConfig& profile) {
+    return lever.loadProfile(TEST_POS_START, TEST_POS_END,
+                             detents, num_detents, ranges, num_ranges, profile);
+}
+
 void test_bldc_lever_construction() {
     BLDCLever lever(5, 6, 9, 7, 10, 11, 120, 0, 14);
 
     TEST_ASSERT_EQUAL(InputType::BLDCLever, lever.getType());
     TEST_ASSERT_EQUAL_UINT8(10, lever.getPin());  // encoder_cs is the identifying pin
-    TEST_ASSERT_FALSE(lever.isCalibrated());
     TEST_ASSERT_FALSE(lever.isProfileActive());
 }
 
@@ -35,20 +48,39 @@ void test_bldc_lever_custom_params() {
     TEST_ASSERT_EQUAL_UINT8(15, lever.getPin());  // encoder_cs pin
 }
 
-void test_calibration_success() {
+void test_raw_encoder_reporting() {
     BLDCLever lever(5, 6, 9, 7, 10, 11, 120, 0, 14);
     lever.begin();
 
-    bool result = lever.runCalibration();
+    MagneticSensorSPI* enc = lever.getEncoder();
 
-    TEST_ASSERT_TRUE(result);
-    TEST_ASSERT_TRUE(lever.isCalibrated());
+    // Set encoder to a known position
+    enc->setPosition(4096);
+    mock_millis_value = 100;
+    lever.updateMotor();
+
+    // First reading should be available (50ms elapsed from 0)
+    Reading r = lever.getReading();
+    TEST_ASSERT_TRUE(r.has_value);
+    TEST_ASSERT_EQUAL(InputType::BLDCLever, r.type);
+    // Value should be angle in milliradians (not detent index)
+
+    // Subsequent reading within 50ms should NOT be available
+    mock_millis_value = 120;
+    lever.updateMotor();
+    r = lever.getReading();
+    TEST_ASSERT_FALSE(r.has_value);
+
+    // After 50ms, should be available again
+    mock_millis_value = 151;
+    lever.updateMotor();
+    r = lever.getReading();
+    TEST_ASSERT_TRUE(r.has_value);
 }
 
 void test_load_profile() {
     BLDCLever lever(5, 6, 9, 7, 10, 11, 120, 0, 14);
     lever.begin();
-    lever.runCalibration();
 
     BLDCConfig::DetentConfig detents[3];
     detents[0].position_percent = 0;
@@ -61,7 +93,7 @@ void test_load_profile() {
     detents[2].detent_strength = 150;
 
     BLDCConfig::ProfileConfig profile;
-    bool result = lever.loadProfile(detents, 3, nullptr, 0, profile);
+    bool result = loadProfileWithBounds(lever, detents, 3, nullptr, 0, profile);
 
     TEST_ASSERT_TRUE(result);
     TEST_ASSERT_TRUE(lever.isProfileActive());
@@ -70,7 +102,6 @@ void test_load_profile() {
 void test_detent_state_tracking() {
     BLDCLever lever(5, 6, 9, 7, 10, 11, 120, 0, 14);
     lever.begin();
-    lever.runCalibration();
 
     BLDCConfig::DetentConfig detents[3];
     detents[0].position_percent = 0;
@@ -83,7 +114,7 @@ void test_detent_state_tracking() {
     detents[2].detent_strength = 150;
 
     BLDCConfig::ProfileConfig profile;
-    lever.loadProfile(detents, 3, nullptr, 0, profile);
+    loadProfileWithBounds(lever, detents, 3, nullptr, 0, profile);
 
     Reading reading = lever.getReading();
     TEST_ASSERT_FALSE(reading.has_value);
@@ -99,7 +130,6 @@ void test_detent_state_tracking() {
 void test_snap_point_hysteresis() {
     BLDCLever lever(5, 6, 9, 7, 10, 11, 120, 0, 14);
     lever.begin();
-    lever.runCalibration();
 
     BLDCConfig::DetentConfig detents[2];
     detents[0].position_percent = 0;
@@ -109,7 +139,7 @@ void test_snap_point_hysteresis() {
 
     BLDCConfig::ProfileConfig profile;
     profile.snap_point = 70;
-    lever.loadProfile(detents, 2, nullptr, 0, profile);
+    loadProfileWithBounds(lever, detents, 2, nullptr, 0, profile);
 
     MagneticSensorSPI* enc = lever.getEncoder();
 
@@ -137,7 +167,6 @@ void test_snap_point_hysteresis() {
 void test_linear_range_damping() {
     BLDCLever lever(5, 6, 9, 7, 10, 11, 120, 0, 14);
     lever.begin();
-    lever.runCalibration();
 
     BLDCConfig::DetentConfig detents[3];
     detents[0].position_percent = 0;
@@ -153,7 +182,7 @@ void test_linear_range_damping() {
     ranges[0].damping_strength = 128;
 
     BLDCConfig::ProfileConfig profile;
-    lever.loadProfile(detents, 3, ranges, 1, profile);
+    loadProfileWithBounds(lever, detents, 3, ranges, 1, profile);
 
     MagneticSensorSPI* enc = lever.getEncoder();
     enc->setPosition(0);
@@ -172,7 +201,6 @@ void test_linear_range_damping() {
 void test_virtual_endstop() {
     BLDCLever lever(5, 6, 9, 7, 10, 11, 120, 0, 14);
     lever.begin();
-    lever.runCalibration();
 
     BLDCConfig::DetentConfig detents[2];
     detents[0].position_percent = 10;
@@ -182,7 +210,7 @@ void test_virtual_endstop() {
 
     BLDCConfig::ProfileConfig profile;
     profile.endstop_strength = 200;
-    lever.loadProfile(detents, 2, nullptr, 0, profile);
+    loadProfileWithBounds(lever, detents, 2, nullptr, 0, profile);
 
     MagneticSensorSPI* enc = lever.getEncoder();
     uint16_t det0 = static_cast<uint16_t>(16383 * 0.10);
@@ -202,14 +230,13 @@ void test_virtual_endstop() {
 void test_velocity_cutoff() {
     BLDCLever lever(5, 6, 9, 7, 10, 11, 120, 0, 14);
     lever.begin();
-    lever.runCalibration();
 
     BLDCConfig::DetentConfig detents[1];
     detents[0].position_percent = 50;
     detents[0].detent_strength = 200;
 
     BLDCConfig::ProfileConfig profile;
-    lever.loadProfile(detents, 1, nullptr, 0, profile);
+    loadProfileWithBounds(lever, detents, 1, nullptr, 0, profile);
 
     MagneticSensorSPI* enc = lever.getEncoder();
     enc->setPosition(8192);
@@ -225,14 +252,13 @@ void test_velocity_cutoff() {
 void test_idle_correction() {
     BLDCLever lever(5, 6, 9, 7, 10, 11, 120, 0, 14);
     lever.begin();
-    lever.runCalibration();
 
     BLDCConfig::DetentConfig detents[1];
     detents[0].position_percent = 50;
     detents[0].detent_strength = 200;
 
     BLDCConfig::ProfileConfig profile;
-    lever.loadProfile(detents, 1, nullptr, 0, profile);
+    loadProfileWithBounds(lever, detents, 1, nullptr, 0, profile);
 
     MagneticSensorSPI* enc = lever.getEncoder();
     enc->setPosition(8250); // slightly off from 8192
@@ -251,7 +277,6 @@ void test_idle_correction() {
 void test_full_detent_traversal() {
     BLDCLever lever(5, 6, 9, 7, 10, 11, 120, 0, 14);
     lever.begin();
-    lever.runCalibration();
 
     // 4 detents: 0%, 33%, 66%, 100%
     BLDCConfig::DetentConfig detents[4];
@@ -268,7 +293,7 @@ void test_full_detent_traversal() {
     profile.snap_point = 55;  // transition just past midpoint
     profile.endstop_strength = 200;
 
-    lever.loadProfile(detents, 4, nullptr, 0, profile);
+    loadProfileWithBounds(lever, detents, 4, nullptr, 0, profile);
 
     MagneticSensorSPI* enc = lever.getEncoder();
 
@@ -317,7 +342,7 @@ int main() {
     UNITY_BEGIN();
     RUN_TEST(test_bldc_lever_construction);
     RUN_TEST(test_bldc_lever_custom_params);
-    RUN_TEST(test_calibration_success);
+    RUN_TEST(test_raw_encoder_reporting);
     RUN_TEST(test_load_profile);
     RUN_TEST(test_detent_state_tracking);
     RUN_TEST(test_snap_point_hysteresis);

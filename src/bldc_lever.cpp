@@ -32,12 +32,13 @@ BLDCLever::BLDCLever(uint8_t motor_pin_a, uint8_t motor_pin_b, uint8_t motor_pin
 #ifndef UNIT_TEST
     , driver_(nullptr)
 #endif
-    , calibrated_(false)
+    , position_bounds_set_(false)
     , min_encoder_position_(0)
     , max_encoder_position_(0)
-    , last_calibration_error_(BLDCConfig::CalibrationError::TIMEOUT)
-    , calibration_angle_min_(0.0f)
-    , calibration_angle_max_(0.0f)
+    , position_start_rad_(0.0f)
+    , position_end_rad_(0.0f)
+    , current_angle_mrad_(0)
+    , last_raw_report_time_(0)
     , profile_active_(false)
     , detents_(nullptr)
     , num_detents_(0)
@@ -133,14 +134,27 @@ void BLDCLever::scan() {
 
 Reading BLDCLever::getReading() {
     Reading reading;
-    reading.has_value = detent_changed_;
     reading.type = InputType::BLDCLever;
     reading.pin = pin_;
-    reading.value = last_reported_detent_;
 
-    // Reset the changed flag after reporting
-    if (detent_changed_) {
-        detent_changed_ = false;
+    if (profile_active_) {
+        // Profile mode: report detent changes
+        reading.has_value = detent_changed_;
+        reading.value = last_reported_detent_;
+        if (detent_changed_) {
+            detent_changed_ = false;
+        }
+    } else {
+        // No profile: report raw encoder angle in milliradians at ~20Hz
+        uint32_t now = millis();
+        if ((now - last_raw_report_time_) >= 50) {
+            last_raw_report_time_ = now;
+            reading.has_value = true;
+            reading.value = current_angle_mrad_;
+        } else {
+            reading.has_value = false;
+            reading.value = current_angle_mrad_;
+        }
     }
 
     return reading;
@@ -166,18 +180,27 @@ void BLDCLever::updateMotor() {
 #endif
     motor_->loopFOC();
 
-    // Read encoder position (centralised here, not in updateDetentState)
+    // Always read raw angle for milliradians reporting
 #ifndef UNIT_TEST
     float angle = encoder_->getAngle();
-    float cal_range = calibration_angle_max_ - calibration_angle_min_;
-    float fraction = (cal_range > 0.0f) ? ((angle - calibration_angle_min_) / cal_range) : 0.0f;
-    if (fraction < 0.0f) fraction = 0.0f;
-    if (fraction > 1.0f) fraction = 1.0f;
-    uint32_t enc_range = max_encoder_position_ - min_encoder_position_;
-    current_encoder_position_ = min_encoder_position_ + static_cast<uint16_t>(fraction * enc_range);
 #else
-    current_encoder_position_ = static_cast<uint16_t>(encoder_->getPosition());
+    float angle = encoder_->getAngle();
 #endif
+    current_angle_mrad_ = static_cast<int16_t>(angle * 1000.0f);
+
+    // Map angle to encoder position if position bounds are set
+    if (position_bounds_set_) {
+#ifndef UNIT_TEST
+        float pos_range = position_end_rad_ - position_start_rad_;
+        float fraction = (pos_range != 0.0f) ? ((angle - position_start_rad_) / pos_range) : 0.0f;
+        if (fraction < 0.0f) fraction = 0.0f;
+        if (fraction > 1.0f) fraction = 1.0f;
+        uint32_t enc_range = max_encoder_position_ - min_encoder_position_;
+        current_encoder_position_ = min_encoder_position_ + static_cast<uint16_t>(fraction * enc_range);
+#else
+        current_encoder_position_ = static_cast<uint16_t>(encoder_->getPosition());
+#endif
+    }
 
     updateVelocity();
     updateIdleCorrection();
@@ -205,100 +228,31 @@ bool BLDCLever::isEncoderHealthy() const {
     return (now - last_encoder_success_time_) < 100;
 }
 
-bool BLDCLever::runCalibration() {
-    if (motor_ == nullptr || encoder_ == nullptr) {
-        last_calibration_error_ = BLDCConfig::CalibrationError::ENCODER_ERROR;
-        return false;
-    }
-
-#ifndef UNIT_TEST
-    // Real calibration: stall-detection against physical endstops
-
-    // 1. Enable motor
-    motor_->enable();
-
-    // 2. Drive toward first endstop (negative torque)
-    float angle_min = 0.0f;
-    if (!driveToStall(-BLDCConfig::CALIBRATION_TORQUE, angle_min)) {
-        motor_->disable();
-        last_calibration_error_ = BLDCConfig::CalibrationError::TIMEOUT;
-        return false;
-    }
-
-    // 3. Drive toward second endstop (positive torque)
-    float angle_max = 0.0f;
-    if (!driveToStall(BLDCConfig::CALIBRATION_TORQUE, angle_max)) {
-        motor_->disable();
-        last_calibration_error_ = BLDCConfig::CalibrationError::TIMEOUT;
-        return false;
-    }
-
-    // 4. Ensure min < max
-    if (angle_min > angle_max) {
-        float tmp = angle_min;
-        angle_min = angle_max;
-        angle_max = tmp;
-    }
-
-    // 5. Validate physical arc is large enough (~5 degrees)
-    float arc = angle_max - angle_min;
-    if (arc < BLDCConfig::MIN_CALIBRATION_ARC_RAD) {
-        motor_->disable();
-        last_calibration_error_ = BLDCConfig::CalibrationError::RANGE_TOO_SMALL;
-        return false;
-    }
-
-    // Store raw angle endpoints
-    calibration_angle_min_ = angle_min;
-    calibration_angle_max_ = angle_max;
-
-    // Map to encoder tick range for the rest of the system
-    uint16_t encoder_max = (1 << encoder_bits_) - 1;
-    min_encoder_position_ = 0;
-    max_encoder_position_ = encoder_max;
-
-    // 6. Drive to center, hold briefly
-    float center = (angle_min + angle_max) / 2.0f;
-    if (!driveToCenter(center)) {
-        // Centering failed but calibration data is still valid
-        // (non-fatal: we still have good endstop data)
-    }
-
-    // 7. Disable motor (freewheel until profile loaded)
-    motor_->move(0.0f);
-    motor_->disable();
-
-#else
-    // Mock calibration for unit tests (full encoder range)
-    calibration_angle_min_ = 0.0f;
-    calibration_angle_max_ = 6.28318f;
-    min_encoder_position_ = 0;
-    max_encoder_position_ = 16383;
-#endif
-
-    calibrated_ = true;
-
-    // Compute ticks per degree from calibrated range
-    uint32_t range = max_encoder_position_ - min_encoder_position_;
-    ticks_per_degree_ = static_cast<float>(range) / BLDCConfig::LEVER_ARC_DEGREES;
-
-    return true;
-}
-
 bool BLDCLever::loadProfile(
+    int16_t position_start_mrad, int16_t position_end_mrad,
     const BLDCConfig::DetentConfig* detents,
     uint8_t num_detents,
     const BLDCConfig::LinearRangeConfig* ranges,
     uint8_t num_ranges,
     const BLDCConfig::ProfileConfig& profile_config
 ) {
-    if (!calibrated_) {
-        return false;  // Must calibrate before loading profile
-    }
-
     if (detents == nullptr || num_detents == 0) {
         return false;  // Need at least one detent
     }
+
+    // Store position bounds from host calibration
+    position_start_rad_ = position_start_mrad / 1000.0f;
+    position_end_rad_ = position_end_mrad / 1000.0f;
+    min_encoder_position_ = 0;
+    max_encoder_position_ = (1 << encoder_bits_) - 1;
+    position_bounds_set_ = true;
+
+    // Compute ticks per degree from the actual arc
+    float arc_rad = position_end_rad_ - position_start_rad_;
+    if (arc_rad < 0.0f) arc_rad = -arc_rad;
+    float arc_deg = arc_rad * (180.0f / 3.14159265f);
+    uint32_t enc_range = max_encoder_position_ - min_encoder_position_;
+    ticks_per_degree_ = (arc_deg > 0.0f) ? (static_cast<float>(enc_range) / arc_deg) : 0.0f;
 
     // Deactivate current profile if any
     deactivateProfile();
@@ -460,7 +414,7 @@ float BLDCLever::calculateTargetTorque() {
 }
 
 uint16_t BLDCLever::percentToEncoderPosition(uint8_t percent) const {
-    if (!calibrated_) {
+    if (!position_bounds_set_) {
         return 0;
     }
 
@@ -483,7 +437,7 @@ uint8_t BLDCLever::findClosestDetent() const {
         // Convert detent position percent to encoder position
         uint16_t detent_pos = percentToEncoderPosition(detents_[i].position_percent);
 
-        // Calculate distance (handle wraparound)
+        // Calculate distance
         uint32_t distance;
         if (current_encoder_position_ >= detent_pos) {
             distance = current_encoder_position_ - detent_pos;
@@ -578,7 +532,7 @@ bool BLDCLever::validateProfile(const BLDCConfig::ProfileConfig& profile_config)
     return true;
 }
 
-// PD controller helper stubs (will be implemented in later tasks)
+// PD controller helpers
 
 void BLDCLever::recalculatePDGains() {
     if (detents_ == nullptr || num_detents_ == 0 || current_detent_index_ >= num_detents_) {
@@ -685,108 +639,5 @@ float BLDCLever::getDetentCenter() const {
     float nominal = static_cast<float>(percentToEncoderPosition(detents_[current_detent_index_].position_percent));
     return nominal + detent_center_offset_;
 }
-
-// Calibration helpers
-
-#ifndef UNIT_TEST
-
-bool BLDCLever::driveToStall(float torque, float& stall_angle) {
-    uint32_t start_time = millis();
-    uint32_t last_sample_time = start_time;
-    uint32_t stall_start_time = 0;
-    float last_angle = encoder_->getAngle();
-    bool stall_timing = false;
-
-    while ((millis() - start_time) < BLDCConfig::CALIBRATION_STALL_TIMEOUT_MS) {
-        motor_->loopFOC();
-        motor_->move(torque);
-        delay(1);
-
-        uint32_t now = millis();
-
-        // Skip stall detection during initial settle period
-        if ((now - start_time) < BLDCConfig::STALL_SETTLE_MS) {
-            last_angle = encoder_->getAngle();
-            last_sample_time = now;
-            continue;
-        }
-
-        // Sample at configured interval
-        if ((now - last_sample_time) < BLDCConfig::STALL_SAMPLE_INTERVAL_MS) {
-            continue;
-        }
-        last_sample_time = now;
-
-        float current_angle = encoder_->getAngle();
-        float delta = current_angle - last_angle;
-        if (delta < 0.0f) delta = -delta;
-
-        if (delta < BLDCConfig::STALL_THRESHOLD_RAD) {
-            if (!stall_timing) {
-                stall_timing = true;
-                stall_start_time = now;
-            } else if ((now - stall_start_time) >= BLDCConfig::STALL_CONFIRM_MS) {
-                // Stall confirmed
-                stall_angle = current_angle;
-                return true;
-            }
-        } else {
-            stall_timing = false;
-        }
-
-        last_angle = current_angle;
-    }
-
-    return false;  // Timeout
-}
-
-bool BLDCLever::driveToCenter(float center_angle) {
-    uint32_t start_time = millis();
-    uint32_t settle_start = 0;
-    bool settling = false;
-
-    while ((millis() - start_time) < BLDCConfig::CENTER_TIMEOUT_MS) {
-        motor_->loopFOC();
-
-        float current_angle = encoder_->getAngle();
-        float error = center_angle - current_angle;
-
-        // P-controller with torque clamping
-        float torque = error * BLDCConfig::CENTER_P_GAIN;
-        if (torque > BLDCConfig::CENTER_MAX_TORQUE) torque = BLDCConfig::CENTER_MAX_TORQUE;
-        if (torque < -BLDCConfig::CENTER_MAX_TORQUE) torque = -BLDCConfig::CENTER_MAX_TORQUE;
-        motor_->move(torque);
-
-        // Check if within tolerance
-        float abs_error = error > 0.0f ? error : -error;
-        if (abs_error < BLDCConfig::CENTER_TOLERANCE_RAD) {
-            uint32_t now = millis();
-            if (!settling) {
-                settling = true;
-                settle_start = now;
-            } else if ((now - settle_start) >= BLDCConfig::CENTER_SETTLE_MS) {
-                return true;  // Centered and held
-            }
-        } else {
-            settling = false;
-        }
-
-        delay(1);
-    }
-
-    return false;  // Timeout
-}
-
-#else
-
-bool BLDCLever::driveToStall(float, float&) {
-    return false;
-}
-
-bool BLDCLever::driveToCenter(float) {
-    return false;
-}
-
-#endif
 
 } // namespace Sensors

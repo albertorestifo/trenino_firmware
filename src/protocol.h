@@ -14,8 +14,7 @@ constexpr uint8_t MESSAGE_TYPE_CONFIGURATION_ERROR = 4;
 constexpr uint8_t MESSAGE_TYPE_INPUT_VALUE = 5;
 constexpr uint8_t MESSAGE_TYPE_HEARTBEAT = 6;
 constexpr uint8_t MESSAGE_TYPE_SET_OUTPUT = 7;
-constexpr uint8_t MESSAGE_TYPE_RETRY_CALIBRATION = 8;
-constexpr uint8_t MESSAGE_TYPE_CALIBRATION_ERROR = 9;
+// Message types 8 and 9 are reserved (formerly RetryCalibration and CalibrationError)
 constexpr uint8_t MESSAGE_TYPE_ENCODER_ERROR = 10;
 constexpr uint8_t MESSAGE_TYPE_LOAD_BLDC_PROFILE = 11;
 constexpr uint8_t MESSAGE_TYPE_DEACTIVATE_BLDC_PROFILE = 12;
@@ -173,29 +172,6 @@ struct SetOutput {
     bool decode(const uint8_t* buffer, size_t length);
 };
 
-// RetryCalibration message - sent by host to retry calibration on BLDC lever
-struct RetryCalibration {
-    uint8_t pin;
-
-    // Encode to buffer (returns number of bytes written, 0 on error)
-    size_t encode(uint8_t* buffer, size_t buffer_size) const;
-
-    // Decode from buffer (returns true on success)
-    bool decode(const uint8_t* buffer, size_t length);
-};
-
-// CalibrationError message - sent by device when BLDC calibration fails
-struct CalibrationError {
-    uint8_t pin;
-    uint8_t error_code; // 0=timeout, 1=range_too_small, 2=encoder_error
-
-    // Encode to buffer (returns number of bytes written, 0 on error)
-    size_t encode(uint8_t* buffer, size_t buffer_size) const;
-
-    // Decode from buffer (returns true on success)
-    bool decode(const uint8_t* buffer, size_t length);
-};
-
 // EncoderError message - sent by device when encoder error is detected
 struct EncoderError {
     uint8_t pin;
@@ -214,6 +190,8 @@ struct LoadBLDCProfile {
     uint8_t num_linear_ranges;
     uint8_t snap_point;          // 50-150 -> 0.50-1.50 hysteresis threshold
     uint8_t endstop_strength;    // 0-255: virtual endstop P gain
+    int16_t position_start;      // encoder angle at 0% (milliradians, LE)
+    int16_t position_end;        // encoder angle at 100% (milliradians, LE)
     // Followed by detent data and range data in subsequent bytes
 
     // Encode to buffer (returns number of bytes written, 0 on error)
@@ -247,8 +225,6 @@ struct Message {
         InputValue input_value;
         Heartbeat heartbeat;
         SetOutput set_output;
-        RetryCalibration retry_calibration;
-        CalibrationError calibration_error;
         EncoderError encoder_error;
         LoadBLDCProfile load_bldc_profile;
         DeactivateBLDCProfile deactivate_bldc_profile;
@@ -287,12 +263,6 @@ struct Message {
 
     // Check if this is a SetOutput message
     bool isSetOutput() const { return message_type == MESSAGE_TYPE_SET_OUTPUT; }
-
-    // Check if this is a RetryCalibration message
-    bool isRetryCalibration() const { return message_type == MESSAGE_TYPE_RETRY_CALIBRATION; }
-
-    // Check if this is a CalibrationError message
-    bool isCalibrationError() const { return message_type == MESSAGE_TYPE_CALIBRATION_ERROR; }
 
     // Check if this is an EncoderError message
     bool isEncoderError() const { return message_type == MESSAGE_TYPE_ENCODER_ERROR; }
