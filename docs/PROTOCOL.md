@@ -345,6 +345,14 @@ If the device is power-cycled (or the host disconnects and reconnects), the devi
 
 The display content is **not** restored from EEPROM (segments are not persisted). If your host wants the display to show specific content after a reconnect, re-send `WriteSegments` after observing `IdentityResponse` or after a fresh `ConfigurationStored`.
 
+### Working reference implementation
+
+A working Python host implementation lives at
+[`examples/ht16k33_host_demo.py`](../examples/ht16k33_host_demo.py).
+It includes COBS encode/decode, the configure / write-segments /
+brightness / module-error handling, the 14-segment font table, and a
+short visual demo. See the file's docstring for run instructions.
+
 ### Minimal pseudocode example
 
 ```
