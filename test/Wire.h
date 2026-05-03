@@ -48,6 +48,9 @@ static uint8_t transaction_count = 0;
 static AddressNackBehavior nack_table[MAX_ADDRESSES];
 static uint8_t nack_table_count = 0;
 static bool wire_begin_called = false;
+static unsigned long wire_timeout_us = 0;
+static bool wire_timeout_reset_on_timeout = false;
+static uint8_t wire_timeout_call_count = 0;
 
 static uint8_t current_address = 0;
 static uint8_t current_buffer[MAX_BYTES_PER_TRANSACTION];
@@ -58,6 +61,9 @@ static inline void reset() {
     transaction_count = 0;
     nack_table_count = 0;
     wire_begin_called = false;
+    wire_timeout_us = 0;
+    wire_timeout_reset_on_timeout = false;
+    wire_timeout_call_count = 0;
     transaction_active = false;
     current_length = 0;
 }
@@ -85,6 +91,12 @@ class TwoWire {
 public:
     void begin() {
         MockWire::wire_begin_called = true;
+    }
+
+    void setWireTimeout(unsigned long timeout, bool reset_on_timeout) {
+        MockWire::wire_timeout_us = timeout;
+        MockWire::wire_timeout_reset_on_timeout = reset_on_timeout;
+        MockWire::wire_timeout_call_count++;
     }
 
     void beginTransmission(uint8_t address) {

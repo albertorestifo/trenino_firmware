@@ -1,3 +1,4 @@
+#define ARDUINO_ARCH_AVR
 #define UNIT_TEST
 #include "../Wire.h"
 #include "../../src/ht16k33_module.cpp"
@@ -280,6 +281,23 @@ void test_setBrightness_two_nacks_increment_failure_count()
     TEST_ASSERT_FALSE(mod.needsReinit());
 }
 
+// Test that begin() configures a Wire timeout to prevent stuck-bus hangs.
+// The first begin() across the whole test binary calls Wire.begin() and
+// Wire.setWireTimeout(25000, true). Subsequent begin() calls don't because
+// g_wire_initialized is static.
+void test_begin_sets_wire_timeout()
+{
+    HT16K33Module mod(0x70, 0, 4);
+    mod.begin();
+
+    // setWireTimeout was called at some point. Across the suite this might
+    // already have happened on a previous test, so we check >= 1 calls
+    // and the values are correct.
+    TEST_ASSERT_GREATER_OR_EQUAL_UINT8(1, MockWire::wire_timeout_call_count);
+    TEST_ASSERT_EQUAL_UINT32(25000, MockWire::wire_timeout_us);
+    TEST_ASSERT_TRUE(MockWire::wire_timeout_reset_on_timeout);
+}
+
 void test_brightness_change_persists_through_reinit()
 {
     HT16K33Module mod(0x70, 0, 4);
@@ -320,5 +338,6 @@ int main()
     RUN_TEST(test_three_failures_set_needs_reinit);
     RUN_TEST(test_next_write_after_needs_reinit_runs_init_and_restores_cache);
     RUN_TEST(test_brightness_change_persists_through_reinit);
+    RUN_TEST(test_begin_sets_wire_timeout);
     return UNITY_END();
 }

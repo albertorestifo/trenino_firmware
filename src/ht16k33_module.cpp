@@ -53,6 +53,12 @@ bool HT16K33Module::begin()
 {
     if (!g_wire_initialized) {
         Wire.begin();
+#ifdef ARDUINO_ARCH_AVR
+        // Bound any single I2C transaction so a stuck bus (no pull-ups, shorted
+        // SDA, missing slave) does not hang the firmware. 25 ms is comfortably
+        // longer than any HT16K33 transaction at 100 kHz.
+        Wire.setWireTimeout(25000, true);
+#endif
         g_wire_initialized = true;
     }
 
