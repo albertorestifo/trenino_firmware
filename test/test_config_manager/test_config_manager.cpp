@@ -47,10 +47,10 @@ void tearDown()
 void test_store_writes_version()
 {
     ConfigManager::ModuleConfig modules[2];
-    modules[0].input_type = Protocol::MODULE_TYPE_ANALOG;
+    modules[0].module_type = Protocol::MODULE_TYPE_ANALOG;
     modules[0].analog.pin = 14;
     modules[0].analog.sensitivity = 5;
-    modules[1].input_type = Protocol::MODULE_TYPE_ANALOG;
+    modules[1].module_type = Protocol::MODULE_TYPE_ANALOG;
     modules[1].analog.pin = 15;
     modules[1].analog.sensitivity = 8;
 
@@ -84,7 +84,7 @@ void test_load_succeeds_with_matching_version()
 {
     // Store a valid configuration
     ConfigManager::ModuleConfig modules[1];
-    modules[0].input_type = Protocol::MODULE_TYPE_ANALOG;
+    modules[0].module_type = Protocol::MODULE_TYPE_ANALOG;
     modules[0].analog.pin = 14;
     modules[0].analog.sensitivity = 5;
 
@@ -102,7 +102,7 @@ void test_load_succeeds_with_matching_version()
     uint8_t num_modules = 0;
     const ConfigManager::ModuleConfig* loaded = ConfigManager::getCurrentConfig(num_modules);
     TEST_ASSERT_EQUAL_UINT8(1, num_modules);
-    TEST_ASSERT_EQUAL_UINT8(Protocol::MODULE_TYPE_ANALOG, loaded[0].input_type);
+    TEST_ASSERT_EQUAL_UINT8(Protocol::MODULE_TYPE_ANALOG, loaded[0].module_type);
     TEST_ASSERT_EQUAL_UINT8(14, loaded[0].analog.pin);
     TEST_ASSERT_EQUAL_UINT8(5, loaded[0].analog.sensitivity);
 }

@@ -124,12 +124,12 @@ bool IdentityResponse::decode(const uint8_t* buffer, size_t length)
 
 size_t Configure::encode(uint8_t* buffer, size_t buffer_size) const
 {
-    // Common header: 1 type + 4 config_id + 1 total_parts + 1 part_number + 1 input_type = 8 bytes
+    // Common header: 1 type + 4 config_id + 1 total_parts + 1 part_number + 1 module_type = 8 bytes
     constexpr size_t HEADER_SIZE = 8;
 
-    // Calculate required size based on input_type
+    // Calculate required size based on module_type
     size_t payload_size = 0;
-    switch (input_type) {
+    switch (module_type) {
     case MODULE_TYPE_ANALOG:
         payload_size = 2; // pin + sensitivity
         break;
@@ -165,11 +165,11 @@ size_t Configure::encode(uint8_t* buffer, size_t buffer_size) const
     // part_number (u8)
     buffer[offset++] = part_number;
 
-    // input_type (u8)
-    buffer[offset++] = input_type;
+    // module_type (u8)
+    buffer[offset++] = module_type;
 
     // Type-specific payload
-    switch (input_type) {
+    switch (module_type) {
     case MODULE_TYPE_ANALOG:
         buffer[offset++] = analog.pin;
         buffer[offset++] = analog.sensitivity;
@@ -217,11 +217,11 @@ bool Configure::decode(const uint8_t* buffer, size_t length)
     // part_number (u8)
     part_number = buffer[offset++];
 
-    // input_type (u8)
-    input_type = buffer[offset++];
+    // module_type (u8)
+    module_type = buffer[offset++];
 
     // Type-specific payload
-    switch (input_type) {
+    switch (module_type) {
     case MODULE_TYPE_ANALOG:
         if (length < HEADER_SIZE + 2) {
             return false; // Not enough data for analog payload

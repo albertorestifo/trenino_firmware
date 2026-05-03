@@ -190,7 +190,7 @@ void test_configure_encode()
     cfg.config_id = 0x00000001;
     cfg.total_parts = 3;
     cfg.part_number = 0;
-    cfg.input_type = MODULE_TYPE_ANALOG;
+    cfg.module_type = MODULE_TYPE_ANALOG;
     cfg.analog.pin = 0xA0; // A0
     cfg.analog.sensitivity = 128;
 
@@ -205,7 +205,7 @@ void test_configure_encode()
     TEST_ASSERT_EQUAL_UINT8(0x00, buffer[4]); // config_id byte 3 (LE)
     TEST_ASSERT_EQUAL_UINT8(3, buffer[5]); // total_parts
     TEST_ASSERT_EQUAL_UINT8(0, buffer[6]); // part_number
-    TEST_ASSERT_EQUAL_UINT8(MODULE_TYPE_ANALOG, buffer[7]); // input_type
+    TEST_ASSERT_EQUAL_UINT8(MODULE_TYPE_ANALOG, buffer[7]); // module_type
     TEST_ASSERT_EQUAL_UINT8(0xA0, buffer[8]); // pin
     TEST_ASSERT_EQUAL_UINT8(128, buffer[9]); // sensitivity
 }
@@ -222,7 +222,7 @@ void test_configure_decode()
     TEST_ASSERT_EQUAL_UINT32(0x00000001, cfg.config_id);
     TEST_ASSERT_EQUAL_UINT8(3, cfg.total_parts);
     TEST_ASSERT_EQUAL_UINT8(0, cfg.part_number);
-    TEST_ASSERT_EQUAL_UINT8(MODULE_TYPE_ANALOG, cfg.input_type);
+    TEST_ASSERT_EQUAL_UINT8(MODULE_TYPE_ANALOG, cfg.module_type);
     TEST_ASSERT_EQUAL_UINT8(0xA0, cfg.analog.pin);
     TEST_ASSERT_EQUAL_UINT8(0x80, cfg.analog.sensitivity);
 }
@@ -245,7 +245,7 @@ void test_configure_roundtrip()
     original.config_id = 0xDEADBEEF;
     original.total_parts = 5;
     original.part_number = 2;
-    original.input_type = MODULE_TYPE_ANALOG;
+    original.module_type = MODULE_TYPE_ANALOG;
     original.analog.pin = 0xA1;
     original.analog.sensitivity = 200;
 
@@ -259,7 +259,7 @@ void test_configure_roundtrip()
     TEST_ASSERT_EQUAL_UINT32(original.config_id, decoded.config_id);
     TEST_ASSERT_EQUAL_UINT8(original.total_parts, decoded.total_parts);
     TEST_ASSERT_EQUAL_UINT8(original.part_number, decoded.part_number);
-    TEST_ASSERT_EQUAL_UINT8(original.input_type, decoded.input_type);
+    TEST_ASSERT_EQUAL_UINT8(original.module_type, decoded.module_type);
     TEST_ASSERT_EQUAL_UINT8(original.analog.pin, decoded.analog.pin);
     TEST_ASSERT_EQUAL_UINT8(original.analog.sensitivity, decoded.analog.sensitivity);
 }
@@ -271,7 +271,7 @@ void test_configure_button_encode()
     cfg.config_id = 0x00000002;
     cfg.total_parts = 2;
     cfg.part_number = 1;
-    cfg.input_type = MODULE_TYPE_BUTTON;
+    cfg.module_type = MODULE_TYPE_BUTTON;
     cfg.button.pin = 7;
     cfg.button.debounce = 3;
 
@@ -297,7 +297,7 @@ void test_configure_button_decode()
     TEST_ASSERT_EQUAL_UINT32(0x00000002, cfg.config_id);
     TEST_ASSERT_EQUAL_UINT8(2, cfg.total_parts);
     TEST_ASSERT_EQUAL_UINT8(1, cfg.part_number);
-    TEST_ASSERT_EQUAL_UINT8(MODULE_TYPE_BUTTON, cfg.input_type);
+    TEST_ASSERT_EQUAL_UINT8(MODULE_TYPE_BUTTON, cfg.module_type);
     TEST_ASSERT_EQUAL_UINT8(7, cfg.button.pin);
     TEST_ASSERT_EQUAL_UINT8(3, cfg.button.debounce);
 }
@@ -309,7 +309,7 @@ void test_configure_button_roundtrip()
     original.config_id = 0xCAFEBABE;
     original.total_parts = 4;
     original.part_number = 3;
-    original.input_type = MODULE_TYPE_BUTTON;
+    original.module_type = MODULE_TYPE_BUTTON;
     original.button.pin = 12;
     original.button.debounce = 5;
 
@@ -323,7 +323,7 @@ void test_configure_button_roundtrip()
     TEST_ASSERT_EQUAL_UINT32(original.config_id, decoded.config_id);
     TEST_ASSERT_EQUAL_UINT8(original.total_parts, decoded.total_parts);
     TEST_ASSERT_EQUAL_UINT8(original.part_number, decoded.part_number);
-    TEST_ASSERT_EQUAL_UINT8(original.input_type, decoded.input_type);
+    TEST_ASSERT_EQUAL_UINT8(original.module_type, decoded.module_type);
     TEST_ASSERT_EQUAL_UINT8(original.button.pin, decoded.button.pin);
     TEST_ASSERT_EQUAL_UINT8(original.button.debounce, decoded.button.debounce);
 }
@@ -335,7 +335,7 @@ void test_configure_matrix_encode()
     cfg.config_id = 0x00000003;
     cfg.total_parts = 1;
     cfg.part_number = 0;
-    cfg.input_type = MODULE_TYPE_MATRIX;
+    cfg.module_type = MODULE_TYPE_MATRIX;
     cfg.matrix.num_row_pins = 3;
     cfg.matrix.num_col_pins = 4;
     // Row pins: 2, 3, 4
@@ -388,7 +388,7 @@ void test_configure_matrix_decode()
     TEST_ASSERT_EQUAL_UINT32(0x00000003, cfg.config_id);
     TEST_ASSERT_EQUAL_UINT8(1, cfg.total_parts);
     TEST_ASSERT_EQUAL_UINT8(0, cfg.part_number);
-    TEST_ASSERT_EQUAL_UINT8(MODULE_TYPE_MATRIX, cfg.input_type);
+    TEST_ASSERT_EQUAL_UINT8(MODULE_TYPE_MATRIX, cfg.module_type);
     TEST_ASSERT_EQUAL_UINT8(2, cfg.matrix.num_row_pins);
     TEST_ASSERT_EQUAL_UINT8(3, cfg.matrix.num_col_pins);
     TEST_ASSERT_EQUAL_UINT8(0x0A, cfg.matrix.pins[0]); // row 0
@@ -405,7 +405,7 @@ void test_configure_matrix_roundtrip()
     original.config_id = 0x11223344;
     original.total_parts = 2;
     original.part_number = 1;
-    original.input_type = MODULE_TYPE_MATRIX;
+    original.module_type = MODULE_TYPE_MATRIX;
     original.matrix.num_row_pins = 4;
     original.matrix.num_col_pins = 4;
     for (uint8_t i = 0; i < 8; i++) {
@@ -422,7 +422,7 @@ void test_configure_matrix_roundtrip()
     TEST_ASSERT_EQUAL_UINT32(original.config_id, decoded.config_id);
     TEST_ASSERT_EQUAL_UINT8(original.total_parts, decoded.total_parts);
     TEST_ASSERT_EQUAL_UINT8(original.part_number, decoded.part_number);
-    TEST_ASSERT_EQUAL_UINT8(original.input_type, decoded.input_type);
+    TEST_ASSERT_EQUAL_UINT8(original.module_type, decoded.module_type);
     TEST_ASSERT_EQUAL_UINT8(original.matrix.num_row_pins, decoded.matrix.num_row_pins);
     TEST_ASSERT_EQUAL_UINT8(original.matrix.num_col_pins, decoded.matrix.num_col_pins);
     for (uint8_t i = 0; i < 8; i++) {
@@ -500,7 +500,7 @@ void test_message_decode_configure()
     TEST_ASSERT_EQUAL_UINT32(0x00000001, msg.configure.config_id);
     TEST_ASSERT_EQUAL_UINT8(3, msg.configure.total_parts);
     TEST_ASSERT_EQUAL_UINT8(0, msg.configure.part_number);
-    TEST_ASSERT_EQUAL_UINT8(MODULE_TYPE_ANALOG, msg.configure.input_type);
+    TEST_ASSERT_EQUAL_UINT8(MODULE_TYPE_ANALOG, msg.configure.module_type);
     TEST_ASSERT_EQUAL_UINT8(0xA0, msg.configure.analog.pin);
     TEST_ASSERT_EQUAL_UINT8(0x80, msg.configure.analog.sensitivity);
 }
@@ -515,7 +515,7 @@ void test_message_decode_configure_button()
 
     TEST_ASSERT_TRUE(result);
     TEST_ASSERT_TRUE(msg.isConfigure());
-    TEST_ASSERT_EQUAL_UINT8(MODULE_TYPE_BUTTON, msg.configure.input_type);
+    TEST_ASSERT_EQUAL_UINT8(MODULE_TYPE_BUTTON, msg.configure.module_type);
     TEST_ASSERT_EQUAL_UINT8(7, msg.configure.button.pin);
     TEST_ASSERT_EQUAL_UINT8(3, msg.configure.button.debounce);
 }
@@ -540,7 +540,7 @@ void test_message_decode_configure_matrix()
 
     TEST_ASSERT_TRUE(result);
     TEST_ASSERT_TRUE(msg.isConfigure());
-    TEST_ASSERT_EQUAL_UINT8(MODULE_TYPE_MATRIX, msg.configure.input_type);
+    TEST_ASSERT_EQUAL_UINT8(MODULE_TYPE_MATRIX, msg.configure.module_type);
     TEST_ASSERT_EQUAL_UINT8(2, msg.configure.matrix.num_row_pins);
     TEST_ASSERT_EQUAL_UINT8(2, msg.configure.matrix.num_col_pins);
 }

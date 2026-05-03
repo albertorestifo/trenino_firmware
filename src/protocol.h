@@ -57,14 +57,14 @@ struct IdentityResponse {
 };
 
 // Configure message - sent by host to configure device inputs
-// Uses a discriminated union based on input_type
+// Uses a discriminated union based on module_type
 struct Configure {
     uint32_t config_id;
     uint8_t total_parts;
     uint8_t part_number;
-    uint8_t input_type;
+    uint8_t module_type;
 
-    // Type-specific payload (discriminated by input_type)
+    // Type-specific payload (discriminated by module_type)
     union {
         // MODULE_TYPE_ANALOG
         struct {
@@ -90,7 +90,7 @@ struct Configure {
         : config_id(0)
         , total_parts(0)
         , part_number(0)
-        , input_type(MODULE_TYPE_ANALOG)
+        , module_type(MODULE_TYPE_ANALOG)
     {
         analog.pin = 0;
         analog.sensitivity = 0;

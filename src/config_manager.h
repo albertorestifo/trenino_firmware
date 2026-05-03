@@ -40,7 +40,7 @@ constexpr uint8_t MAX_MATRIX_PINS = Protocol::MAX_MATRIX_PINS;
 
 // Single input configuration - union-based to match protocol
 struct ModuleConfig {
-    uint8_t input_type;
+    uint8_t module_type;
 
     union {
         // MODULE_TYPE_ANALOG
@@ -64,7 +64,7 @@ struct ModuleConfig {
     };
 
     ModuleConfig()
-        : input_type(Protocol::MODULE_TYPE_ANALOG)
+        : module_type(Protocol::MODULE_TYPE_ANALOG)
     {
         analog.pin = 0;
         analog.sensitivity = 0;
@@ -118,9 +118,9 @@ public:
         }
 
         // Store the input configuration based on type
-        modules[cfg.part_number].input_type = cfg.input_type;
+        modules[cfg.part_number].module_type = cfg.module_type;
 
-        switch (cfg.input_type) {
+        switch (cfg.module_type) {
         case Protocol::MODULE_TYPE_ANALOG:
             modules[cfg.part_number].analog.pin = cfg.analog.pin;
             modules[cfg.part_number].analog.sensitivity = cfg.analog.sensitivity;

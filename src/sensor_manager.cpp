@@ -47,7 +47,7 @@ bool applyConfiguration(const ConfigManager::ModuleConfig* modules, uint8_t modu
         Modules::IModule* sensor = nullptr;
 
         // Create sensor based on input type
-        switch (config.input_type) {
+        switch (config.module_type) {
         case Protocol::MODULE_TYPE_ANALOG:
             sensor = new Modules::AnalogSensor(config.analog.pin, config.analog.sensitivity);
             break;

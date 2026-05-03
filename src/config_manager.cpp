@@ -156,10 +156,10 @@ void storeToEEPROM(uint32_t config_id, const ModuleConfig* modules, uint8_t num_
     addr = EEPROM_INPUTS_ADDR;
     for (uint8_t i = 0; i < num_modules; i++) {
         // Write input type
-        eeprom_put(addr, modules[i].input_type);
+        eeprom_put(addr, modules[i].module_type);
         addr += sizeof(uint8_t);
 
-        switch (modules[i].input_type) {
+        switch (modules[i].module_type) {
         case Protocol::MODULE_TYPE_ANALOG:
             eeprom_put(addr, modules[i].analog.pin);
             addr += sizeof(uint8_t);
@@ -228,10 +228,10 @@ bool loadFromEEPROM()
     // Read input configurations (variable size based on type)
     int addr = EEPROM_INPUTS_ADDR;
     for (uint8_t i = 0; i < g_current_num_modules; i++) {
-        eeprom_get(addr, g_current_modules[i].input_type);
+        eeprom_get(addr, g_current_modules[i].module_type);
         addr += sizeof(uint8_t);
 
-        switch (g_current_modules[i].input_type) {
+        switch (g_current_modules[i].module_type) {
         case Protocol::MODULE_TYPE_ANALOG:
             eeprom_get(addr, g_current_modules[i].analog.pin);
             addr += sizeof(uint8_t);
