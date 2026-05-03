@@ -4,7 +4,7 @@
 namespace SensorManager {
 
 // Array of sensor pointers
-static Sensors::ISensor* g_sensors[MAX_SENSORS];
+static Sensors::ISensor* g_sensors[MAX_MODULES];
 static uint8_t g_sensor_count = 0;
 
 // Index for round-robin reading retrieval
@@ -13,7 +13,7 @@ static uint8_t g_next_reading_index = 0;
 void init()
 {
     // Clear all sensors
-    for (uint8_t i = 0; i < MAX_SENSORS; i++) {
+    for (uint8_t i = 0; i < MAX_MODULES; i++) {
         if (g_sensors[i] != nullptr) {
             delete g_sensors[i];
             g_sensors[i] = nullptr;
@@ -26,7 +26,7 @@ void init()
 bool applyConfiguration(const ConfigManager::InputConfig* inputs, uint8_t input_count)
 {
     // Clear existing sensors
-    for (uint8_t i = 0; i < MAX_SENSORS; i++) {
+    for (uint8_t i = 0; i < MAX_MODULES; i++) {
         if (g_sensors[i] != nullptr) {
             delete g_sensors[i];
             g_sensors[i] = nullptr;
@@ -36,7 +36,7 @@ bool applyConfiguration(const ConfigManager::InputConfig* inputs, uint8_t input_
     g_next_reading_index = 0;
 
     // Validate input count
-    if (input_count > MAX_SENSORS) {
+    if (input_count > MAX_MODULES) {
         return false;
     }
 

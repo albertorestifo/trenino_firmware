@@ -20,7 +20,7 @@
 namespace ConfigManager {
 
 // Maximum number of inputs that can be configured
-constexpr uint8_t MAX_INPUTS = 8;
+constexpr uint8_t MAX_MODULES = 8;
 
 // Timeout for configuration in milliseconds (5 seconds)
 constexpr unsigned long CONFIG_TIMEOUT_MS = 5000;
@@ -77,8 +77,8 @@ private:
     uint32_t config_id;
     uint8_t total_parts;
     uint8_t received_parts;
-    bool parts_received[MAX_INPUTS]; // Track which parts we've received
-    InputConfig inputs[MAX_INPUTS];
+    bool parts_received[MAX_MODULES]; // Track which parts we've received
+    InputConfig inputs[MAX_MODULES];
     unsigned long start_time; // When we started receiving this configuration
     bool active; // Is there an active configuration being received?
 
@@ -90,7 +90,7 @@ public:
         , start_time(0)
         , active(false)
     {
-        for (uint8_t i = 0; i < MAX_INPUTS; i++) {
+        for (uint8_t i = 0; i < MAX_MODULES; i++) {
             parts_received[i] = false;
         }
     }
@@ -104,7 +104,7 @@ public:
         start_time = millis();
         active = true;
 
-        for (uint8_t i = 0; i < MAX_INPUTS; i++) {
+        for (uint8_t i = 0; i < MAX_MODULES; i++) {
             parts_received[i] = false;
             inputs[i] = InputConfig();
         }
@@ -113,7 +113,7 @@ public:
     // Add a configuration part from a Configure message
     bool addPart(const Protocol::Configure& cfg)
     {
-        if (!active || cfg.part_number >= total_parts || cfg.part_number >= MAX_INPUTS) {
+        if (!active || cfg.part_number >= total_parts || cfg.part_number >= MAX_MODULES) {
             return false;
         }
 

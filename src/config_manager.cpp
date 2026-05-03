@@ -49,7 +49,7 @@ namespace ConfigManager {
 // Global state
 ConfigState g_config_state;
 uint32_t g_current_config_id = 0;
-static InputConfig g_current_inputs[MAX_INPUTS];
+static InputConfig g_current_inputs[MAX_MODULES];
 static uint8_t g_current_num_inputs = 0;
 
 void init()
@@ -77,7 +77,7 @@ bool handleConfigure(const Protocol::Configure& cfg, bool& complete, bool& error
     // Check if this is a new configuration or continuation of existing one
     if (!g_config_state.isActive()) {
         // Start new configuration
-        if (cfg.total_parts == 0 || cfg.total_parts > MAX_INPUTS) {
+        if (cfg.total_parts == 0 || cfg.total_parts > MAX_MODULES) {
             error = true;
             return true; // Invalid total_parts
         }
@@ -87,7 +87,7 @@ bool handleConfigure(const Protocol::Configure& cfg, bool& complete, bool& error
         if (g_config_state.getConfigId() != cfg.config_id) {
             // Different config_id - discard old configuration and start new one
             g_config_state.reset();
-            if (cfg.total_parts == 0 || cfg.total_parts > MAX_INPUTS) {
+            if (cfg.total_parts == 0 || cfg.total_parts > MAX_MODULES) {
                 error = true;
                 return true;
             }
@@ -221,7 +221,7 @@ bool loadFromEEPROM()
     eeprom_get(EEPROM_NUM_INPUTS_ADDR, g_current_num_inputs);
 
     // Validate number of inputs
-    if (g_current_num_inputs == 0 || g_current_num_inputs > MAX_INPUTS) {
+    if (g_current_num_inputs == 0 || g_current_num_inputs > MAX_MODULES) {
         return false;
     }
 

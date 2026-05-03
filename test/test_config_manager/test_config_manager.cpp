@@ -152,7 +152,7 @@ void test_load_fails_with_invalid_num_inputs()
     TEST_ASSERT_FALSE(result);
 
     // Try with too many inputs
-    num_inputs = ConfigManager::MAX_INPUTS + 1;
+    num_inputs = ConfigManager::MAX_MODULES + 1;
     EEPROM.put(ConfigManager::EEPROM_NUM_INPUTS_ADDR, num_inputs);
 
     result = ConfigManager::loadFromEEPROM();

@@ -9,8 +9,8 @@
 
 namespace SensorManager {
 
-// Maximum number of sensors (matches MAX_INPUTS in config_manager)
-constexpr uint8_t MAX_SENSORS = 8;
+// Maximum number of sensors (matches MAX_MODULES in config_manager)
+constexpr uint8_t MAX_MODULES = 8;
 
 // Initialize sensor manager with configuration from ConfigManager
 void init();
