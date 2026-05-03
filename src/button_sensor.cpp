@@ -13,7 +13,7 @@ ButtonSensor::ButtonSensor(uint8_t pin_number, uint8_t debounce_scans)
 {
 }
 
-void ButtonSensor::begin()
+bool ButtonSensor::begin()
 {
     // Configure pin as input with pullup
     // Button connects pin to GND when pressed (active LOW)
@@ -25,6 +25,7 @@ void ButtonSensor::begin()
     raw_state = false;
     debounce_count = 0;
     has_pending_event = false;
+    return true;
 }
 
 void ButtonSensor::scan()

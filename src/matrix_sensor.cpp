@@ -25,7 +25,7 @@ MatrixSensor::MatrixSensor(uint8_t rows, uint8_t cols,
     memset(debounce_count, 0, sizeof(debounce_count));
 }
 
-void MatrixSensor::begin()
+bool MatrixSensor::begin()
 {
     // Configure row pins as outputs (active LOW when scanning)
     for (uint8_t r = 0; r < num_rows; r++) {
@@ -44,6 +44,7 @@ void MatrixSensor::begin()
     memset(debounce_count, 0, sizeof(debounce_count));
     queue_head = 0;
     queue_tail = 0;
+    return true;
 }
 
 void MatrixSensor::scan()

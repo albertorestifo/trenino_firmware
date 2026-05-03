@@ -12,7 +12,7 @@ AnalogSensor::AnalogSensor(uint8_t pin_number, uint8_t sensitivity_level)
 {
 }
 
-void AnalogSensor::begin()
+bool AnalogSensor::begin()
 {
     // No pinMode needed for analog inputs - analogRead() handles pin configuration.
     // Calling pinMode(channel, INPUT) with a channel number (0, 1, etc.) would
@@ -22,6 +22,7 @@ void AnalogSensor::begin()
     current_value = 0;
     last_sent = 0;
     scans_since_send = 0;
+    return true;
 }
 
 void AnalogSensor::scan()

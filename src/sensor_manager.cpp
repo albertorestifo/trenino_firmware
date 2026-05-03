@@ -70,7 +70,7 @@ bool applyConfiguration(const ConfigManager::ModuleConfig* modules, uint8_t modu
         }
 
         if (sensor != nullptr) {
-            sensor->begin();
+            sensor->begin(); // return value ignored; init-error tracking added in Task B3
             g_sensors[g_sensor_count++] = sensor;
         }
     }

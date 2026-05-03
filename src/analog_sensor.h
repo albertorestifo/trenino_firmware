@@ -27,7 +27,7 @@ public:
     AnalogSensor(uint8_t pin_number, uint8_t sensitivity_level);
 
     // IModule interface implementation
-    void begin() override;
+    bool begin() override;
     void scan() override;
     Reading getReading() override;
     ModuleType getType() const override { return ModuleType::Analog; }

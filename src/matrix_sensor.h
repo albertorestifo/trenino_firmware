@@ -52,7 +52,7 @@ public:
                  const uint8_t* row_pin_array, const uint8_t* col_pin_array);
 
     // IModule interface implementation
-    void begin() override;
+    bool begin() override;
     void scan() override;
     Reading getReading() override;
     ModuleType getType() const override { return ModuleType::Matrix; }
