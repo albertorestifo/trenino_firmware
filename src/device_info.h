@@ -9,4 +9,5 @@ constexpr uint8_t DEVICE_VERSION_PATCH = 1;
 
 // EEPROM format version - increment when EEPROM layout changes
 // Version 4: BLDC lever simplified to single motor_enable pin
-constexpr uint8_t EEPROM_FORMAT_VERSION = 4;
+// Version 5: input/sensor terminology renamed to module; BLDC removed; HT16K33 module added
+constexpr uint8_t EEPROM_FORMAT_VERSION = 5;
