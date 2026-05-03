@@ -49,4 +49,9 @@ Modules::IModule* getModuleByI2CAddress(uint8_t address);
 // and clears the internal list.
 uint8_t getInitErrors(InitError* out, uint8_t max_count);
 
+#ifdef UNIT_TEST
+// Test-only: append a fake InitError. Used to verify drain semantics.
+void testInjectInitError(const InitError& err);
+#endif
+
 } // namespace ModuleManager

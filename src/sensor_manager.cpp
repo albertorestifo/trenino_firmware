@@ -1,5 +1,4 @@
 #include "sensor_manager.h"
-#include "message_handler.h"
 
 namespace ModuleManager {
 
@@ -162,5 +161,14 @@ uint8_t getInitErrors(InitError* out, uint8_t max_count)
     g_init_error_count = 0;
     return copied;
 }
+
+#ifdef UNIT_TEST
+void testInjectInitError(const InitError& err)
+{
+    if (g_init_error_count < MAX_MODULES) {
+        g_init_errors[g_init_error_count++] = err;
+    }
+}
+#endif
 
 } // namespace ModuleManager

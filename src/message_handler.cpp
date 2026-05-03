@@ -91,6 +91,18 @@ void handleIdentityRequest(uint32_t request_id)
 {
     uint32_t config_id = ConfigManager::getCurrentConfigId();
     sendIdentityResponse(request_id, config_id);
+
+    // Drain any pending module-init errors and report them to the host.
+    // This catches errors from the boot-time applyConfiguration() in setup()
+    // — at that point the host isn't connected yet, so errors stay in the
+    // ModuleManager's queue until the host identifies and we flush them here.
+    // The same flush happens after every host-driven Configure (in
+    // handleConfigure), which is the other place applyConfiguration runs.
+    ModuleManager::InitError errors[ModuleManager::MAX_MODULES];
+    uint8_t error_count = ModuleManager::getInitErrors(errors, ModuleManager::MAX_MODULES);
+    for (uint8_t i = 0; i < error_count; i++) {
+        sendModuleError(errors[i].i2c_address, errors[i].error_code);
+    }
 }
 
 void handleConfigure(const Protocol::Configure& cfg)
