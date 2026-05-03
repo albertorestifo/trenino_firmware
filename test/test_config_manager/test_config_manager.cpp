@@ -46,17 +46,17 @@ void tearDown()
 // Test that storeToEEPROM writes the device version
 void test_store_writes_version()
 {
-    ConfigManager::InputConfig inputs[2];
-    inputs[0].input_type = Protocol::MODULE_TYPE_ANALOG;
-    inputs[0].analog.pin = 14;
-    inputs[0].analog.sensitivity = 5;
-    inputs[1].input_type = Protocol::MODULE_TYPE_ANALOG;
-    inputs[1].analog.pin = 15;
-    inputs[1].analog.sensitivity = 8;
+    ConfigManager::ModuleConfig modules[2];
+    modules[0].input_type = Protocol::MODULE_TYPE_ANALOG;
+    modules[0].analog.pin = 14;
+    modules[0].analog.sensitivity = 5;
+    modules[1].input_type = Protocol::MODULE_TYPE_ANALOG;
+    modules[1].analog.pin = 15;
+    modules[1].analog.sensitivity = 8;
 
     uint32_t config_id = 12345;
 
-    ConfigManager::storeToEEPROM(config_id, inputs, 2);
+    ConfigManager::storeToEEPROM(config_id, modules, 2);
 
     // Verify magic number
     uint32_t magic;
@@ -73,23 +73,23 @@ void test_store_writes_version()
     EEPROM.get(ConfigManager::EEPROM_CONFIG_ID_ADDR, stored_config_id);
     TEST_ASSERT_EQUAL_UINT32(config_id, stored_config_id);
 
-    // Verify number of inputs
-    uint8_t num_inputs;
-    EEPROM.get(ConfigManager::EEPROM_NUM_INPUTS_ADDR, num_inputs);
-    TEST_ASSERT_EQUAL_UINT8(2, num_inputs);
+    // Verify number of modules
+    uint8_t num_modules;
+    EEPROM.get(ConfigManager::EEPROM_NUM_INPUTS_ADDR, num_modules);
+    TEST_ASSERT_EQUAL_UINT8(2, num_modules);
 }
 
 // Test that loadFromEEPROM succeeds with matching version
 void test_load_succeeds_with_matching_version()
 {
     // Store a valid configuration
-    ConfigManager::InputConfig inputs[1];
-    inputs[0].input_type = Protocol::MODULE_TYPE_ANALOG;
-    inputs[0].analog.pin = 14;
-    inputs[0].analog.sensitivity = 5;
+    ConfigManager::ModuleConfig modules[1];
+    modules[0].input_type = Protocol::MODULE_TYPE_ANALOG;
+    modules[0].analog.pin = 14;
+    modules[0].analog.sensitivity = 5;
 
     uint32_t config_id = 54321;
-    ConfigManager::storeToEEPROM(config_id, inputs, 1);
+    ConfigManager::storeToEEPROM(config_id, modules, 1);
 
     // Load it back
     bool result = ConfigManager::loadFromEEPROM();
@@ -98,10 +98,10 @@ void test_load_succeeds_with_matching_version()
     // Verify loaded config_id
     TEST_ASSERT_EQUAL_UINT32(config_id, ConfigManager::getCurrentConfigId());
 
-    // Verify loaded inputs
-    uint8_t num_inputs = 0;
-    const ConfigManager::InputConfig* loaded = ConfigManager::getCurrentConfig(num_inputs);
-    TEST_ASSERT_EQUAL_UINT8(1, num_inputs);
+    // Verify loaded modules
+    uint8_t num_modules = 0;
+    const ConfigManager::ModuleConfig* loaded = ConfigManager::getCurrentConfig(num_modules);
+    TEST_ASSERT_EQUAL_UINT8(1, num_modules);
     TEST_ASSERT_EQUAL_UINT8(Protocol::MODULE_TYPE_ANALOG, loaded[0].input_type);
     TEST_ASSERT_EQUAL_UINT8(14, loaded[0].analog.pin);
     TEST_ASSERT_EQUAL_UINT8(5, loaded[0].analog.sensitivity);
@@ -116,8 +116,8 @@ void test_load_fails_with_mismatched_version()
     EEPROM.put(ConfigManager::EEPROM_VERSION_ADDR, wrong_version);
     uint32_t config_id = 99999;
     EEPROM.put(ConfigManager::EEPROM_CONFIG_ID_ADDR, config_id);
-    uint8_t num_inputs = 1;
-    EEPROM.put(ConfigManager::EEPROM_NUM_INPUTS_ADDR, num_inputs);
+    uint8_t num_modules = 1;
+    EEPROM.put(ConfigManager::EEPROM_NUM_INPUTS_ADDR, num_modules);
 
     // Try to load - should fail
     bool result = ConfigManager::loadFromEEPROM();
@@ -145,15 +145,15 @@ void test_load_fails_with_invalid_num_inputs()
     EEPROM.put(ConfigManager::EEPROM_VERSION_ADDR, EEPROM_FORMAT_VERSION);
     uint32_t config_id = 12345;
     EEPROM.put(ConfigManager::EEPROM_CONFIG_ID_ADDR, config_id);
-    uint8_t num_inputs = 0; // Invalid: 0 inputs
-    EEPROM.put(ConfigManager::EEPROM_NUM_INPUTS_ADDR, num_inputs);
+    uint8_t num_modules = 0; // Invalid: 0 modules
+    EEPROM.put(ConfigManager::EEPROM_NUM_INPUTS_ADDR, num_modules);
 
     bool result = ConfigManager::loadFromEEPROM();
     TEST_ASSERT_FALSE(result);
 
-    // Try with too many inputs
-    num_inputs = ConfigManager::MAX_MODULES + 1;
-    EEPROM.put(ConfigManager::EEPROM_NUM_INPUTS_ADDR, num_inputs);
+    // Try with too many modules
+    num_modules = ConfigManager::MAX_MODULES + 1;
+    EEPROM.put(ConfigManager::EEPROM_NUM_INPUTS_ADDR, num_modules);
 
     result = ConfigManager::loadFromEEPROM();
     TEST_ASSERT_FALSE(result);

@@ -39,7 +39,7 @@ constexpr uint32_t EEPROM_MAGIC = 0xC0FF1234;
 constexpr uint8_t MAX_MATRIX_PINS = Protocol::MAX_MATRIX_PINS;
 
 // Single input configuration - union-based to match protocol
-struct InputConfig {
+struct ModuleConfig {
     uint8_t input_type;
 
     union {
@@ -63,7 +63,7 @@ struct InputConfig {
         } matrix;
     };
 
-    InputConfig()
+    ModuleConfig()
         : input_type(Protocol::MODULE_TYPE_ANALOG)
     {
         analog.pin = 0;
@@ -78,7 +78,7 @@ private:
     uint8_t total_parts;
     uint8_t received_parts;
     bool parts_received[MAX_MODULES]; // Track which parts we've received
-    InputConfig inputs[MAX_MODULES];
+    ModuleConfig modules[MAX_MODULES];
     unsigned long start_time; // When we started receiving this configuration
     bool active; // Is there an active configuration being received?
 
@@ -106,7 +106,7 @@ public:
 
         for (uint8_t i = 0; i < MAX_MODULES; i++) {
             parts_received[i] = false;
-            inputs[i] = InputConfig();
+            modules[i] = ModuleConfig();
         }
     }
 
@@ -118,24 +118,24 @@ public:
         }
 
         // Store the input configuration based on type
-        inputs[cfg.part_number].input_type = cfg.input_type;
+        modules[cfg.part_number].input_type = cfg.input_type;
 
         switch (cfg.input_type) {
         case Protocol::MODULE_TYPE_ANALOG:
-            inputs[cfg.part_number].analog.pin = cfg.analog.pin;
-            inputs[cfg.part_number].analog.sensitivity = cfg.analog.sensitivity;
+            modules[cfg.part_number].analog.pin = cfg.analog.pin;
+            modules[cfg.part_number].analog.sensitivity = cfg.analog.sensitivity;
             break;
 
         case Protocol::MODULE_TYPE_BUTTON:
-            inputs[cfg.part_number].button.pin = cfg.button.pin;
-            inputs[cfg.part_number].button.debounce = cfg.button.debounce;
+            modules[cfg.part_number].button.pin = cfg.button.pin;
+            modules[cfg.part_number].button.debounce = cfg.button.debounce;
             break;
 
         case Protocol::MODULE_TYPE_MATRIX:
-            inputs[cfg.part_number].matrix.num_row_pins = cfg.matrix.num_row_pins;
-            inputs[cfg.part_number].matrix.num_col_pins = cfg.matrix.num_col_pins;
+            modules[cfg.part_number].matrix.num_row_pins = cfg.matrix.num_row_pins;
+            modules[cfg.part_number].matrix.num_col_pins = cfg.matrix.num_col_pins;
             for (uint8_t i = 0; i < cfg.matrix.num_row_pins + cfg.matrix.num_col_pins; i++) {
-                inputs[cfg.part_number].matrix.pins[i] = cfg.matrix.pins[i];
+                modules[cfg.part_number].matrix.pins[i] = cfg.matrix.pins[i];
             }
             break;
 
@@ -170,14 +170,14 @@ public:
         return config_id;
     }
 
-    // Get the inputs
-    const InputConfig* getInputs() const
+    // Get the modules
+    const ModuleConfig* getModules() const
     {
-        return inputs;
+        return modules;
     }
 
-    // Get the number of inputs
-    uint8_t getNumInputs() const
+    // Get the number of modules
+    uint8_t getNumModules() const
     {
         return total_parts;
     }
@@ -216,7 +216,7 @@ bool handleConfigure(const Protocol::Configure& cfg, bool& complete, bool& error
 bool checkTimeout();
 
 // Store configuration to EEPROM
-void storeToEEPROM(uint32_t config_id, const InputConfig* inputs, uint8_t num_inputs);
+void storeToEEPROM(uint32_t config_id, const ModuleConfig* modules, uint8_t num_modules);
 
 // Load configuration from EEPROM
 // Returns true if valid configuration was loaded
@@ -226,6 +226,6 @@ bool loadFromEEPROM();
 uint32_t getCurrentConfigId();
 
 // Get current configuration
-const InputConfig* getCurrentConfig(uint8_t& num_inputs);
+const ModuleConfig* getCurrentConfig(uint8_t& num_modules);
 
 } // namespace ConfigManager

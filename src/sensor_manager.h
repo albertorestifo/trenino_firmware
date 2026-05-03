@@ -17,7 +17,7 @@ void init();
 
 // Apply configuration - creates sensors based on configuration
 // Returns true if configuration was successfully applied
-bool applyConfiguration(const ConfigManager::InputConfig* inputs, uint8_t input_count);
+bool applyConfiguration(const ConfigManager::ModuleConfig* modules, uint8_t module_count);
 
 // Scan all sensors (read values, update running averages)
 void scan();

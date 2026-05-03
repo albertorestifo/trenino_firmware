@@ -24,9 +24,9 @@ void setup()
     MessageHandler::init(&g_packet_serial);
 
     // Apply loaded configuration to sensors
-    uint8_t num_inputs = 0;
-    const ConfigManager::InputConfig* inputs = ConfigManager::getCurrentConfig(num_inputs);
-    ModuleManager::applyConfiguration(inputs, num_inputs);
+    uint8_t num_modules = 0;
+    const ConfigManager::ModuleConfig* modules = ConfigManager::getCurrentConfig(num_modules);
+    ModuleManager::applyConfiguration(modules, num_modules);
 }
 
 void loop()

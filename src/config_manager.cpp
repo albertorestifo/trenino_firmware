@@ -49,8 +49,8 @@ namespace ConfigManager {
 // Global state
 ConfigState g_config_state;
 uint32_t g_current_config_id = 0;
-static InputConfig g_current_inputs[MAX_MODULES];
-static uint8_t g_current_num_inputs = 0;
+static ModuleConfig g_current_modules[MAX_MODULES];
+static uint8_t g_current_num_modules = 0;
 
 void init()
 {
@@ -65,7 +65,7 @@ void init()
     } else {
         // No valid configuration in EEPROM
         g_current_config_id = 0;
-        g_current_num_inputs = 0;
+        g_current_num_modules = 0;
     }
 }
 
@@ -107,14 +107,14 @@ bool handleConfigure(const Protocol::Configure& cfg, bool& complete, bool& error
         // Store to EEPROM
         storeToEEPROM(
             g_config_state.getConfigId(),
-            g_config_state.getInputs(),
-            g_config_state.getNumInputs());
+            g_config_state.getModules(),
+            g_config_state.getNumModules());
 
         // Update current configuration
         g_current_config_id = g_config_state.getConfigId();
-        g_current_num_inputs = g_config_state.getNumInputs();
-        for (uint8_t i = 0; i < g_current_num_inputs; i++) {
-            g_current_inputs[i] = g_config_state.getInputs()[i];
+        g_current_num_modules = g_config_state.getNumModules();
+        for (uint8_t i = 0; i < g_current_num_modules; i++) {
+            g_current_modules[i] = g_config_state.getModules()[i];
         }
 
         // Reset state
@@ -136,7 +136,7 @@ bool checkTimeout()
     return false;
 }
 
-void storeToEEPROM(uint32_t config_id, const InputConfig* inputs, uint8_t num_inputs)
+void storeToEEPROM(uint32_t config_id, const ModuleConfig* modules, uint8_t num_modules)
 {
     int addr = 0;
 
@@ -149,39 +149,39 @@ void storeToEEPROM(uint32_t config_id, const InputConfig* inputs, uint8_t num_in
     // Write config_id
     eeprom_put(EEPROM_CONFIG_ID_ADDR, config_id);
 
-    // Write number of inputs
-    eeprom_put(EEPROM_NUM_INPUTS_ADDR, num_inputs);
+    // Write number of modules
+    eeprom_put(EEPROM_NUM_INPUTS_ADDR, num_modules);
 
-    // Write input configurations (variable size based on type)
+    // Write module configurations (variable size based on type)
     addr = EEPROM_INPUTS_ADDR;
-    for (uint8_t i = 0; i < num_inputs; i++) {
+    for (uint8_t i = 0; i < num_modules; i++) {
         // Write input type
-        eeprom_put(addr, inputs[i].input_type);
+        eeprom_put(addr, modules[i].input_type);
         addr += sizeof(uint8_t);
 
-        switch (inputs[i].input_type) {
+        switch (modules[i].input_type) {
         case Protocol::MODULE_TYPE_ANALOG:
-            eeprom_put(addr, inputs[i].analog.pin);
+            eeprom_put(addr, modules[i].analog.pin);
             addr += sizeof(uint8_t);
-            eeprom_put(addr, inputs[i].analog.sensitivity);
+            eeprom_put(addr, modules[i].analog.sensitivity);
             addr += sizeof(uint8_t);
             break;
 
         case Protocol::MODULE_TYPE_BUTTON:
-            eeprom_put(addr, inputs[i].button.pin);
+            eeprom_put(addr, modules[i].button.pin);
             addr += sizeof(uint8_t);
-            eeprom_put(addr, inputs[i].button.debounce);
+            eeprom_put(addr, modules[i].button.debounce);
             addr += sizeof(uint8_t);
             break;
 
         case Protocol::MODULE_TYPE_MATRIX: {
-            eeprom_put(addr, inputs[i].matrix.num_row_pins);
+            eeprom_put(addr, modules[i].matrix.num_row_pins);
             addr += sizeof(uint8_t);
-            eeprom_put(addr, inputs[i].matrix.num_col_pins);
+            eeprom_put(addr, modules[i].matrix.num_col_pins);
             addr += sizeof(uint8_t);
-            uint8_t total_pins = inputs[i].matrix.num_row_pins + inputs[i].matrix.num_col_pins;
+            uint8_t total_pins = modules[i].matrix.num_row_pins + modules[i].matrix.num_col_pins;
             for (uint8_t p = 0; p < total_pins; p++) {
-                eeprom_put(addr, inputs[i].matrix.pins[p]);
+                eeprom_put(addr, modules[i].matrix.pins[p]);
                 addr += sizeof(uint8_t);
             }
             break;
@@ -218,45 +218,45 @@ bool loadFromEEPROM()
     eeprom_get(EEPROM_CONFIG_ID_ADDR, g_current_config_id);
 
     // Read number of inputs
-    eeprom_get(EEPROM_NUM_INPUTS_ADDR, g_current_num_inputs);
+    eeprom_get(EEPROM_NUM_INPUTS_ADDR, g_current_num_modules);
 
     // Validate number of inputs
-    if (g_current_num_inputs == 0 || g_current_num_inputs > MAX_MODULES) {
+    if (g_current_num_modules == 0 || g_current_num_modules > MAX_MODULES) {
         return false;
     }
 
     // Read input configurations (variable size based on type)
     int addr = EEPROM_INPUTS_ADDR;
-    for (uint8_t i = 0; i < g_current_num_inputs; i++) {
-        eeprom_get(addr, g_current_inputs[i].input_type);
+    for (uint8_t i = 0; i < g_current_num_modules; i++) {
+        eeprom_get(addr, g_current_modules[i].input_type);
         addr += sizeof(uint8_t);
 
-        switch (g_current_inputs[i].input_type) {
+        switch (g_current_modules[i].input_type) {
         case Protocol::MODULE_TYPE_ANALOG:
-            eeprom_get(addr, g_current_inputs[i].analog.pin);
+            eeprom_get(addr, g_current_modules[i].analog.pin);
             addr += sizeof(uint8_t);
-            eeprom_get(addr, g_current_inputs[i].analog.sensitivity);
+            eeprom_get(addr, g_current_modules[i].analog.sensitivity);
             addr += sizeof(uint8_t);
             break;
 
         case Protocol::MODULE_TYPE_BUTTON:
-            eeprom_get(addr, g_current_inputs[i].button.pin);
+            eeprom_get(addr, g_current_modules[i].button.pin);
             addr += sizeof(uint8_t);
-            eeprom_get(addr, g_current_inputs[i].button.debounce);
+            eeprom_get(addr, g_current_modules[i].button.debounce);
             addr += sizeof(uint8_t);
             break;
 
         case Protocol::MODULE_TYPE_MATRIX: {
-            eeprom_get(addr, g_current_inputs[i].matrix.num_row_pins);
+            eeprom_get(addr, g_current_modules[i].matrix.num_row_pins);
             addr += sizeof(uint8_t);
-            eeprom_get(addr, g_current_inputs[i].matrix.num_col_pins);
+            eeprom_get(addr, g_current_modules[i].matrix.num_col_pins);
             addr += sizeof(uint8_t);
-            uint8_t total_pins = g_current_inputs[i].matrix.num_row_pins + g_current_inputs[i].matrix.num_col_pins;
+            uint8_t total_pins = g_current_modules[i].matrix.num_row_pins + g_current_modules[i].matrix.num_col_pins;
             if (total_pins > MAX_MATRIX_PINS) {
                 return false; // Invalid matrix config
             }
             for (uint8_t p = 0; p < total_pins; p++) {
-                eeprom_get(addr, g_current_inputs[i].matrix.pins[p]);
+                eeprom_get(addr, g_current_modules[i].matrix.pins[p]);
                 addr += sizeof(uint8_t);
             }
             break;
@@ -275,10 +275,10 @@ uint32_t getCurrentConfigId()
     return g_current_config_id;
 }
 
-const InputConfig* getCurrentConfig(uint8_t& num_inputs)
+const ModuleConfig* getCurrentConfig(uint8_t& num_modules)
 {
-    num_inputs = g_current_num_inputs;
-    return g_current_inputs;
+    num_modules = g_current_num_modules;
+    return g_current_modules;
 }
 
 } // namespace ConfigManager

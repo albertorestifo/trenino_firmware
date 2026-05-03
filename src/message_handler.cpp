@@ -97,9 +97,9 @@ void handleConfigure(const Protocol::Configure& cfg)
 
     if (complete) {
         // Apply configuration to sensors
-        uint8_t num_inputs = 0;
-        const ConfigManager::InputConfig* inputs = ConfigManager::getCurrentConfig(num_inputs);
-        ModuleManager::applyConfiguration(inputs, num_inputs);
+        uint8_t num_modules = 0;
+        const ConfigManager::ModuleConfig* modules = ConfigManager::getCurrentConfig(num_modules);
+        ModuleManager::applyConfiguration(modules, num_modules);
 
         sendConfigurationStored(cfg.config_id);
     } else if (error) {

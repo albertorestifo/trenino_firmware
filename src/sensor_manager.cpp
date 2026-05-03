@@ -23,7 +23,7 @@ void init()
     g_next_reading_index = 0;
 }
 
-bool applyConfiguration(const ConfigManager::InputConfig* inputs, uint8_t input_count)
+bool applyConfiguration(const ConfigManager::ModuleConfig* modules, uint8_t module_count)
 {
     // Clear existing sensors
     for (uint8_t i = 0; i < MAX_MODULES; i++) {
@@ -35,14 +35,14 @@ bool applyConfiguration(const ConfigManager::InputConfig* inputs, uint8_t input_
     g_sensor_count = 0;
     g_next_reading_index = 0;
 
-    // Validate input count
-    if (input_count > MAX_MODULES) {
+    // Validate module count
+    if (module_count > MAX_MODULES) {
         return false;
     }
 
     // Create sensors based on configuration
-    for (uint8_t i = 0; i < input_count; i++) {
-        const ConfigManager::InputConfig& config = inputs[i];
+    for (uint8_t i = 0; i < module_count; i++) {
+        const ConfigManager::ModuleConfig& config = modules[i];
 
         Modules::IModule* sensor = nullptr;
 
