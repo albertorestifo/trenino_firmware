@@ -1,13 +1,13 @@
 #pragma once
 
-#include "sensor.h"
+#include "module.h"
 #include <Arduino.h>
 
-namespace Sensors {
+namespace Modules {
 
 // Button sensor implementation
 // Uses counter-based debouncing and reports edge events (press/release)
-class ButtonSensor : public ISensor {
+class ButtonSensor : public IModule {
 private:
     uint8_t pin;               // Arduino pin number
     uint8_t debounce_threshold; // Number of scans for debounce
@@ -22,12 +22,12 @@ private:
 public:
     ButtonSensor(uint8_t pin_number, uint8_t debounce_scans);
 
-    // ISensor interface implementation
+    // IModule interface implementation
     void begin() override;
     void scan() override;
     Reading getReading() override;
-    InputType getType() const override { return InputType::Button; }
+    ModuleType getType() const override { return ModuleType::Button; }
     uint8_t getPin() const override { return pin; }
 };
 
-} // namespace Sensors
+} // namespace Modules

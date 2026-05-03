@@ -76,7 +76,7 @@ void update()
     SensorManager::scan();
 
     // Check for sensor readings and send them
-    Sensors::Reading reading;
+    Modules::Reading reading;
     while (SensorManager::getNextReading(reading)) {
         sendInputValue(reading);
     }
@@ -140,7 +140,7 @@ void sendConfigurationError(uint32_t config_id)
     sendMessage(error);
 }
 
-void sendInputValue(const Sensors::Reading& reading)
+void sendInputValue(const Modules::Reading& reading)
 {
     Protocol::InputValue input_value;
     input_value.pin = reading.pin;

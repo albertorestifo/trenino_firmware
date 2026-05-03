@@ -4,7 +4,7 @@
 #include "button_sensor.h"
 #include "config_manager.h"
 #include "matrix_sensor.h"
-#include "sensor.h"
+#include "module.h"
 #include <stdint.h>
 
 namespace SensorManager {
@@ -25,13 +25,13 @@ void scan();
 // Check if any sensor has a reading to report
 // Returns true if a reading is available
 // Populates the reading parameter with the sensor reading
-bool getNextReading(Sensors::Reading& reading);
+bool getNextReading(Modules::Reading& reading);
 
 // Get number of active sensors
 uint8_t getSensorCount();
 
 // Get sensor by pin number
 // Returns nullptr if not found
-Sensors::ISensor* getSensorByPin(uint8_t pin);
+Modules::IModule* getSensorByPin(uint8_t pin);
 
 } // namespace SensorManager

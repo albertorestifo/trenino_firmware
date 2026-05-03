@@ -1,14 +1,14 @@
 #pragma once
 
-#include "sensor.h"
+#include "module.h"
 #include <Arduino.h>
 
-namespace Sensors {
+namespace Modules {
 
 // Matrix sensor implementation
 // Uses row/column scanning with per-button debouncing
 // Reports edge events for each button with virtual pin scheme
-class MatrixSensor : public ISensor {
+class MatrixSensor : public IModule {
 public:
     // Maximum matrix size (to avoid dynamic allocation)
     static constexpr uint8_t MAX_ROWS = 8;
@@ -51,11 +51,11 @@ public:
     MatrixSensor(uint8_t rows, uint8_t cols,
                  const uint8_t* row_pin_array, const uint8_t* col_pin_array);
 
-    // ISensor interface implementation
+    // IModule interface implementation
     void begin() override;
     void scan() override;
     Reading getReading() override;
-    InputType getType() const override { return InputType::Matrix; }
+    ModuleType getType() const override { return ModuleType::Matrix; }
     uint8_t getPin() const override { return VIRTUAL_PIN_BASE; } // Base pin identifier
 
 private:
@@ -75,4 +75,4 @@ private:
     uint8_t virtualPin(uint8_t button_index) const { return VIRTUAL_PIN_BASE + button_index; }
 };
 
-} // namespace Sensors
+} // namespace Modules

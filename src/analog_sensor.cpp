@@ -1,6 +1,6 @@
 #include "analog_sensor.h"
 
-namespace Sensors {
+namespace Modules {
 
 AnalogSensor::AnalogSensor(uint8_t pin_number, uint8_t sensitivity_level)
     : pin(pin_number)
@@ -47,7 +47,7 @@ Reading AnalogSensor::getReading()
     last_sent = current_value;
     scans_since_send = 0;
 
-    return Reading(value, InputType::Analog, pin);
+    return Reading(value, ModuleType::Analog, pin);
 }
 
 uint16_t AnalogSensor::computeMinSendInterval() const
@@ -78,4 +78,4 @@ bool AnalogSensor::shouldSend()
     return delta > DEAD_ZONE;
 }
 
-} // namespace Sensors
+} // namespace Modules

@@ -2,7 +2,7 @@
 
 #include "device_info.h"
 #include "protocol.h"
-#include "sensor.h"
+#include "module.h"
 #include <PacketSerial.h>
 #include <stdint.h>
 
@@ -34,7 +34,7 @@ void sendMessage(const T& message);
 void sendIdentityResponse(uint32_t request_id, uint32_t config_id);
 void sendConfigurationStored(uint32_t config_id);
 void sendConfigurationError(uint32_t config_id);
-void sendInputValue(const Sensors::Reading& reading);
+void sendInputValue(const Modules::Reading& reading);
 void sendHeartbeat();
 
 } // namespace MessageHandler

@@ -31,11 +31,11 @@ void digitalWrite(uint8_t pin, uint8_t val)
 }
 
 // Now include the sensor code (include .cpp directly since we provide mocks above)
-#include "../../src/sensor.h"
+#include "../../src/module.h"
 #include "../../src/button_sensor.cpp"
 #include <unity.h>
 
-using namespace Sensors;
+using namespace Modules;
 
 // Helper to set mock digital value
 void setMockDigitalValue(int value)
@@ -48,7 +48,7 @@ void test_button_sensor_init()
 {
     ButtonSensor sensor(7, 3);
 
-    TEST_ASSERT_EQUAL(InputType::Button, sensor.getType());
+    TEST_ASSERT_EQUAL(ModuleType::Button, sensor.getType());
     TEST_ASSERT_EQUAL(7, sensor.getPin());
 }
 
@@ -102,7 +102,7 @@ void test_button_sensor_press_detection()
     Reading r2 = sensor.getReading();
     TEST_ASSERT_TRUE(r2.has_value);
     TEST_ASSERT_EQUAL(1, r2.value); // 1 = pressed
-    TEST_ASSERT_EQUAL(InputType::Button, r2.type);
+    TEST_ASSERT_EQUAL(ModuleType::Button, r2.type);
     TEST_ASSERT_EQUAL(7, r2.pin);
 }
 

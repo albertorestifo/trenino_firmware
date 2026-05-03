@@ -1,6 +1,6 @@
 #include "button_sensor.h"
 
-namespace Sensors {
+namespace Modules {
 
 ButtonSensor::ButtonSensor(uint8_t pin_number, uint8_t debounce_scans)
     : pin(pin_number)
@@ -70,7 +70,7 @@ Reading ButtonSensor::getReading()
     last_reported = current_state;
     has_pending_event = false;
 
-    return Reading(value, InputType::Button, pin);
+    return Reading(value, ModuleType::Button, pin);
 }
 
-} // namespace Sensors
+} // namespace Modules

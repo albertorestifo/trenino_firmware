@@ -1,7 +1,7 @@
 #include "matrix_sensor.h"
 #include <string.h>
 
-namespace Sensors {
+namespace Modules {
 
 MatrixSensor::MatrixSensor(uint8_t rows, uint8_t cols,
                            const uint8_t* row_pin_array, const uint8_t* col_pin_array)
@@ -128,7 +128,7 @@ Reading MatrixSensor::getReading()
     int16_t value = event.pressed ? 1 : 0;
     uint8_t pin = virtualPin(event.button_index);
 
-    return Reading(value, InputType::Matrix, pin);
+    return Reading(value, ModuleType::Matrix, pin);
 }
 
-} // namespace Sensors
+} // namespace Modules

@@ -1,14 +1,14 @@
 #pragma once
 
-#include "sensor.h"
+#include "module.h"
 #include <Arduino.h>
 
-namespace Sensors {
+namespace Modules {
 
 // Analog sensor implementation
 // Uses EMA (Exponential Moving Average) for smoothing
 // Reports based on sensitivity, change threshold, and time-based forcing
-class AnalogSensor : public ISensor {
+class AnalogSensor : public IModule {
 private:
     uint8_t pin; // Arduino pin number
     uint8_t sensitivity; // Sensitivity level (0-10, where 10 = most sensitive/sends most frequently)
@@ -26,11 +26,11 @@ private:
 public:
     AnalogSensor(uint8_t pin_number, uint8_t sensitivity_level);
 
-    // ISensor interface implementation
+    // IModule interface implementation
     void begin() override;
     void scan() override;
     Reading getReading() override;
-    InputType getType() const override { return InputType::Analog; }
+    ModuleType getType() const override { return ModuleType::Analog; }
     uint8_t getPin() const override { return pin; }
 
 private:
@@ -41,4 +41,4 @@ private:
     uint16_t computeMinSendInterval() const;
 };
 
-} // namespace Sensors
+} // namespace Modules

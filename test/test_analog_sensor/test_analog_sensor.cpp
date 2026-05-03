@@ -21,11 +21,11 @@ int analogRead(uint8_t pin)
 }
 
 // Now include the sensor code (include .cpp directly since we provide mocks above)
-#include "../../src/sensor.h"
+#include "../../src/module.h"
 #include "../../src/analog_sensor.cpp"
 #include <unity.h>
 
-using namespace Sensors;
+using namespace Modules;
 
 // Helper to set mock analog value
 void setMockAnalogValue(uint16_t value)
@@ -38,7 +38,7 @@ void test_analog_sensor_init()
 {
     AnalogSensor sensor(A0, 5);
 
-    TEST_ASSERT_EQUAL(InputType::Analog, sensor.getType());
+    TEST_ASSERT_EQUAL(ModuleType::Analog, sensor.getType());
     TEST_ASSERT_EQUAL(A0, sensor.getPin());
 }
 
@@ -124,7 +124,7 @@ void test_analog_sensor_send_on_significant_change()
     // Should have a reading now (rate limit passed && value changed)
     Reading r = sensor.getReading();
     TEST_ASSERT_TRUE(r.has_value);
-    TEST_ASSERT_EQUAL(InputType::Analog, r.type);
+    TEST_ASSERT_EQUAL(ModuleType::Analog, r.type);
 }
 
 // Test that value is NOT sent when no change
@@ -210,7 +210,7 @@ void test_analog_sensor_forced_send_after_min_gap()
     // Should have a reading now (forced periodic update even with no change)
     Reading r = sensor.getReading();
     TEST_ASSERT_TRUE(r.has_value);
-    TEST_ASSERT_EQUAL(InputType::Analog, r.type);
+    TEST_ASSERT_EQUAL(ModuleType::Analog, r.type);
 }
 
 // Test that reading resets scan counter

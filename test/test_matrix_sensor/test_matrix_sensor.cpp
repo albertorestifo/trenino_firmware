@@ -56,11 +56,11 @@ void delayMicroseconds(unsigned int us)
 }
 
 // Now include the sensor code
-#include "../../src/sensor.h"
+#include "../../src/module.h"
 #include "../../src/matrix_sensor.cpp"
 #include <unity.h>
 
-using namespace Sensors;
+using namespace Modules;
 
 // Helper to reset mock state
 void resetMockState()
@@ -97,7 +97,7 @@ void test_matrix_sensor_init()
     uint8_t cols[] = {5, 6, 7, 8};
     MatrixSensor sensor(3, 4, rows, cols);
 
-    TEST_ASSERT_EQUAL(InputType::Matrix, sensor.getType());
+    TEST_ASSERT_EQUAL(ModuleType::Matrix, sensor.getType());
     TEST_ASSERT_EQUAL(128, sensor.getPin()); // Virtual pin base
 }
 
@@ -141,7 +141,7 @@ void test_matrix_sensor_single_button_press()
     Reading r2 = sensor.getReading();
     TEST_ASSERT_TRUE(r2.has_value);
     TEST_ASSERT_EQUAL(1, r2.value); // 1 = pressed
-    TEST_ASSERT_EQUAL(InputType::Matrix, r2.type);
+    TEST_ASSERT_EQUAL(ModuleType::Matrix, r2.type);
     // Virtual pin = 128 + (row * num_cols + col) = 128 + (1 * 4 + 2) = 134
     TEST_ASSERT_EQUAL(134, r2.pin);
 }
