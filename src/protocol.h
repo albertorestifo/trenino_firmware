@@ -23,7 +23,6 @@ constexpr uint8_t MESSAGE_TYPE_DEACTIVATE_BLDC_PROFILE = 12;
 constexpr uint8_t MODULE_TYPE_ANALOG = 0;
 constexpr uint8_t MODULE_TYPE_BUTTON = 1;
 constexpr uint8_t MODULE_TYPE_MATRIX = 2;
-constexpr uint8_t MODULE_TYPE_BLDC_LEVER = 3;
 
 // Maximum number of pins for matrix configuration (row_pins + col_pins)
 constexpr uint8_t MAX_MATRIX_PINS = 16;
@@ -85,19 +84,6 @@ struct Configure {
             uint8_t num_col_pins;
             uint8_t pins[MAX_MATRIX_PINS]; // row_pins followed by col_pins
         } matrix;
-
-        // MODULE_TYPE_BLDC_LEVER
-        struct {
-            uint8_t motor_pin_a;
-            uint8_t motor_pin_b;
-            uint8_t motor_pin_c;
-            uint8_t motor_enable;
-            uint8_t encoder_cs;
-            uint8_t pole_pairs;
-            uint8_t voltage;        // 0.1V units (e.g. 120 = 12.0V)
-            uint8_t current_limit;  // 0.1A units (0 = no limit)
-            uint8_t encoder_bits;   // Encoder resolution (e.g. 14 for AS5047D)
-        } bldc_lever;
     };
 
     Configure()

@@ -186,27 +186,6 @@ void storeToEEPROM(uint32_t config_id, const InputConfig* inputs, uint8_t num_in
             }
             break;
         }
-
-        case Protocol::MODULE_TYPE_BLDC_LEVER:
-            eeprom_put(addr, inputs[i].bldc.motor_pin_a);
-            addr += sizeof(uint8_t);
-            eeprom_put(addr, inputs[i].bldc.motor_pin_b);
-            addr += sizeof(uint8_t);
-            eeprom_put(addr, inputs[i].bldc.motor_pin_c);
-            addr += sizeof(uint8_t);
-            eeprom_put(addr, inputs[i].bldc.motor_enable);
-            addr += sizeof(uint8_t);
-            eeprom_put(addr, inputs[i].bldc.encoder_cs);
-            addr += sizeof(uint8_t);
-            eeprom_put(addr, inputs[i].bldc.pole_pairs);
-            addr += sizeof(uint8_t);
-            eeprom_put(addr, inputs[i].bldc.voltage);
-            addr += sizeof(uint8_t);
-            eeprom_put(addr, inputs[i].bldc.current_limit);
-            addr += sizeof(uint8_t);
-            eeprom_put(addr, inputs[i].bldc.encoder_bits);
-            addr += sizeof(uint8_t);
-            break;
         }
     }
 
@@ -282,27 +261,6 @@ bool loadFromEEPROM()
             }
             break;
         }
-
-        case Protocol::MODULE_TYPE_BLDC_LEVER:
-            eeprom_get(addr, g_current_inputs[i].bldc.motor_pin_a);
-            addr += sizeof(uint8_t);
-            eeprom_get(addr, g_current_inputs[i].bldc.motor_pin_b);
-            addr += sizeof(uint8_t);
-            eeprom_get(addr, g_current_inputs[i].bldc.motor_pin_c);
-            addr += sizeof(uint8_t);
-            eeprom_get(addr, g_current_inputs[i].bldc.motor_enable);
-            addr += sizeof(uint8_t);
-            eeprom_get(addr, g_current_inputs[i].bldc.encoder_cs);
-            addr += sizeof(uint8_t);
-            eeprom_get(addr, g_current_inputs[i].bldc.pole_pairs);
-            addr += sizeof(uint8_t);
-            eeprom_get(addr, g_current_inputs[i].bldc.voltage);
-            addr += sizeof(uint8_t);
-            eeprom_get(addr, g_current_inputs[i].bldc.current_limit);
-            addr += sizeof(uint8_t);
-            eeprom_get(addr, g_current_inputs[i].bldc.encoder_bits);
-            addr += sizeof(uint8_t);
-            break;
 
         default:
             return false; // Unknown input type

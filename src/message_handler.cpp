@@ -1,7 +1,4 @@
 #include "message_handler.h"
-#include "bldc_config.h"
-#include "bldc_lever.h"
-#include "bldc_manager.h"
 #include "config_manager.h"
 #include "heartbeat.h"
 #include "output_manager.h"
@@ -60,66 +57,9 @@ void onPacketReceived(const uint8_t* buffer, size_t size)
         handleConfigure(msg.configure);
     } else if (msg.isSetOutput()) {
         handleSetOutput(msg.set_output);
-    } else if (msg.isLoadBLDCProfile()) {
-        // Buffer format: [msg_type][pin][num_detents][num_linear_ranges][snap_point][endstop_strength][pos_start_lo][pos_start_hi][pos_end_lo][pos_end_hi][detent_data...][range_data...]
-        size_t offset = 10; // After header (10 bytes with position bounds)
-
-        // Build profile config from header fields
-        BLDCConfig::ProfileConfig profile_config;
-        profile_config.snap_point = msg.load_bldc_profile.snap_point;
-        profile_config.endstop_strength = msg.load_bldc_profile.endstop_strength;
-
-        // Allocate temporary arrays
-        BLDCConfig::DetentConfig* detents = new BLDCConfig::DetentConfig[msg.load_bldc_profile.num_detents];
-        BLDCConfig::LinearRangeConfig* ranges = nullptr;
-        if (msg.load_bldc_profile.num_linear_ranges > 0) {
-            ranges = new BLDCConfig::LinearRangeConfig[msg.load_bldc_profile.num_linear_ranges];
-        }
-
-        // Parse detents (2 bytes each: position_percent + detent_strength)
-        for (uint8_t i = 0; i < msg.load_bldc_profile.num_detents && offset + 2 <= size; i++) {
-            detents[i].position_percent = buffer[offset++];
-            detents[i].detent_strength = buffer[offset++];
-        }
-
-        // Parse linear ranges (3 bytes each)
-        for (uint8_t i = 0; i < msg.load_bldc_profile.num_linear_ranges && offset + 3 <= size; i++) {
-            ranges[i].start_detent_index = buffer[offset++];
-            ranges[i].end_detent_index = buffer[offset++];
-            ranges[i].damping_strength = buffer[offset++];
-        }
-
-        // Find BLDC lever and load profile
-        Sensors::ISensor* sensor = SensorManager::getSensorByPin(msg.load_bldc_profile.pin);
-        if (sensor != nullptr && sensor->getType() == Sensors::InputType::BLDCLever) {
-            Sensors::BLDCLever* bldc = static_cast<Sensors::BLDCLever*>(sensor);
-            if (bldc->loadProfile(
-                    msg.load_bldc_profile.position_start,
-                    msg.load_bldc_profile.position_end,
-                    detents, msg.load_bldc_profile.num_detents,
-                    ranges, msg.load_bldc_profile.num_linear_ranges,
-                    profile_config)) {
-                sendConfigurationStored(0); // Success
-            } else {
-                sendConfigurationError(0); // Validation failed
-            }
-        } else {
-            sendConfigurationError(0); // Sensor not found
-        }
-
-        // Clean up
-        delete[] detents;
-        if (ranges != nullptr) {
-            delete[] ranges;
-        }
-    } else if (msg.isDeactivateBLDCProfile()) {
-        Sensors::ISensor* sensor = SensorManager::getSensorByPin(msg.deactivate_bldc_profile.pin);
-        if (sensor != nullptr && sensor->getType() == Sensors::InputType::BLDCLever) {
-            Sensors::BLDCLever* bldc = static_cast<Sensors::BLDCLever*>(sensor);
-            bldc->deactivateProfile();
-            // No response - fire and forget
-        }
     }
+    // isLoadBLDCProfile() and isDeactivateBLDCProfile() are silently ignored
+    // (wire-level messages kept for backwards compatibility with older hosts)
 }
 
 void update()
@@ -227,14 +167,6 @@ void sendHeartbeat()
         // Note: We don't call notifyMessageSent here because the heartbeat
         // manager already knows it sent a heartbeat via its callback
     }
-}
-
-void sendEncoderError(uint8_t pin)
-{
-    Protocol::EncoderError msg;
-    msg.pin = pin;
-
-    sendMessage(msg);
 }
 
 } // namespace MessageHandler

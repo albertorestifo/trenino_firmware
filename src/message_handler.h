@@ -36,6 +36,5 @@ void sendConfigurationStored(uint32_t config_id);
 void sendConfigurationError(uint32_t config_id);
 void sendInputValue(const Sensors::Reading& reading);
 void sendHeartbeat();
-void sendEncoderError(uint8_t pin);
 
 } // namespace MessageHandler

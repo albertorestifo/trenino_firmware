@@ -61,19 +61,6 @@ struct InputConfig {
             uint8_t num_col_pins;
             uint8_t pins[MAX_MATRIX_PINS]; // row_pins followed by col_pins
         } matrix;
-
-        // MODULE_TYPE_BLDC_LEVER
-        struct {
-            uint8_t motor_pin_a;
-            uint8_t motor_pin_b;
-            uint8_t motor_pin_c;
-            uint8_t motor_enable;
-            uint8_t encoder_cs;
-            uint8_t pole_pairs;
-            uint8_t voltage;
-            uint8_t current_limit;
-            uint8_t encoder_bits;
-        } bldc;
     };
 
     InputConfig()
@@ -150,18 +137,6 @@ public:
             for (uint8_t i = 0; i < cfg.matrix.num_row_pins + cfg.matrix.num_col_pins; i++) {
                 inputs[cfg.part_number].matrix.pins[i] = cfg.matrix.pins[i];
             }
-            break;
-
-        case Protocol::MODULE_TYPE_BLDC_LEVER:
-            inputs[cfg.part_number].bldc.motor_pin_a = cfg.bldc_lever.motor_pin_a;
-            inputs[cfg.part_number].bldc.motor_pin_b = cfg.bldc_lever.motor_pin_b;
-            inputs[cfg.part_number].bldc.motor_pin_c = cfg.bldc_lever.motor_pin_c;
-            inputs[cfg.part_number].bldc.motor_enable = cfg.bldc_lever.motor_enable;
-            inputs[cfg.part_number].bldc.encoder_cs = cfg.bldc_lever.encoder_cs;
-            inputs[cfg.part_number].bldc.pole_pairs = cfg.bldc_lever.pole_pairs;
-            inputs[cfg.part_number].bldc.voltage = cfg.bldc_lever.voltage;
-            inputs[cfg.part_number].bldc.current_limit = cfg.bldc_lever.current_limit;
-            inputs[cfg.part_number].bldc.encoder_bits = cfg.bldc_lever.encoder_bits;
             break;
 
         default:

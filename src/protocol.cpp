@@ -139,9 +139,6 @@ size_t Configure::encode(uint8_t* buffer, size_t buffer_size) const
     case MODULE_TYPE_MATRIX:
         payload_size = 2 + matrix.num_row_pins + matrix.num_col_pins; // counts + pins
         break;
-    case MODULE_TYPE_BLDC_LEVER:
-        payload_size = 9;
-        break;
     default:
         return 0; // Unknown input type
     }
@@ -189,18 +186,6 @@ size_t Configure::encode(uint8_t* buffer, size_t buffer_size) const
         for (uint8_t i = 0; i < matrix.num_row_pins + matrix.num_col_pins; i++) {
             buffer[offset++] = matrix.pins[i];
         }
-        break;
-
-    case MODULE_TYPE_BLDC_LEVER:
-        buffer[offset++] = bldc_lever.motor_pin_a;
-        buffer[offset++] = bldc_lever.motor_pin_b;
-        buffer[offset++] = bldc_lever.motor_pin_c;
-        buffer[offset++] = bldc_lever.motor_enable;
-        buffer[offset++] = bldc_lever.encoder_cs;
-        buffer[offset++] = bldc_lever.pole_pairs;
-        buffer[offset++] = bldc_lever.voltage;
-        buffer[offset++] = bldc_lever.current_limit;
-        buffer[offset++] = bldc_lever.encoder_bits;
         break;
     }
 
@@ -272,21 +257,6 @@ bool Configure::decode(const uint8_t* buffer, size_t length)
         }
         break;
     }
-
-    case MODULE_TYPE_BLDC_LEVER:
-        if (length < HEADER_SIZE + 9) {
-            return false; // Not enough data for BLDC lever payload
-        }
-        bldc_lever.motor_pin_a = buffer[offset++];
-        bldc_lever.motor_pin_b = buffer[offset++];
-        bldc_lever.motor_pin_c = buffer[offset++];
-        bldc_lever.motor_enable = buffer[offset++];
-        bldc_lever.encoder_cs = buffer[offset++];
-        bldc_lever.pole_pairs = buffer[offset++];
-        bldc_lever.voltage = buffer[offset++];
-        bldc_lever.current_limit = buffer[offset++];
-        bldc_lever.encoder_bits = buffer[offset++];
-        break;
 
     default:
         return false; // Unknown input type

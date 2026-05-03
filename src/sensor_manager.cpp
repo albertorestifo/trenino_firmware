@@ -1,6 +1,4 @@
 #include "sensor_manager.h"
-#include "bldc_lever.h"
-#include "bldc_manager.h"
 #include "message_handler.h"
 
 namespace SensorManager {
@@ -27,13 +25,6 @@ void init()
 
 bool applyConfiguration(const ConfigManager::InputConfig* inputs, uint8_t input_count)
 {
-    // Unregister any BLDC levers from BLDCManager before deleting
-    for (uint8_t i = 0; i < g_sensor_count; i++) {
-        if (g_sensors[i] != nullptr && g_sensors[i]->getType() == Sensors::InputType::BLDCLever) {
-            BLDCManager::unregisterLever(static_cast<Sensors::BLDCLever*>(g_sensors[i]));
-        }
-    }
-
     // Clear existing sensors
     for (uint8_t i = 0; i < MAX_SENSORS; i++) {
         if (g_sensors[i] != nullptr) {
@@ -73,19 +64,6 @@ bool applyConfiguration(const ConfigManager::InputConfig* inputs, uint8_t input_
                 config.matrix.pins + config.matrix.num_row_pins); // col pins
             break;
 
-        case Protocol::MODULE_TYPE_BLDC_LEVER:
-            sensor = new Sensors::BLDCLever(
-                config.bldc.motor_pin_a,
-                config.bldc.motor_pin_b,
-                config.bldc.motor_pin_c,
-                config.bldc.motor_enable,
-                config.bldc.encoder_cs,
-                config.bldc.pole_pairs,
-                config.bldc.voltage,
-                config.bldc.current_limit,
-                config.bldc.encoder_bits);
-            break;
-
         default:
             // Unknown input type - skip
             continue;
@@ -93,13 +71,6 @@ bool applyConfiguration(const ConfigManager::InputConfig* inputs, uint8_t input_
 
         if (sensor != nullptr) {
             sensor->begin();
-
-            // Register BLDC levers with BLDCManager for motor updates
-            if (config.input_type == Protocol::MODULE_TYPE_BLDC_LEVER) {
-                Sensors::BLDCLever* bldc = static_cast<Sensors::BLDCLever*>(sensor);
-                BLDCManager::registerLever(bldc);
-            }
-
             g_sensors[g_sensor_count++] = sensor;
         }
     }

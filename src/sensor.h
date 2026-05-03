@@ -8,8 +8,7 @@ namespace Sensors {
 enum class InputType : uint8_t {
     Analog = 0,
     Button = 1,
-    Matrix = 2,
-    BLDCLever = 3
+    Matrix = 2
 };
 
 // Sensor reading result
