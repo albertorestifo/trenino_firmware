@@ -8,18 +8,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- BLDC haptic lever support with SimpleFOC library
-- Configurable virtual detents with variable strengths
-- Two-level configuration: hardware (EEPROM) + runtime profiles (volatile)
-- Auto-calibration to find physical endstops
-- Spring-back behavior between detents
-- Linear ranges with damping
-- Board profile system (SimpleFOCShield v2 on Mega 2560)
-- New message types: LoadBLDCProfile, DeactivateBLDCProfile, RetryCalibration, CalibrationError, EncoderError
-- Main loop now runs at 1kHz (was 10Hz) for smooth motor control
+
+- **HT16K33 14-segment LED display support** — new I2C-attached module type (`MODULE_TYPE_HT16K33 = 4`) for driving Holtek HT16K33-based 14-segment LED displays.
+  - Configured via the existing `Configure` message with `i2c_address`, initial `brightness` (0–15), and `num_digits` (4 or 8).
+  - Three new wire-level messages: `WriteSegments` (13), `SetModuleBrightness` (14), `ModuleError` (15). See `docs/PROTOCOL.md` for full wire format and the new "Driving an HT16K33 from the Host" guide for implementation walkthroughs.
+  - Configuration persists across reboots via EEPROM; the chip is re-initialized automatically on power-up.
+  - Resilient to transient I2C bus noise: a single retry after ~1 ms on NACK; after three consecutive write failures the firmware silently re-initializes the chip and replays the last cached segment write before retrying.
+  - Brightness updates persist through auto-reinit (the cached value is used during the chip's brightness step).
+
+- **I2C-addressable modules** — modules can now be identified by I2C address (the new `i2c_address` field) in addition to hardware pin. This generalizes the configuration pipeline to accept future I2C-attached modules (e.g. MCP23017 GPIO expanders, ADS1115 ADCs) without further architectural changes. Documented in the new "Addressing Scheme" section of `docs/PROTOCOL.md`.
+
+- **`ModuleError (15)` message** — Device → Host. Sent after `applyConfiguration` for each module whose `begin()` failed (e.g. an HT16K33 chip that NACKed because it isn't on the bus or has a wrong address). Lets hosts surface a meaningful error to the user instead of silently leaving the module inoperative.
 
 ### Changed
-- Main loop delay reduced from 10ms to 1ms for motor control responsiveness
+
+- **BREAKING (protocol)**: terminology renamed throughout from "input" to "module".
+  - `INPUT_TYPE_*` constants → `MODULE_TYPE_*`.
+  - `input_type` field on `Configure` → `module_type`.
+  - The internal `Sensors::` namespace, `ISensor` interface, and `SensorManager` are renamed to `Modules::`, `IModule`, and `ModuleManager`. The header `sensor.h` is now `module.h`.
+  - `MAX_INPUTS` / `MAX_SENSORS` constants unified as `MAX_MODULES` (still 8).
+- **BREAKING (storage)**: EEPROM format version incremented from 4 to 5. Existing configurations are discarded on upgrade; reconfigure each device after flashing.
+- **`IModule` interface (`begin()` now returns `bool`)** — modules whose initialization can fail (currently HT16K33; future I2C input modules) signal failure; modules that cannot fail simply `return true`. Default empty implementations of `scan()` and `getReading()` mean output-only modules don't need stub overrides.
+- **`ModuleManager`** gained `getModuleByI2CAddress(addr)` (used to dispatch `WriteSegments` / `SetModuleBrightness`) and `getInitErrors(out, max)` (drained by the message handler after `applyConfiguration` to emit `ModuleError` messages).
+- Configuration sequence: after `ConfigurationStored`, the device may now emit zero or more `ModuleError` messages — one per module whose `begin()` failed.
+
+### Removed
+
+- **BLDC haptic lever** — the `BLDCLever` class, `BLDCManager`, SimpleFOC dependency, and all related test mocks have been removed. This was a failed experiment that never tagged a release; everything was on `[Unreleased]` and is now reverted.
+  - The wire-level protocol stubs `EncoderError (10)`, `LoadBLDCProfile (11)`, and `DeactivateBLDCProfile (12)` are retained for backwards compatibility — the firmware decodes them but performs no action. Hosts may continue to emit them harmlessly.
+  - `MODULE_TYPE_BLDC_LEVER` (was type ID 3) is no longer accepted in `Configure`; type ID 3 is now reserved. The HT16K33 module uses type ID 4 to keep the historical numbering.
+  - SimpleFOC is no longer required for any build; the `megaatmega2560` environment no longer pulls it in. All eight supported environments build cleanly without it.
+
+### Protocol Migration
+
+To upgrade an existing host implementation:
+
+1. **Reconfigure devices after flashing.** EEPROM format version went 4 → 5; old configurations are erased.
+2. **Update protocol constants.** Rename `INPUT_TYPE_*` → `MODULE_TYPE_*` and `input_type` → `module_type` in your host code. Wire-level layout of `Configure` is otherwise unchanged for analog/button/matrix variants — only the field/constant names changed.
+3. **Stop sending `MODULE_TYPE_BLDC_LEVER` (3) Configures.** The firmware no longer accepts BLDC configuration. If your host still sends `LoadBLDCProfile` / `DeactivateBLDCProfile` they will be silently ignored — no harm, but no effect either.
+4. **(Optional) Add HT16K33 support.** Send `Configure` with `module_type = 4` and the HT16K33 payload (`i2c_address`, `brightness`, `num_digits`); then drive the display with `WriteSegments`. See the "Driving an HT16K33 from the Host" section in `docs/PROTOCOL.md` for a concrete walkthrough including the segment bit mapping.
+5. **(Optional) Handle `ModuleError`.** Hosts that configure I2C modules should listen for type-15 messages after `ConfigurationStored` and surface failures (e.g. wrong I2C address, chip not connected) to the user.
 
 ## [2.2.1] - 2026-01-31
 

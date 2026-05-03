@@ -254,6 +254,116 @@ Modules are addressed in two ways depending on their type:
 
 **Only one I2C bus is supported.** All I2C modules share the same bus. Each must have a distinct I2C address.
 
+## Driving an HT16K33 from the Host
+
+This section walks through the message sequence a host needs to issue to drive an HT16K33 14-segment display. All multi-byte integers are little-endian; messages are framed using COBS as described in the Transport section.
+
+### 1. Configure the module (once per session, persisted to EEPROM)
+
+Send a `Configure` message (type 2) with `module_type = 4`. The payload after the 8-byte header is 3 bytes:
+
+```
+[type=2] [config_id: u32]
+[total_parts: u8] [part_number: u8]
+[module_type: u8 = 4]
+[i2c_address: u8] [brightness: u8] [num_digits: u8]
+```
+
+| Field | Recommended value |
+|-------|-------------------|
+| i2c_address | `0x70` (default for Adafruit/SparkFun breakouts; A0/A1/A2 jumpers select 0x70–0x77) |
+| brightness | `0x08` for half-brightness; full range 0–15 |
+| num_digits | `4` for the typical 4-character breakout; `8` for 8-character variants |
+
+The device responds with `ConfigurationStored` (type 3) once all parts of the configuration have arrived. If the chip is not present on the bus (NACK during init), the device additionally emits one `ModuleError` (type 15) with `error_code = 0`. Listen for both.
+
+### 2. Write segments
+
+Once configured, send `WriteSegments` (type 13) any time you want to update the display:
+
+```
+[type=13] [i2c_address: u8] [num_bytes: u8] [data: u8[num_bytes]]
+```
+
+`data` is written verbatim to HT16K33 display RAM starting at register `0x00`. The chip auto-increments. Each character occupies **two bytes** — the lower 8 segment bits in the first byte, the upper 6 bits (plus optional decimal point) in the second.
+
+For a 4-digit display, send 8 bytes (4 characters × 2 bytes). For an 8-digit display, send 16 bytes. The firmware silently caps `num_bytes` at `num_digits * 2`, so a host can safely send 16 bytes regardless and let the firmware truncate.
+
+#### Segment bit mapping
+
+The HT16K33 maps each character's 14 segments + decimal point into a 16-bit word laid out in two consecutive RAM bytes (low byte then high byte):
+
+```
+Byte 0 (low):  [dp] [N] [M] [L] [K] [J] [H] [G2]
+Byte 1 (high): [-]  [-] [G1] [F] [E] [D] [C] [B] [A]
+```
+
+(Bit names follow the standard 14-segment naming: A–G2 are the seven primary segments and the split middle bar, H/J/K/M are the diagonals, I/L are vertical splits, N is the second middle, dp is the decimal point. Several common 14-segment products use slightly different naming — consult your specific display's datasheet for the authoritative mapping.)
+
+In practice, hosts typically use a precomputed ASCII-to-segments table. The Adafruit LED Backpack library's `alphafonttable[]` (in `Adafruit_LEDBackpack.cpp`) is a widely used reference. A few entries for orientation:
+
+| Character | low byte | high byte | bytes (LE) |
+|-----------|----------|-----------|------------|
+| ` ` (space) | `0x00` | `0x00` | `0x00 0x00` |
+| `0` | `0x3F` | `0x12` | `0x3F 0x12` |
+| `1` | `0x06` | `0x10` | `0x06 0x10` |
+| `2` | `0xDB` | `0x00` | `0xDB 0x00` |
+| `A` | `0xF7` | `0x00` | `0xF7 0x00` |
+| `-` | `0xC0` | `0x00` | `0xC0 0x00` |
+
+To display `"42KM"` on a 4-digit module at I2C address 0x70 you would send a `WriteSegments` with `num_bytes = 8` and `data` constructed by concatenating the LE byte pairs for `4`, `2`, `K`, `M`.
+
+`WriteSegments` is fire-and-forget — the device sends no acknowledgment. If the chip NACKs at runtime, the firmware retries once internally; persistent failure triggers a transparent re-initialization on the next write. The host does not need to handle these cases.
+
+### 3. Update brightness at runtime
+
+```
+[type=14] [i2c_address: u8] [brightness: u8]
+```
+
+The firmware clamps `brightness` to 0–15 and updates the chip immediately. The new value is also cached so any future auto-reinit uses it.
+
+Fire-and-forget; no acknowledgment.
+
+### 4. Handle `ModuleError`
+
+After every `ConfigurationStored`, the device emits zero or more `ModuleError` messages — one per I2C module whose initialization failed. Treat these as actionable: the most common cause is a wrong I2C address or a chip that's not powered/connected. The module remains registered (so subsequent writes attempt to re-initialize), but the host should typically surface the failure to the user.
+
+```
+[type=15] [i2c_address: u8] [error_code: u8]
+```
+
+Currently only `error_code = 0` (init_failed) is defined. Future codes are reserved.
+
+### Reset / reconnect behavior
+
+If the device is power-cycled (or the host disconnects and reconnects), the device:
+
+- Re-loads the configuration from EEPROM.
+- Re-initializes each configured HT16K33 (oscillator on, display on, brightness, zero display RAM).
+- Emits `ModuleError` for any chip that fails to initialize.
+
+The display content is **not** restored from EEPROM (segments are not persisted). If your host wants the display to show specific content after a reconnect, re-send `WriteSegments` after observing `IdentityResponse` or after a fresh `ConfigurationStored`.
+
+### Minimal pseudocode example
+
+```
+# Configure once
+send Configure(config_id=1, total_parts=1, part_number=0,
+               module_type=4, i2c_address=0x70,
+               brightness=8, num_digits=4)
+wait_for ConfigurationStored
+on ModuleError(addr=0x70, err=0):
+    log "HT16K33 at 0x70 not responding; check wiring/address"
+
+# Show "42  "
+segments = encode_ascii("42  ")  # 8 bytes per the segment table
+send WriteSegments(i2c_address=0x70, num_bytes=8, data=segments)
+
+# Dim the display for night-mode
+send SetModuleBrightness(i2c_address=0x70, brightness=2)
+```
+
 ## Adding New Message Types
 
 ### Hardware-pin modules
