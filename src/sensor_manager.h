@@ -7,7 +7,7 @@
 #include "module.h"
 #include <stdint.h>
 
-namespace SensorManager {
+namespace ModuleManager {
 
 // Maximum number of sensors (matches MAX_MODULES in config_manager)
 constexpr uint8_t MAX_MODULES = 8;
@@ -32,6 +32,6 @@ uint8_t getSensorCount();
 
 // Get sensor by pin number
 // Returns nullptr if not found
-Modules::IModule* getSensorByPin(uint8_t pin);
+Modules::IModule* getModuleByPin(uint8_t pin);
 
-} // namespace SensorManager
+} // namespace ModuleManager

@@ -1,7 +1,7 @@
 #include "sensor_manager.h"
 #include "message_handler.h"
 
-namespace SensorManager {
+namespace ModuleManager {
 
 // Array of sensor pointers
 static Modules::IModule* g_sensors[MAX_MODULES];
@@ -113,7 +113,7 @@ uint8_t getSensorCount()
     return g_sensor_count;
 }
 
-Modules::IModule* getSensorByPin(uint8_t pin)
+Modules::IModule* getModuleByPin(uint8_t pin)
 {
     for (uint8_t i = 0; i < g_sensor_count; i++) {
         if (g_sensors[i] != nullptr && g_sensors[i]->getPin() == pin) {
@@ -123,4 +123,4 @@ Modules::IModule* getSensorByPin(uint8_t pin)
     return nullptr;
 }
 
-} // namespace SensorManager
+} // namespace ModuleManager

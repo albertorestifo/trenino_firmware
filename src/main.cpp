@@ -19,14 +19,14 @@ void setup()
 
     // Initialize subsystems
     ConfigManager::init();
-    SensorManager::init();
+    ModuleManager::init();
     OutputManager::init();
     MessageHandler::init(&g_packet_serial);
 
     // Apply loaded configuration to sensors
     uint8_t num_inputs = 0;
     const ConfigManager::InputConfig* inputs = ConfigManager::getCurrentConfig(num_inputs);
-    SensorManager::applyConfiguration(inputs, num_inputs);
+    ModuleManager::applyConfiguration(inputs, num_inputs);
 }
 
 void loop()

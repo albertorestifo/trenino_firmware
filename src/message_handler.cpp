@@ -73,11 +73,11 @@ void update()
     }
 
     // Scan all sensors
-    SensorManager::scan();
+    ModuleManager::scan();
 
     // Check for sensor readings and send them
     Modules::Reading reading;
-    while (SensorManager::getNextReading(reading)) {
+    while (ModuleManager::getNextReading(reading)) {
         sendInputValue(reading);
     }
 }
@@ -99,7 +99,7 @@ void handleConfigure(const Protocol::Configure& cfg)
         // Apply configuration to sensors
         uint8_t num_inputs = 0;
         const ConfigManager::InputConfig* inputs = ConfigManager::getCurrentConfig(num_inputs);
-        SensorManager::applyConfiguration(inputs, num_inputs);
+        ModuleManager::applyConfiguration(inputs, num_inputs);
 
         sendConfigurationStored(cfg.config_id);
     } else if (error) {
