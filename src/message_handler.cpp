@@ -106,14 +106,14 @@ void handleConfigure(const Protocol::Configure& cfg)
         const ConfigManager::ModuleConfig* modules = ConfigManager::getCurrentConfig(num_modules);
         ModuleManager::applyConfiguration(modules, num_modules);
 
+        sendConfigurationStored(cfg.config_id);
+
         // Drain any per-module init errors and report them to the host
         ModuleManager::InitError errors[ModuleManager::MAX_MODULES];
         uint8_t error_count = ModuleManager::getInitErrors(errors, ModuleManager::MAX_MODULES);
         for (uint8_t i = 0; i < error_count; i++) {
             sendModuleError(errors[i].i2c_address, errors[i].error_code);
         }
-
-        sendConfigurationStored(cfg.config_id);
     } else if (error) {
         sendConfigurationError(cfg.config_id);
     }

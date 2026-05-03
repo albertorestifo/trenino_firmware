@@ -10,6 +10,15 @@
 //   // ... run code under test ...
 //   MockWire::transactions[i].address;       // inspect what was sent
 //   MockWire::transactions[i].data[j];
+//
+// IMPORTANT — single-TU constraint:
+// All mock state (transactions, nack_table, Wire instance) is declared `static`,
+// which means each translation unit that includes this header gets its own private
+// copy. This is a C++11 header-only limitation. Therefore this header MUST be
+// included by exactly one test translation unit per test binary. If a future test
+// suite also needs Wire mock support, either (a) merge it into the same binary so
+// only one TU includes Wire.h, or (b) refactor the mock into a .cpp/.h pair with
+// a single definition and extern declarations.
 #pragma once
 
 #include <stdint.h>

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "module.h"
+#include "protocol.h"
 #include <stdint.h>
 
 namespace Modules {
@@ -40,3 +41,6 @@ private:
 };
 
 } // namespace Modules
+
+static_assert(Modules::HT16K33Module::MAX_DISPLAY_BYTES <= Protocol::MAX_SEGMENT_BYTES,
+    "HT16K33 display RAM must fit within the WriteSegments protocol payload cap");

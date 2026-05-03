@@ -37,9 +37,6 @@ void scan();
 // Populates the reading parameter with the sensor reading
 bool getNextReading(Modules::Reading& reading);
 
-// Get number of active sensors
-uint8_t getSensorCount();
-
 // Get sensor by pin number
 // Returns nullptr if not found
 Modules::IModule* getModuleByPin(uint8_t pin);

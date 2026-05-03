@@ -15,7 +15,7 @@ void ht16k33_reset_wire_state() { g_wire_initialized = false; }
 HT16K33Module::HT16K33Module(uint8_t i2c_address, uint8_t brightness, uint8_t num_digits)
     : i2c_address_(i2c_address)
     , cached_brightness_(brightness > 15 ? 15 : brightness)
-    , num_digits_(num_digits)
+    , num_digits_(num_digits > (MAX_DISPLAY_BYTES / 2) ? (MAX_DISPLAY_BYTES / 2) : num_digits)
     , cached_segment_bytes_(0)
     , failure_count_(0)
     , needs_reinit_(false)

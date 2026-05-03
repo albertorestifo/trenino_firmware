@@ -252,6 +252,34 @@ void test_next_write_after_needs_reinit_runs_init_and_restores_cache()
     TEST_ASSERT_EQUAL_UINT8(0, mod.getFailureCount());
 }
 
+void test_setBrightness_retries_once_on_nack()
+{
+    HT16K33Module mod(0x70, 0, 4);
+    mod.begin();
+    MockWire::reset();
+    MockWire::scheduleNacks(0x70, 1); // first attempt NACKs, retry ACKs
+
+    bool ok = mod.setBrightness(7);
+
+    TEST_ASSERT_TRUE(ok);
+    TEST_ASSERT_EQUAL_UINT8(2, MockWire::transaction_count); // first + retry
+    TEST_ASSERT_EQUAL_UINT8(0, mod.getFailureCount());
+}
+
+void test_setBrightness_two_nacks_increment_failure_count()
+{
+    HT16K33Module mod(0x70, 0, 4);
+    mod.begin();
+    MockWire::reset();
+    MockWire::scheduleNacks(0x70, 2);
+
+    bool ok = mod.setBrightness(7);
+
+    TEST_ASSERT_FALSE(ok);
+    TEST_ASSERT_EQUAL_UINT8(1, mod.getFailureCount());
+    TEST_ASSERT_FALSE(mod.needsReinit());
+}
+
 void test_brightness_change_persists_through_reinit()
 {
     HT16K33Module mod(0x70, 0, 4);
@@ -285,6 +313,8 @@ int main()
     RUN_TEST(test_writeSegments_8_digit_module);
     RUN_TEST(test_setBrightness_writes_command);
     RUN_TEST(test_setBrightness_clamps);
+    RUN_TEST(test_setBrightness_retries_once_on_nack);
+    RUN_TEST(test_setBrightness_two_nacks_increment_failure_count);
     RUN_TEST(test_writeSegments_retries_once_on_transient_nack);
     RUN_TEST(test_writeSegments_two_nacks_increment_failure_count);
     RUN_TEST(test_three_failures_set_needs_reinit);

@@ -9,6 +9,7 @@ enum class ModuleType : uint8_t {
     Analog = 0,
     Button = 1,
     Matrix = 2,
+    // 3 = reserved (formerly BLDCLever)
     HT16K33 = 4
 };
 
