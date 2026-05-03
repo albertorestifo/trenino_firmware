@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.0.0] - 2026-05-03
+
 ### Added
 
 - **HT16K33 14-segment LED display support** — new I2C-attached module type (`MODULE_TYPE_HT16K33 = 4`) for driving Holtek HT16K33-based 14-segment LED displays.
