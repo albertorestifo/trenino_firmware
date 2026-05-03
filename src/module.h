@@ -8,7 +8,8 @@ namespace Modules {
 enum class ModuleType : uint8_t {
     Analog = 0,
     Button = 1,
-    Matrix = 2
+    Matrix = 2,
+    HT16K33 = 4
 };
 
 // Module reading result
