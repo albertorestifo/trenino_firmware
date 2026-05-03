@@ -61,6 +61,13 @@ struct ModuleConfig {
             uint8_t num_col_pins;
             uint8_t pins[MAX_MATRIX_PINS]; // row_pins followed by col_pins
         } matrix;
+
+        // MODULE_TYPE_HT16K33
+        struct {
+            uint8_t i2c_address;
+            uint8_t brightness;
+            uint8_t num_digits;
+        } ht16k33;
     };
 
     ModuleConfig()
@@ -137,6 +144,12 @@ public:
             for (uint8_t i = 0; i < cfg.matrix.num_row_pins + cfg.matrix.num_col_pins; i++) {
                 modules[cfg.part_number].matrix.pins[i] = cfg.matrix.pins[i];
             }
+            break;
+
+        case Protocol::MODULE_TYPE_HT16K33:
+            modules[cfg.part_number].ht16k33.i2c_address = cfg.ht16k33.i2c_address;
+            modules[cfg.part_number].ht16k33.brightness = cfg.ht16k33.brightness;
+            modules[cfg.part_number].ht16k33.num_digits = cfg.ht16k33.num_digits;
             break;
 
         default:

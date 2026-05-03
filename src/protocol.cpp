@@ -139,6 +139,9 @@ size_t Configure::encode(uint8_t* buffer, size_t buffer_size) const
     case MODULE_TYPE_MATRIX:
         payload_size = 2 + matrix.num_row_pins + matrix.num_col_pins; // counts + pins
         break;
+    case MODULE_TYPE_HT16K33:
+        payload_size = 3; // i2c_address + brightness + num_digits
+        break;
     default:
         return 0; // Unknown input type
     }
@@ -186,6 +189,12 @@ size_t Configure::encode(uint8_t* buffer, size_t buffer_size) const
         for (uint8_t i = 0; i < matrix.num_row_pins + matrix.num_col_pins; i++) {
             buffer[offset++] = matrix.pins[i];
         }
+        break;
+
+    case MODULE_TYPE_HT16K33:
+        buffer[offset++] = ht16k33.i2c_address;
+        buffer[offset++] = ht16k33.brightness;
+        buffer[offset++] = ht16k33.num_digits;
         break;
     }
 
@@ -257,6 +266,15 @@ bool Configure::decode(const uint8_t* buffer, size_t length)
         }
         break;
     }
+
+    case MODULE_TYPE_HT16K33:
+        if (length < HEADER_SIZE + 3) {
+            return false; // Not enough data for HT16K33 payload
+        }
+        ht16k33.i2c_address = buffer[offset++];
+        ht16k33.brightness = buffer[offset++];
+        ht16k33.num_digits = buffer[offset++];
+        break;
 
     default:
         return false; // Unknown input type

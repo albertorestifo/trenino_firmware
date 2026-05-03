@@ -186,6 +186,15 @@ void storeToEEPROM(uint32_t config_id, const ModuleConfig* modules, uint8_t num_
             }
             break;
         }
+
+        case Protocol::MODULE_TYPE_HT16K33:
+            eeprom_put(addr, modules[i].ht16k33.i2c_address);
+            addr += sizeof(uint8_t);
+            eeprom_put(addr, modules[i].ht16k33.brightness);
+            addr += sizeof(uint8_t);
+            eeprom_put(addr, modules[i].ht16k33.num_digits);
+            addr += sizeof(uint8_t);
+            break;
         }
     }
 
@@ -261,6 +270,15 @@ bool loadFromEEPROM()
             }
             break;
         }
+
+        case Protocol::MODULE_TYPE_HT16K33:
+            eeprom_get(addr, g_current_modules[i].ht16k33.i2c_address);
+            addr += sizeof(uint8_t);
+            eeprom_get(addr, g_current_modules[i].ht16k33.brightness);
+            addr += sizeof(uint8_t);
+            eeprom_get(addr, g_current_modules[i].ht16k33.num_digits);
+            addr += sizeof(uint8_t);
+            break;
 
         default:
             return false; // Unknown input type

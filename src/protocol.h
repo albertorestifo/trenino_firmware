@@ -23,6 +23,8 @@ constexpr uint8_t MESSAGE_TYPE_DEACTIVATE_BLDC_PROFILE = 12;
 constexpr uint8_t MODULE_TYPE_ANALOG = 0;
 constexpr uint8_t MODULE_TYPE_BUTTON = 1;
 constexpr uint8_t MODULE_TYPE_MATRIX = 2;
+// Note: 3 is reserved (formerly BLDC)
+constexpr uint8_t MODULE_TYPE_HT16K33 = 4;
 
 // Maximum number of pins for matrix configuration (row_pins + col_pins)
 constexpr uint8_t MAX_MATRIX_PINS = 16;
@@ -84,6 +86,13 @@ struct Configure {
             uint8_t num_col_pins;
             uint8_t pins[MAX_MATRIX_PINS]; // row_pins followed by col_pins
         } matrix;
+
+        // MODULE_TYPE_HT16K33
+        struct {
+            uint8_t i2c_address;
+            uint8_t brightness;
+            uint8_t num_digits;
+        } ht16k33;
     };
 
     Configure()
