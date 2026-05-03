@@ -43,26 +43,26 @@ struct InputConfig {
     uint8_t input_type;
 
     union {
-        // INPUT_TYPE_ANALOG
+        // MODULE_TYPE_ANALOG
         struct {
             uint8_t pin;
             uint8_t sensitivity;
         } analog;
 
-        // INPUT_TYPE_BUTTON
+        // MODULE_TYPE_BUTTON
         struct {
             uint8_t pin;
             uint8_t debounce;
         } button;
 
-        // INPUT_TYPE_MATRIX
+        // MODULE_TYPE_MATRIX
         struct {
             uint8_t num_row_pins;
             uint8_t num_col_pins;
             uint8_t pins[MAX_MATRIX_PINS]; // row_pins followed by col_pins
         } matrix;
 
-        // INPUT_TYPE_BLDC_LEVER
+        // MODULE_TYPE_BLDC_LEVER
         struct {
             uint8_t motor_pin_a;
             uint8_t motor_pin_b;
@@ -77,7 +77,7 @@ struct InputConfig {
     };
 
     InputConfig()
-        : input_type(Protocol::INPUT_TYPE_ANALOG)
+        : input_type(Protocol::MODULE_TYPE_ANALOG)
     {
         analog.pin = 0;
         analog.sensitivity = 0;
@@ -134,17 +134,17 @@ public:
         inputs[cfg.part_number].input_type = cfg.input_type;
 
         switch (cfg.input_type) {
-        case Protocol::INPUT_TYPE_ANALOG:
+        case Protocol::MODULE_TYPE_ANALOG:
             inputs[cfg.part_number].analog.pin = cfg.analog.pin;
             inputs[cfg.part_number].analog.sensitivity = cfg.analog.sensitivity;
             break;
 
-        case Protocol::INPUT_TYPE_BUTTON:
+        case Protocol::MODULE_TYPE_BUTTON:
             inputs[cfg.part_number].button.pin = cfg.button.pin;
             inputs[cfg.part_number].button.debounce = cfg.button.debounce;
             break;
 
-        case Protocol::INPUT_TYPE_MATRIX:
+        case Protocol::MODULE_TYPE_MATRIX:
             inputs[cfg.part_number].matrix.num_row_pins = cfg.matrix.num_row_pins;
             inputs[cfg.part_number].matrix.num_col_pins = cfg.matrix.num_col_pins;
             for (uint8_t i = 0; i < cfg.matrix.num_row_pins + cfg.matrix.num_col_pins; i++) {
@@ -152,7 +152,7 @@ public:
             }
             break;
 
-        case Protocol::INPUT_TYPE_BLDC_LEVER:
+        case Protocol::MODULE_TYPE_BLDC_LEVER:
             inputs[cfg.part_number].bldc.motor_pin_a = cfg.bldc_lever.motor_pin_a;
             inputs[cfg.part_number].bldc.motor_pin_b = cfg.bldc_lever.motor_pin_b;
             inputs[cfg.part_number].bldc.motor_pin_c = cfg.bldc_lever.motor_pin_c;

@@ -57,15 +57,15 @@ bool applyConfiguration(const ConfigManager::InputConfig* inputs, uint8_t input_
 
         // Create sensor based on input type
         switch (config.input_type) {
-        case Protocol::INPUT_TYPE_ANALOG:
+        case Protocol::MODULE_TYPE_ANALOG:
             sensor = new Sensors::AnalogSensor(config.analog.pin, config.analog.sensitivity);
             break;
 
-        case Protocol::INPUT_TYPE_BUTTON:
+        case Protocol::MODULE_TYPE_BUTTON:
             sensor = new Sensors::ButtonSensor(config.button.pin, config.button.debounce);
             break;
 
-        case Protocol::INPUT_TYPE_MATRIX:
+        case Protocol::MODULE_TYPE_MATRIX:
             sensor = new Sensors::MatrixSensor(
                 config.matrix.num_row_pins,
                 config.matrix.num_col_pins,
@@ -73,7 +73,7 @@ bool applyConfiguration(const ConfigManager::InputConfig* inputs, uint8_t input_
                 config.matrix.pins + config.matrix.num_row_pins); // col pins
             break;
 
-        case Protocol::INPUT_TYPE_BLDC_LEVER:
+        case Protocol::MODULE_TYPE_BLDC_LEVER:
             sensor = new Sensors::BLDCLever(
                 config.bldc.motor_pin_a,
                 config.bldc.motor_pin_b,
@@ -95,7 +95,7 @@ bool applyConfiguration(const ConfigManager::InputConfig* inputs, uint8_t input_
             sensor->begin();
 
             // Register BLDC levers with BLDCManager for motor updates
-            if (config.input_type == Protocol::INPUT_TYPE_BLDC_LEVER) {
+            if (config.input_type == Protocol::MODULE_TYPE_BLDC_LEVER) {
                 Sensors::BLDCLever* bldc = static_cast<Sensors::BLDCLever*>(sensor);
                 BLDCManager::registerLever(bldc);
             }

@@ -51,7 +51,7 @@ void test_configure_bldc_lever_encode() {
     cfg.config_id = 0x00000001;
     cfg.total_parts = 1;
     cfg.part_number = 0;
-    cfg.input_type = Protocol::INPUT_TYPE_BLDC_LEVER;
+    cfg.input_type = Protocol::MODULE_TYPE_BLDC_LEVER;
     cfg.bldc_lever.motor_pin_a = 5;
     cfg.bldc_lever.motor_pin_b = 6;
     cfg.bldc_lever.motor_pin_c = 9;
@@ -68,7 +68,7 @@ void test_configure_bldc_lever_encode() {
     // header(8) + 9 payload bytes = 17
     TEST_ASSERT_EQUAL(17, size);
     TEST_ASSERT_EQUAL_UINT8(Protocol::MESSAGE_TYPE_CONFIGURE, buffer[0]);
-    TEST_ASSERT_EQUAL_UINT8(Protocol::INPUT_TYPE_BLDC_LEVER, buffer[7]);
+    TEST_ASSERT_EQUAL_UINT8(Protocol::MODULE_TYPE_BLDC_LEVER, buffer[7]);
     TEST_ASSERT_EQUAL_UINT8(5, buffer[8]);    // motor_pin_a
     TEST_ASSERT_EQUAL_UINT8(6, buffer[9]);    // motor_pin_b
     TEST_ASSERT_EQUAL_UINT8(9, buffer[10]);   // motor_pin_c
@@ -86,7 +86,7 @@ void test_configure_bldc_lever_decode() {
         0x01, 0x00, 0x00, 0x00,  // config_id
         0x01,                     // total_parts
         0x00,                     // part_number
-        Protocol::INPUT_TYPE_BLDC_LEVER,
+        Protocol::MODULE_TYPE_BLDC_LEVER,
         5, 6, 9,                  // motor pins A/B/C
         7,                        // enable pin
         10,                       // encoder_cs
@@ -100,7 +100,7 @@ void test_configure_bldc_lever_decode() {
     bool result = cfg.decode(buffer, sizeof(buffer));
 
     TEST_ASSERT_TRUE(result);
-    TEST_ASSERT_EQUAL_UINT8(Protocol::INPUT_TYPE_BLDC_LEVER, cfg.input_type);
+    TEST_ASSERT_EQUAL_UINT8(Protocol::MODULE_TYPE_BLDC_LEVER, cfg.input_type);
     TEST_ASSERT_EQUAL_UINT8(5, cfg.bldc_lever.motor_pin_a);
     TEST_ASSERT_EQUAL_UINT8(6, cfg.bldc_lever.motor_pin_b);
     TEST_ASSERT_EQUAL_UINT8(9, cfg.bldc_lever.motor_pin_c);
@@ -117,7 +117,7 @@ void test_configure_bldc_lever_roundtrip() {
     original.config_id = 0xDEADBEEF;
     original.total_parts = 2;
     original.part_number = 1;
-    original.input_type = Protocol::INPUT_TYPE_BLDC_LEVER;
+    original.input_type = Protocol::MODULE_TYPE_BLDC_LEVER;
     original.bldc_lever.motor_pin_a = 3;
     original.bldc_lever.motor_pin_b = 5;
     original.bldc_lever.motor_pin_c = 6;
@@ -151,7 +151,7 @@ void test_configure_bldc_lever_decode_insufficient_data() {
         Protocol::MESSAGE_TYPE_CONFIGURE,
         0x01, 0x00, 0x00, 0x00,
         0x01, 0x00,
-        Protocol::INPUT_TYPE_BLDC_LEVER,
+        Protocol::MODULE_TYPE_BLDC_LEVER,
         5, 6, 9  // Only 3 bytes, need 9
     };
 

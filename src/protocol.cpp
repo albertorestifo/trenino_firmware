@@ -130,16 +130,16 @@ size_t Configure::encode(uint8_t* buffer, size_t buffer_size) const
     // Calculate required size based on input_type
     size_t payload_size = 0;
     switch (input_type) {
-    case INPUT_TYPE_ANALOG:
+    case MODULE_TYPE_ANALOG:
         payload_size = 2; // pin + sensitivity
         break;
-    case INPUT_TYPE_BUTTON:
+    case MODULE_TYPE_BUTTON:
         payload_size = 2; // pin + debounce
         break;
-    case INPUT_TYPE_MATRIX:
+    case MODULE_TYPE_MATRIX:
         payload_size = 2 + matrix.num_row_pins + matrix.num_col_pins; // counts + pins
         break;
-    case INPUT_TYPE_BLDC_LEVER:
+    case MODULE_TYPE_BLDC_LEVER:
         payload_size = 9;
         break;
     default:
@@ -173,17 +173,17 @@ size_t Configure::encode(uint8_t* buffer, size_t buffer_size) const
 
     // Type-specific payload
     switch (input_type) {
-    case INPUT_TYPE_ANALOG:
+    case MODULE_TYPE_ANALOG:
         buffer[offset++] = analog.pin;
         buffer[offset++] = analog.sensitivity;
         break;
 
-    case INPUT_TYPE_BUTTON:
+    case MODULE_TYPE_BUTTON:
         buffer[offset++] = button.pin;
         buffer[offset++] = button.debounce;
         break;
 
-    case INPUT_TYPE_MATRIX:
+    case MODULE_TYPE_MATRIX:
         buffer[offset++] = matrix.num_row_pins;
         buffer[offset++] = matrix.num_col_pins;
         for (uint8_t i = 0; i < matrix.num_row_pins + matrix.num_col_pins; i++) {
@@ -191,7 +191,7 @@ size_t Configure::encode(uint8_t* buffer, size_t buffer_size) const
         }
         break;
 
-    case INPUT_TYPE_BLDC_LEVER:
+    case MODULE_TYPE_BLDC_LEVER:
         buffer[offset++] = bldc_lever.motor_pin_a;
         buffer[offset++] = bldc_lever.motor_pin_b;
         buffer[offset++] = bldc_lever.motor_pin_c;
@@ -237,7 +237,7 @@ bool Configure::decode(const uint8_t* buffer, size_t length)
 
     // Type-specific payload
     switch (input_type) {
-    case INPUT_TYPE_ANALOG:
+    case MODULE_TYPE_ANALOG:
         if (length < HEADER_SIZE + 2) {
             return false; // Not enough data for analog payload
         }
@@ -245,7 +245,7 @@ bool Configure::decode(const uint8_t* buffer, size_t length)
         analog.sensitivity = buffer[offset++];
         break;
 
-    case INPUT_TYPE_BUTTON:
+    case MODULE_TYPE_BUTTON:
         if (length < HEADER_SIZE + 2) {
             return false; // Not enough data for button payload
         }
@@ -253,7 +253,7 @@ bool Configure::decode(const uint8_t* buffer, size_t length)
         button.debounce = buffer[offset++];
         break;
 
-    case INPUT_TYPE_MATRIX: {
+    case MODULE_TYPE_MATRIX: {
         if (length < HEADER_SIZE + 2) {
             return false; // Not enough data for matrix header
         }
@@ -273,7 +273,7 @@ bool Configure::decode(const uint8_t* buffer, size_t length)
         break;
     }
 
-    case INPUT_TYPE_BLDC_LEVER:
+    case MODULE_TYPE_BLDC_LEVER:
         if (length < HEADER_SIZE + 9) {
             return false; // Not enough data for BLDC lever payload
         }

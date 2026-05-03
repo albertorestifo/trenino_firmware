@@ -160,21 +160,21 @@ void storeToEEPROM(uint32_t config_id, const InputConfig* inputs, uint8_t num_in
         addr += sizeof(uint8_t);
 
         switch (inputs[i].input_type) {
-        case Protocol::INPUT_TYPE_ANALOG:
+        case Protocol::MODULE_TYPE_ANALOG:
             eeprom_put(addr, inputs[i].analog.pin);
             addr += sizeof(uint8_t);
             eeprom_put(addr, inputs[i].analog.sensitivity);
             addr += sizeof(uint8_t);
             break;
 
-        case Protocol::INPUT_TYPE_BUTTON:
+        case Protocol::MODULE_TYPE_BUTTON:
             eeprom_put(addr, inputs[i].button.pin);
             addr += sizeof(uint8_t);
             eeprom_put(addr, inputs[i].button.debounce);
             addr += sizeof(uint8_t);
             break;
 
-        case Protocol::INPUT_TYPE_MATRIX: {
+        case Protocol::MODULE_TYPE_MATRIX: {
             eeprom_put(addr, inputs[i].matrix.num_row_pins);
             addr += sizeof(uint8_t);
             eeprom_put(addr, inputs[i].matrix.num_col_pins);
@@ -187,7 +187,7 @@ void storeToEEPROM(uint32_t config_id, const InputConfig* inputs, uint8_t num_in
             break;
         }
 
-        case Protocol::INPUT_TYPE_BLDC_LEVER:
+        case Protocol::MODULE_TYPE_BLDC_LEVER:
             eeprom_put(addr, inputs[i].bldc.motor_pin_a);
             addr += sizeof(uint8_t);
             eeprom_put(addr, inputs[i].bldc.motor_pin_b);
@@ -253,21 +253,21 @@ bool loadFromEEPROM()
         addr += sizeof(uint8_t);
 
         switch (g_current_inputs[i].input_type) {
-        case Protocol::INPUT_TYPE_ANALOG:
+        case Protocol::MODULE_TYPE_ANALOG:
             eeprom_get(addr, g_current_inputs[i].analog.pin);
             addr += sizeof(uint8_t);
             eeprom_get(addr, g_current_inputs[i].analog.sensitivity);
             addr += sizeof(uint8_t);
             break;
 
-        case Protocol::INPUT_TYPE_BUTTON:
+        case Protocol::MODULE_TYPE_BUTTON:
             eeprom_get(addr, g_current_inputs[i].button.pin);
             addr += sizeof(uint8_t);
             eeprom_get(addr, g_current_inputs[i].button.debounce);
             addr += sizeof(uint8_t);
             break;
 
-        case Protocol::INPUT_TYPE_MATRIX: {
+        case Protocol::MODULE_TYPE_MATRIX: {
             eeprom_get(addr, g_current_inputs[i].matrix.num_row_pins);
             addr += sizeof(uint8_t);
             eeprom_get(addr, g_current_inputs[i].matrix.num_col_pins);
@@ -283,7 +283,7 @@ bool loadFromEEPROM()
             break;
         }
 
-        case Protocol::INPUT_TYPE_BLDC_LEVER:
+        case Protocol::MODULE_TYPE_BLDC_LEVER:
             eeprom_get(addr, g_current_inputs[i].bldc.motor_pin_a);
             addr += sizeof(uint8_t);
             eeprom_get(addr, g_current_inputs[i].bldc.motor_pin_b);

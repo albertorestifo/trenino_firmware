@@ -4,7 +4,7 @@
 
 namespace Sensors {
 
-// Input types (matches protocol INPUT_TYPE_* constants)
+// Input types (matches protocol MODULE_TYPE_* constants)
 enum class InputType : uint8_t {
     Analog = 0,
     Button = 1,

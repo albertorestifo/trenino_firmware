@@ -47,10 +47,10 @@ void tearDown()
 void test_store_writes_version()
 {
     ConfigManager::InputConfig inputs[2];
-    inputs[0].input_type = Protocol::INPUT_TYPE_ANALOG;
+    inputs[0].input_type = Protocol::MODULE_TYPE_ANALOG;
     inputs[0].analog.pin = 14;
     inputs[0].analog.sensitivity = 5;
-    inputs[1].input_type = Protocol::INPUT_TYPE_ANALOG;
+    inputs[1].input_type = Protocol::MODULE_TYPE_ANALOG;
     inputs[1].analog.pin = 15;
     inputs[1].analog.sensitivity = 8;
 
@@ -84,7 +84,7 @@ void test_load_succeeds_with_matching_version()
 {
     // Store a valid configuration
     ConfigManager::InputConfig inputs[1];
-    inputs[0].input_type = Protocol::INPUT_TYPE_ANALOG;
+    inputs[0].input_type = Protocol::MODULE_TYPE_ANALOG;
     inputs[0].analog.pin = 14;
     inputs[0].analog.sensitivity = 5;
 
@@ -102,7 +102,7 @@ void test_load_succeeds_with_matching_version()
     uint8_t num_inputs = 0;
     const ConfigManager::InputConfig* loaded = ConfigManager::getCurrentConfig(num_inputs);
     TEST_ASSERT_EQUAL_UINT8(1, num_inputs);
-    TEST_ASSERT_EQUAL_UINT8(Protocol::INPUT_TYPE_ANALOG, loaded[0].input_type);
+    TEST_ASSERT_EQUAL_UINT8(Protocol::MODULE_TYPE_ANALOG, loaded[0].input_type);
     TEST_ASSERT_EQUAL_UINT8(14, loaded[0].analog.pin);
     TEST_ASSERT_EQUAL_UINT8(5, loaded[0].analog.sensitivity);
 }
@@ -140,7 +140,7 @@ void test_load_fails_with_no_magic()
 // Test store and load of BLDC lever configuration
 void test_store_and_load_bldc_lever() {
     ConfigManager::InputConfig inputs[1];
-    inputs[0].input_type = Protocol::INPUT_TYPE_BLDC_LEVER;
+    inputs[0].input_type = Protocol::MODULE_TYPE_BLDC_LEVER;
     inputs[0].bldc.motor_pin_a = 5;
     inputs[0].bldc.motor_pin_b = 6;
     inputs[0].bldc.motor_pin_c = 9;
@@ -158,7 +158,7 @@ void test_store_and_load_bldc_lever() {
     uint8_t num_inputs = 0;
     const ConfigManager::InputConfig* loaded = ConfigManager::getCurrentConfig(num_inputs);
     TEST_ASSERT_EQUAL_UINT8(1, num_inputs);
-    TEST_ASSERT_EQUAL_UINT8(Protocol::INPUT_TYPE_BLDC_LEVER, loaded[0].input_type);
+    TEST_ASSERT_EQUAL_UINT8(Protocol::MODULE_TYPE_BLDC_LEVER, loaded[0].input_type);
     TEST_ASSERT_EQUAL_UINT8(5, loaded[0].bldc.motor_pin_a);
     TEST_ASSERT_EQUAL_UINT8(6, loaded[0].bldc.motor_pin_b);
     TEST_ASSERT_EQUAL_UINT8(9, loaded[0].bldc.motor_pin_c);

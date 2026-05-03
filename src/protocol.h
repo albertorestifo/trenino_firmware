@@ -19,11 +19,11 @@ constexpr uint8_t MESSAGE_TYPE_ENCODER_ERROR = 10;
 constexpr uint8_t MESSAGE_TYPE_LOAD_BLDC_PROFILE = 11;
 constexpr uint8_t MESSAGE_TYPE_DEACTIVATE_BLDC_PROFILE = 12;
 
-// Input Type constants for Configure message
-constexpr uint8_t INPUT_TYPE_ANALOG = 0;
-constexpr uint8_t INPUT_TYPE_BUTTON = 1;
-constexpr uint8_t INPUT_TYPE_MATRIX = 2;
-constexpr uint8_t INPUT_TYPE_BLDC_LEVER = 3;
+// Module Type constants for Configure message
+constexpr uint8_t MODULE_TYPE_ANALOG = 0;
+constexpr uint8_t MODULE_TYPE_BUTTON = 1;
+constexpr uint8_t MODULE_TYPE_MATRIX = 2;
+constexpr uint8_t MODULE_TYPE_BLDC_LEVER = 3;
 
 // Maximum number of pins for matrix configuration (row_pins + col_pins)
 constexpr uint8_t MAX_MATRIX_PINS = 16;
@@ -67,26 +67,26 @@ struct Configure {
 
     // Type-specific payload (discriminated by input_type)
     union {
-        // INPUT_TYPE_ANALOG
+        // MODULE_TYPE_ANALOG
         struct {
             uint8_t pin;
             uint8_t sensitivity;
         } analog;
 
-        // INPUT_TYPE_BUTTON
+        // MODULE_TYPE_BUTTON
         struct {
             uint8_t pin;
             uint8_t debounce;
         } button;
 
-        // INPUT_TYPE_MATRIX
+        // MODULE_TYPE_MATRIX
         struct {
             uint8_t num_row_pins;
             uint8_t num_col_pins;
             uint8_t pins[MAX_MATRIX_PINS]; // row_pins followed by col_pins
         } matrix;
 
-        // INPUT_TYPE_BLDC_LEVER
+        // MODULE_TYPE_BLDC_LEVER
         struct {
             uint8_t motor_pin_a;
             uint8_t motor_pin_b;
@@ -104,7 +104,7 @@ struct Configure {
         : config_id(0)
         , total_parts(0)
         , part_number(0)
-        , input_type(INPUT_TYPE_ANALOG)
+        , input_type(MODULE_TYPE_ANALOG)
     {
         analog.pin = 0;
         analog.sensitivity = 0;
