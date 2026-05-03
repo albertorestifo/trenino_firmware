@@ -69,6 +69,13 @@ bool applyConfiguration(const ConfigManager::ModuleConfig* modules, uint8_t modu
                 config.matrix.pins + config.matrix.num_row_pins); // col pins
             break;
 
+        case Protocol::MODULE_TYPE_HT16K33:
+            sensor = new Modules::HT16K33Module(
+                config.ht16k33.i2c_address,
+                config.ht16k33.brightness,
+                config.ht16k33.num_digits);
+            break;
+
         default:
             // Unknown input type - skip
             continue;

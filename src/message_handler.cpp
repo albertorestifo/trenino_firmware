@@ -1,6 +1,7 @@
 #include "message_handler.h"
 #include "config_manager.h"
 #include "heartbeat.h"
+#include "ht16k33_module.h"
 #include "output_manager.h"
 #include "sensor_manager.h"
 
@@ -57,6 +58,10 @@ void onPacketReceived(const uint8_t* buffer, size_t size)
         handleConfigure(msg.configure);
     } else if (msg.isSetOutput()) {
         handleSetOutput(msg.set_output);
+    } else if (msg.isWriteSegments()) {
+        handleWriteSegments(msg.write_segments);
+    } else if (msg.isSetModuleBrightness()) {
+        handleSetModuleBrightness(msg.set_module_brightness);
     }
     // isLoadBLDCProfile() and isDeactivateBLDCProfile() are silently ignored
     // (wire-level messages kept for backwards compatibility with older hosts)
@@ -101,6 +106,13 @@ void handleConfigure(const Protocol::Configure& cfg)
         const ConfigManager::ModuleConfig* modules = ConfigManager::getCurrentConfig(num_modules);
         ModuleManager::applyConfiguration(modules, num_modules);
 
+        // Drain any per-module init errors and report them to the host
+        ModuleManager::InitError errors[ModuleManager::MAX_MODULES];
+        uint8_t error_count = ModuleManager::getInitErrors(errors, ModuleManager::MAX_MODULES);
+        for (uint8_t i = 0; i < error_count; i++) {
+            sendModuleError(errors[i].i2c_address, errors[i].error_code);
+        }
+
         sendConfigurationStored(cfg.config_id);
     } else if (error) {
         sendConfigurationError(cfg.config_id);
@@ -110,6 +122,26 @@ void handleConfigure(const Protocol::Configure& cfg)
 void handleSetOutput(const Protocol::SetOutput& cmd)
 {
     OutputManager::setOutput(cmd.pin, cmd.value);
+}
+
+void handleWriteSegments(const Protocol::WriteSegments& cmd)
+{
+    Modules::IModule* module = ModuleManager::getModuleByI2CAddress(cmd.i2c_address);
+    if (module == nullptr) return;
+    if (module->getType() != Modules::ModuleType::HT16K33) return;
+
+    Modules::HT16K33Module* ht = static_cast<Modules::HT16K33Module*>(module);
+    ht->writeSegments(cmd.data, cmd.num_bytes);
+}
+
+void handleSetModuleBrightness(const Protocol::SetModuleBrightness& cmd)
+{
+    Modules::IModule* module = ModuleManager::getModuleByI2CAddress(cmd.i2c_address);
+    if (module == nullptr) return;
+    if (module->getType() != Modules::ModuleType::HT16K33) return;
+
+    Modules::HT16K33Module* ht = static_cast<Modules::HT16K33Module*>(module);
+    ht->setBrightness(cmd.brightness);
 }
 
 void sendIdentityResponse(uint32_t request_id, uint32_t config_id)
@@ -147,6 +179,14 @@ void sendInputValue(const Modules::Reading& reading)
     input_value.value = reading.value;
 
     sendMessage(input_value);
+}
+
+void sendModuleError(uint8_t i2c_address, uint8_t error_code)
+{
+    Protocol::ModuleError msg;
+    msg.i2c_address = i2c_address;
+    msg.error_code = error_code;
+    sendMessage(msg);
 }
 
 void sendHeartbeat()

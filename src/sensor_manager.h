@@ -3,6 +3,7 @@
 #include "analog_sensor.h"
 #include "button_sensor.h"
 #include "config_manager.h"
+#include "ht16k33_module.h"
 #include "matrix_sensor.h"
 #include "module.h"
 #include <stdint.h>

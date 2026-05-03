@@ -24,6 +24,8 @@ void update();
 void handleIdentityRequest(uint32_t request_id);
 void handleConfigure(const Protocol::Configure& cfg);
 void handleSetOutput(const Protocol::SetOutput& cmd);
+void handleWriteSegments(const Protocol::WriteSegments& cmd);
+void handleSetModuleBrightness(const Protocol::SetModuleBrightness& cmd);
 
 // Internal helper - sends a message and notifies heartbeat manager
 // Template function to handle any protocol message type
@@ -36,5 +38,6 @@ void sendConfigurationStored(uint32_t config_id);
 void sendConfigurationError(uint32_t config_id);
 void sendInputValue(const Modules::Reading& reading);
 void sendHeartbeat();
+void sendModuleError(uint8_t i2c_address, uint8_t error_code);
 
 } // namespace MessageHandler
