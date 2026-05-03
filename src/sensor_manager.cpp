@@ -10,6 +10,10 @@ static uint8_t g_sensor_count = 0;
 // Index for round-robin reading retrieval
 static uint8_t g_next_reading_index = 0;
 
+// Init-error list, populated by applyConfiguration, drained by getInitErrors
+static InitError g_init_errors[MAX_MODULES];
+static uint8_t g_init_error_count = 0;
+
 void init()
 {
     // Clear all sensors
@@ -34,6 +38,7 @@ bool applyConfiguration(const ConfigManager::ModuleConfig* modules, uint8_t modu
     }
     g_sensor_count = 0;
     g_next_reading_index = 0;
+    g_init_error_count = 0;
 
     // Validate module count
     if (module_count > MAX_MODULES) {
@@ -70,7 +75,17 @@ bool applyConfiguration(const ConfigManager::ModuleConfig* modules, uint8_t modu
         }
 
         if (sensor != nullptr) {
-            sensor->begin(); // return value ignored; init-error tracking added in Task B3
+            bool ok = sensor->begin();
+
+            if (!ok && g_init_error_count < MAX_MODULES) {
+                InitError err;
+                err.type = sensor->getType();
+                err.i2c_address = sensor->getI2CAddress();
+                err.pin = sensor->getPin();
+                err.error_code = 0; // init_failed
+                g_init_errors[g_init_error_count++] = err;
+            }
+
             g_sensors[g_sensor_count++] = sensor;
         }
     }
@@ -121,6 +136,29 @@ Modules::IModule* getModuleByPin(uint8_t pin)
         }
     }
     return nullptr;
+}
+
+Modules::IModule* getModuleByI2CAddress(uint8_t address)
+{
+    if (address == 0) {
+        return nullptr; // 0 means "no I2C address" — never match
+    }
+    for (uint8_t i = 0; i < g_sensor_count; i++) {
+        if (g_sensors[i] != nullptr && g_sensors[i]->getI2CAddress() == address) {
+            return g_sensors[i];
+        }
+    }
+    return nullptr;
+}
+
+uint8_t getInitErrors(InitError* out, uint8_t max_count)
+{
+    uint8_t copied = (g_init_error_count < max_count) ? g_init_error_count : max_count;
+    for (uint8_t i = 0; i < copied; i++) {
+        out[i] = g_init_errors[i];
+    }
+    g_init_error_count = 0;
+    return copied;
 }
 
 } // namespace ModuleManager
