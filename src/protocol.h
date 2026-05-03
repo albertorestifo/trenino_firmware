@@ -18,6 +18,9 @@ constexpr uint8_t MESSAGE_TYPE_SET_OUTPUT = 7;
 constexpr uint8_t MESSAGE_TYPE_ENCODER_ERROR = 10;
 constexpr uint8_t MESSAGE_TYPE_LOAD_BLDC_PROFILE = 11;
 constexpr uint8_t MESSAGE_TYPE_DEACTIVATE_BLDC_PROFILE = 12;
+constexpr uint8_t MESSAGE_TYPE_WRITE_SEGMENTS = 13;
+constexpr uint8_t MESSAGE_TYPE_SET_MODULE_BRIGHTNESS = 14;
+constexpr uint8_t MESSAGE_TYPE_MODULE_ERROR = 15;
 
 // Module Type constants for Configure message
 constexpr uint8_t MODULE_TYPE_ANALOG = 0;
@@ -31,6 +34,9 @@ constexpr uint8_t MAX_MATRIX_PINS = 16;
 
 // Maximum payload size
 constexpr size_t MAX_PAYLOAD_SIZE = 64;
+
+// Maximum payload size for WriteSegments data (HT16K33 has 16 bytes of display RAM)
+constexpr uint8_t MAX_SEGMENT_BYTES = 16;
 
 // Identity Request message
 struct IdentityRequest {
@@ -207,6 +213,34 @@ struct DeactivateBLDCProfile {
     bool decode(const uint8_t* buffer, size_t length);
 };
 
+// WriteSegments message - sent by host to write segment data to an I2C display module
+struct WriteSegments {
+    uint8_t i2c_address;
+    uint8_t num_bytes;
+    uint8_t data[MAX_SEGMENT_BYTES];
+
+    size_t encode(uint8_t* buffer, size_t buffer_size) const;
+    bool decode(const uint8_t* buffer, size_t length);
+};
+
+// SetModuleBrightness - host sets brightness on an I2C display module
+struct SetModuleBrightness {
+    uint8_t i2c_address;
+    uint8_t brightness;
+
+    size_t encode(uint8_t* buffer, size_t buffer_size) const;
+    bool decode(const uint8_t* buffer, size_t length);
+};
+
+// ModuleError - device reports a module-level error to host
+struct ModuleError {
+    uint8_t i2c_address;
+    uint8_t error_code; // 0 = init_failed, 1+ reserved
+
+    size_t encode(uint8_t* buffer, size_t buffer_size) const;
+    bool decode(const uint8_t* buffer, size_t length);
+};
+
 // Generic message union for decoding
 struct Message {
     uint8_t message_type;
@@ -223,6 +257,9 @@ struct Message {
         EncoderError encoder_error;
         LoadBLDCProfile load_bldc_profile;
         DeactivateBLDCProfile deactivate_bldc_profile;
+        WriteSegments write_segments;
+        SetModuleBrightness set_module_brightness;
+        ModuleError module_error;
     };
 
     Message()
@@ -267,6 +304,15 @@ struct Message {
 
     // Check if this is a DeactivateBLDCProfile message
     bool isDeactivateBLDCProfile() const { return message_type == MESSAGE_TYPE_DEACTIVATE_BLDC_PROFILE; }
+
+    // Check if this is a WriteSegments message
+    bool isWriteSegments() const { return message_type == MESSAGE_TYPE_WRITE_SEGMENTS; }
+
+    // Check if this is a SetModuleBrightness message
+    bool isSetModuleBrightness() const { return message_type == MESSAGE_TYPE_SET_MODULE_BRIGHTNESS; }
+
+    // Check if this is a ModuleError message
+    bool isModuleError() const { return message_type == MESSAGE_TYPE_MODULE_ERROR; }
 };
 
 } // namespace Protocol

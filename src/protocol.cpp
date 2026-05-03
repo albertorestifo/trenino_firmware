@@ -659,6 +659,84 @@ bool DeactivateBLDCProfile::decode(const uint8_t* buffer, size_t length)
     return true;
 }
 
+// WriteSegments implementation
+
+size_t WriteSegments::encode(uint8_t* buffer, size_t buffer_size) const
+{
+    if (num_bytes > MAX_SEGMENT_BYTES) {
+        return 0;
+    }
+    size_t required = 3 + num_bytes;
+    if (buffer_size < required) {
+        return 0;
+    }
+
+    size_t offset = 0;
+    buffer[offset++] = MESSAGE_TYPE_WRITE_SEGMENTS;
+    buffer[offset++] = i2c_address;
+    buffer[offset++] = num_bytes;
+    for (uint8_t i = 0; i < num_bytes; i++) {
+        buffer[offset++] = data[i];
+    }
+    return offset;
+}
+
+bool WriteSegments::decode(const uint8_t* buffer, size_t length)
+{
+    if (length < 3) return false;
+    if (buffer[0] != MESSAGE_TYPE_WRITE_SEGMENTS) return false;
+
+    i2c_address = buffer[1];
+    num_bytes = buffer[2];
+    if (num_bytes > MAX_SEGMENT_BYTES) return false;
+    if (length < (size_t)(3 + num_bytes)) return false;
+
+    for (uint8_t i = 0; i < num_bytes; i++) {
+        data[i] = buffer[3 + i];
+    }
+    return true;
+}
+
+// SetModuleBrightness implementation
+
+size_t SetModuleBrightness::encode(uint8_t* buffer, size_t buffer_size) const
+{
+    if (buffer_size < 3) return 0;
+    buffer[0] = MESSAGE_TYPE_SET_MODULE_BRIGHTNESS;
+    buffer[1] = i2c_address;
+    buffer[2] = brightness;
+    return 3;
+}
+
+bool SetModuleBrightness::decode(const uint8_t* buffer, size_t length)
+{
+    if (length < 3) return false;
+    if (buffer[0] != MESSAGE_TYPE_SET_MODULE_BRIGHTNESS) return false;
+    i2c_address = buffer[1];
+    brightness = buffer[2];
+    return true;
+}
+
+// ModuleError implementation
+
+size_t ModuleError::encode(uint8_t* buffer, size_t buffer_size) const
+{
+    if (buffer_size < 3) return 0;
+    buffer[0] = MESSAGE_TYPE_MODULE_ERROR;
+    buffer[1] = i2c_address;
+    buffer[2] = error_code;
+    return 3;
+}
+
+bool ModuleError::decode(const uint8_t* buffer, size_t length)
+{
+    if (length < 3) return false;
+    if (buffer[0] != MESSAGE_TYPE_MODULE_ERROR) return false;
+    i2c_address = buffer[1];
+    error_code = buffer[2];
+    return true;
+}
+
 // Message implementation (for generic decoding)
 
 bool Message::decode(const uint8_t* buffer, size_t length)
@@ -702,6 +780,15 @@ bool Message::decode(const uint8_t* buffer, size_t length)
 
     case MESSAGE_TYPE_DEACTIVATE_BLDC_PROFILE:
         return deactivate_bldc_profile.decode(buffer, length);
+
+    case MESSAGE_TYPE_WRITE_SEGMENTS:
+        return write_segments.decode(buffer, length);
+
+    case MESSAGE_TYPE_SET_MODULE_BRIGHTNESS:
+        return set_module_brightness.decode(buffer, length);
+
+    case MESSAGE_TYPE_MODULE_ERROR:
+        return module_error.decode(buffer, length);
 
     default:
         return false; // Unknown message type
