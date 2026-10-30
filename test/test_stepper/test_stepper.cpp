@@ -1,4 +1,5 @@
 #define GET_STATUS 0 // Arduino native USB core uses this global macro.
+#define DISABLED 0 // ESP32 Arduino GPIO core uses this global macro.
 #include "../../src/stepper.h"
 #include <unity.h>
 
@@ -38,7 +39,7 @@ void test_unknown_reference_and_bounded_home() {
     TEST_ASSERT_EQUAL(OK, controller.home(0, 0));
     run(0, 550);
     TEST_ASSERT_TRUE(controller.axis(0).known);
-    TEST_ASSERT_EQUAL(IDLE, controller.axis(0).state);
+    TEST_ASSERT_EQUAL(AXIS_IDLE, controller.axis(0).state);
     TEST_ASSERT_EQUAL(110, driver.writes - 1); // initial energize + bounded phase transitions
     TEST_ASSERT_EQUAL(0, controller.axis(0).position);
 }
@@ -50,7 +51,7 @@ void test_release_and_fault_forget_reference() {
     TEST_ASSERT_FALSE(controller.axis(0).known);
     TEST_ASSERT_EQUAL(OK, controller.reference(0, 20, 0));
     controller.moveTo(0, 50, 0); driver.fail = true; run(0, 20);
-    TEST_ASSERT_EQUAL(FAULT, controller.axis(0).state);
+    TEST_ASSERT_EQUAL(AXIS_FAULT, controller.axis(0).state);
     TEST_ASSERT_FALSE(controller.axis(0).known);
 }
 void test_latest_target_limits_and_two_ports() {
@@ -112,7 +113,7 @@ void test_backoff_reference_kind_stop_and_release_idle() {
     c.hold = 0; c.home_steps = 1; c.home_backoff = 0;
     controller.configure(0,c,0); controller.home(0,0); run(0,5);
     TEST_ASSERT_FALSE(controller.axis(0).known);
-    TEST_ASSERT_EQUAL(DISABLED, controller.axis(0).state);
+    TEST_ASSERT_EQUAL(AXIS_DISABLED, controller.axis(0).state);
 }
 void test_reversal_brakes_and_stays_inside_limits() {
     Config c = config(); c.home_strategy = 0; c.maximum = 1000;
@@ -129,7 +130,7 @@ void test_reversal_brakes_and_stays_inside_limits() {
         TEST_ASSERT_LESS_OR_EQUAL(1000,controller.axis(0).position);
     }
     TEST_ASSERT_EQUAL(0,controller.axis(0).position);
-    TEST_ASSERT_EQUAL(IDLE,controller.axis(0).state);
+    TEST_ASSERT_EQUAL(AXIS_IDLE,controller.axis(0).state);
 }
 void test_extreme_configuration_shared_fault_and_mode_phasecount() {
     Config c = config(); c.minimum = INT32_MIN;
@@ -144,7 +145,7 @@ void test_extreme_configuration_shared_fault_and_mode_phasecount() {
     c.port = 2; c.mode = 3; controller.configure(1,c,100000); controller.reference(1,0,100000);
     driver.fail = true; run(100000,10);
     TEST_ASSERT_FALSE(controller.axis(0).known); TEST_ASSERT_FALSE(controller.axis(1).known);
-    TEST_ASSERT_EQUAL(FAULT,controller.axis(1).state);
+    TEST_ASSERT_EQUAL(AXIS_FAULT,controller.axis(1).state);
 }
 int main() {
     UNITY_BEGIN();

@@ -9,7 +9,7 @@ enum Operation : uint8_t { CONFIGURE = 0, MOVE_TO = 1, HOME = 2, STOP = 3,
     ENABLE = 4, RELEASE = 5, STATUS_QUERY = 6, KEEP_ALIVE = 7, RESET = 8, REFERENCE = 9, FORGET_DRIVER = 10 };
 enum Result : uint8_t { OK = 0, INVALID = 1, BAD_AXIS = 2, UNSUPPORTED = 3,
     CONFLICT = 4, UNCONFIGURED = 5, UNREFERENCED = 6, LIMIT = 7, BUSY = 8, IO_ERROR = 9 };
-enum State : uint8_t { DISABLED = 0, IDLE = 1, MOVING = 2, HOMING = 3, FAULT = 4 };
+enum State : uint8_t { AXIS_DISABLED = 0, AXIS_IDLE = 1, AXIS_MOVING = 2, AXIS_HOMING = 3, AXIS_FAULT = 4 };
 enum Fault : uint8_t { NO_FAULT = 0, DRIVER_ERROR = 1, HOME_TIMEOUT = 2, HOST_LOST = 3 };
 struct Config {
     uint8_t driver, mode, address, port, reverse, hold, loss_policy, home_strategy;

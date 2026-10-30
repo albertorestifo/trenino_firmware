@@ -71,7 +71,7 @@ Result Controller::configure(uint8_t id, const Config& c, uint32_t now) {
 }
 void Controller::fail(Axis& a, Fault reason, bool release_output) {
     if (release_output) driver_.release(a.config.address, a.config.port);
-    a.known = false; a.reference_kind = 0; a.enabled = !release_output && a.enabled; a.state = FAULT; a.fault = reason;
+    a.known = false; a.reference_kind = 0; a.enabled = !release_output && a.enabled; a.state = AXIS_FAULT; a.fault = reason;
     a.speed_squared = 0; a.home_remaining = 0;
     if (reason == DRIVER_ERROR) {
         for (uint8_t i = 0; i < MAX_AXES; ++i) {
@@ -79,7 +79,7 @@ void Controller::fail(Axis& a, Fault reason, bool release_output) {
             if (&other != &a && other.configured && other.config.address == a.config.address) {
                 driver_.release(other.config.address, other.config.port);
                 other.known = false; other.reference_kind = 0; other.enabled = false;
-                other.state = FAULT; other.fault = DRIVER_ERROR; other.speed_squared = 0; other.home_remaining = 0;
+                other.state = AXIS_FAULT; other.fault = DRIVER_ERROR; other.speed_squared = 0; other.home_remaining = 0;
             }
         }
     }
@@ -91,16 +91,16 @@ bool Controller::energize(Axis& a) {
 Result Controller::enable(uint8_t id) {
     Result r = check(id); if (r != OK) return r;
     Axis& a = axes_[id];
-    if (a.state == FAULT) return IO_ERROR; // reconfigure acknowledges and clears fault
+    if (a.state == AXIS_FAULT) return IO_ERROR; // reconfigure acknowledges and clears fault
     if (a.enabled) return OK;
     if (!energize(a)) return IO_ERROR;
-    a.state = IDLE; return OK;
+    a.state = AXIS_IDLE; return OK;
 }
 Result Controller::reference(uint8_t id, int32_t p, uint32_t now) {
     Result r = check(id); if (r != OK) return r;
     Axis& a = axes_[id];
     if (a.config.home_strategy != 0) return UNSUPPORTED;
-    if (a.state == MOVING || a.state == HOMING) return BUSY;
+    if (a.state == AXIS_MOVING || a.state == AXIS_HOMING) return BUSY;
     if (p < a.config.minimum || p > a.config.maximum) return LIMIT;
     if ((r = enable(id)) != OK) return r;
     a.position = a.target = p; a.known = true; a.reference_kind = 2; a.last_step = now;
@@ -109,15 +109,15 @@ Result Controller::reference(uint8_t id, int32_t p, uint32_t now) {
 Result Controller::moveTo(uint8_t id, int32_t p, uint32_t now) {
     Result r = check(id); if (r != OK) return r;
     Axis& a = axes_[id];
-    if (a.state == HOMING) return BUSY;
+    if (a.state == AXIS_HOMING) return BUSY;
     if (!a.known) return UNREFERENCED;
     if (p < a.config.minimum || p > a.config.maximum) return LIMIT;
     if ((r = enable(id)) != OK) return r;
     a.target = p;
-    if (a.state != MOVING && p != a.position) {
+    if (a.state != AXIS_MOVING && p != a.position) {
         a.direction = p > a.position ? 1 : -1;
         a.speed_squared = smaller(uint32_t(a.config.max_speed) * a.config.max_speed, 2UL * a.config.acceleration);
-        a.last_step = now; a.state = MOVING;
+        a.last_step = now; a.state = AXIS_MOVING;
     }
     return OK;
 }
@@ -125,11 +125,11 @@ Result Controller::home(uint8_t id, uint32_t now) {
     Result r = check(id); if (r != OK) return r;
     Axis& a = axes_[id];
     if (a.config.home_strategy != 1) return UNSUPPORTED;
-    if (a.state == HOMING || a.state == MOVING) return BUSY;
+    if (a.state == AXIS_HOMING || a.state == AXIS_MOVING) return BUSY;
     if ((r = enable(id)) != OK) return r;
     a.known = false; a.reference_kind = 0; a.backing_off = false;
     a.home_remaining = a.config.home_steps; a.home_started = a.last_step = now;
-    a.state = HOMING; return OK;
+    a.state = AXIS_HOMING; return OK;
 }
 Result Controller::release(uint8_t id) {
     Result r = check(id); if (r != OK) return r;
@@ -137,14 +137,14 @@ Result Controller::release(uint8_t id) {
     bool ok = driver_.release(a.config.address, a.config.port);
     a.enabled = false; a.known = false; a.reference_kind = 0; a.speed_squared = 0; a.home_remaining = 0;
     if (!ok) { fail(a, DRIVER_ERROR, false); return IO_ERROR; }
-    if (a.state != FAULT) a.state = DISABLED;
+    if (a.state != AXIS_FAULT) a.state = AXIS_DISABLED;
     return OK;
 }
 void Controller::idle(Axis& a) {
-    a.state = IDLE; a.speed_squared = 0; a.direction = 0;
+    a.state = AXIS_IDLE; a.speed_squared = 0; a.direction = 0;
     if (!a.config.hold) {
         if (!driver_.release(a.config.address, a.config.port)) { fail(a, DRIVER_ERROR, false); return; }
-        a.enabled = false; a.known = false; a.reference_kind = 0; a.state = DISABLED;
+        a.enabled = false; a.known = false; a.reference_kind = 0; a.state = AXIS_DISABLED;
     }
 }
 Result Controller::stop(uint8_t id) {
@@ -152,36 +152,36 @@ Result Controller::stop(uint8_t id) {
     Axis& a = axes_[id];
     // Immediate halt is explicitly not a controlled deceleration. A moving rotor
     // can coast: require a fresh reference rather than claiming exact position.
-    if (a.state == MOVING || a.state == HOMING) { a.known = false; a.reference_kind = 0; }
+    if (a.state == AXIS_MOVING || a.state == AXIS_HOMING) { a.known = false; a.reference_kind = 0; }
     a.target = a.position; a.home_remaining = 0;
-    if (a.state != FAULT) idle(a);
+    if (a.state != AXIS_FAULT) idle(a);
     return OK;
 }
 void Controller::update(uint32_t now) {
     for (uint8_t i = 0; i < MAX_AXES; ++i) {
-        Axis& a = axes_[i]; if (!a.configured || a.state == FAULT) continue;
+        Axis& a = axes_[i]; if (!a.configured || a.state == AXIS_FAULT) continue;
         if (uint32_t(now - last_contact_) >= uint32_t(a.config.watchdog_ms) * 1000UL) {
             // Policy 0 releases; policy 1 holds the last phase but never claims
             // a reference after an emergency halt. Explicit reconfigure required.
             fail(a, HOST_LOST, a.config.loss_policy == 0); continue;
         }
-        if (a.state != MOVING && a.state != HOMING) continue;
-        if (a.state == HOMING && uint32_t(now - a.home_started) >= uint32_t(a.config.home_timeout_ms) * 1000UL) {
+        if (a.state != AXIS_MOVING && a.state != AXIS_HOMING) continue;
+        if (a.state == AXIS_HOMING && uint32_t(now - a.home_started) >= uint32_t(a.config.home_timeout_ms) * 1000UL) {
             fail(a, HOME_TIMEOUT); continue;
         }
-        uint32_t speed = a.state == HOMING ? a.config.home_speed : uint32_t(sqrt(double(a.speed_squared)));
+        uint32_t speed = a.state == AXIS_HOMING ? a.config.home_speed : uint32_t(sqrt(double(a.speed_squared)));
         if (!speed) speed = 1;
         if (uint32_t(now - a.last_step) < (1000000UL + speed - 1) / speed) continue;
         // No catch-up burst: the next deadline is based on the actual service time.
         a.last_step = now;
-        int8_t direction = a.state == HOMING ? a.config.home_direction : a.direction;
-        if (a.state == HOMING && a.backing_off) direction = -direction;
+        int8_t direction = a.state == AXIS_HOMING ? a.config.home_direction : a.direction;
+        if (a.state == AXIS_HOMING && a.backing_off) direction = -direction;
         if (a.config.reverse) direction = -direction;
         uint8_t count = driver_.phaseCount(a.config.mode);
         uint8_t phase = (a.phase + (direction > 0 ? 1 : count - 1)) % count;
         if (!driver_.write(a.config.address, a.config.port, a.config.mode, phase)) { fail(a, DRIVER_ERROR); continue; }
         a.phase = phase;
-        if (a.state == HOMING) {
+        if (a.state == AXIS_HOMING) {
             if (--a.home_remaining == 0) {
                 if (!a.backing_off && a.config.home_backoff) {
                     a.backing_off = true; a.home_remaining = a.config.home_backoff;
