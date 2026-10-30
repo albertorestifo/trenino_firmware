@@ -238,6 +238,33 @@ void test_module_error_roundtrip()
     TEST_ASSERT_EQUAL_UINT8(original.error_code, decoded.error_code);
 }
 
+void test_empty_configure_canonical_wire()
+{
+    const uint8_t expected[] = {2,0x78,0x56,0x34,0x12,0,0,0xff};
+    Configure cfg; cfg.config_id = 0x12345678; cfg.total_parts = 0; cfg.part_number = 0; cfg.module_type = 0xff;
+    uint8_t encoded[9] = {};
+    TEST_ASSERT_EQUAL(8,cfg.encode(encoded,sizeof(encoded)));
+    TEST_ASSERT_EQUAL_UINT8_ARRAY(expected,encoded,8);
+    Message decoded;
+    TEST_ASSERT_TRUE(decoded.decode(expected,sizeof(expected)));
+    TEST_ASSERT_EQUAL_HEX32(0x12345678,decoded.configure.config_id);
+    TEST_ASSERT_EQUAL(0,decoded.configure.total_parts);
+    TEST_ASSERT_EQUAL(0xff,decoded.configure.module_type);
+    TEST_ASSERT_EQUAL(0,cfg.encode(encoded,7));
+}
+void test_empty_configure_rejects_noncanonical_header_and_lengths()
+{
+    uint8_t b[] = {2,1,0,0,0,0,0,0xff,0};
+    Configure cfg;
+    TEST_ASSERT_FALSE(cfg.decode(b,7));
+    TEST_ASSERT_FALSE(cfg.decode(b,9));
+    b[5] = 1; TEST_ASSERT_FALSE(cfg.decode(b,8));
+    b[5] = 0; b[6] = 1; TEST_ASSERT_FALSE(cfg.decode(b,8));
+    b[6] = 0; b[7] = 0; TEST_ASSERT_FALSE(cfg.decode(b,8));
+    cfg.total_parts = 1; cfg.module_type = 0xff; TEST_ASSERT_EQUAL(0,cfg.encode(b,sizeof(b)));
+    cfg.total_parts = 0; cfg.part_number = 1; TEST_ASSERT_EQUAL(0,cfg.encode(b,sizeof(b)));
+}
+
 int main()
 {
     UNITY_BEGIN();
@@ -260,6 +287,8 @@ int main()
     RUN_TEST(test_module_error_encode);
     RUN_TEST(test_module_error_decode);
     RUN_TEST(test_module_error_roundtrip);
+    RUN_TEST(test_empty_configure_canonical_wire);
+    RUN_TEST(test_empty_configure_rejects_noncanonical_header_and_lengths);
 
     return UNITY_END();
 }

@@ -4,6 +4,28 @@ Firmware3.1.0 adds optional message types16/17 for configurable stepper axes.
 See [the stepper extension contract](STEPPER_PROTOCOL.md) for exact sizes,
 capabilities, referencing, watchdog, retry and commissioning requirements.
 
+Firmware3.1.0 also supports an explicit empty legacy module deployment. Its
+entire decoded packet is exactly8 bytes:
+`02 <config_id:u32 little endian> 00 00 ff`.
+The fields are Configure(type2), config_id, total_parts0, part_number0 and the
+Configure-only empty discriminator0xff. There is no payload and no dummy module.
+Any other total_parts/part_number paired with0xff, a different discriminator
+paired with total_parts0, truncation or trailing bytes is invalid.
+
+An accepted empty deployment cancels pending multipart configuration, removes
+all legacy module instances, persists the supplied config_id with zero modules,
+and sends ConfigurationStored(type3) with that ID. Identity retains that ID
+after reboot. As with every completed legacy deployment, all volatile stepper
+axes are reset and release is attempted; any release failure is separately
+reported as ModuleError. Shield address registration remains intact.
+
+This configures the **module list**, not every physical output: independent
+SetOutput pins retain their last state, and removing a display does not blank
+its hardware. Hosts must send explicit output/display commands before removal
+if that behaviour is required. Old firmware does not support the empty command;
+gate it on version >=3.1.0. Replaying any legacy deployment also resets axes, so
+finish deployment/retries before configuring and referencing stepper axes.
+
 Binary protocol over serial using COBS framing (PacketSerial library).
 
 ## Transport

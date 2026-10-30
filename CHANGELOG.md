@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Canonical empty legacy Configure command for axis-only deployments, retaining
+  config_id across reboot without dummy modules and preserving legacy format5.
 - Configurable stepper axis extension (wire revision1, firmware3.1.0): two axes on
   one Adafruit PCA9685/TB6612 shield, Switec six-state and conventional bipolar
   full/half-step modes, bounded asynchronous home/backoff, limits, acceleration,

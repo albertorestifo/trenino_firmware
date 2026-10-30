@@ -96,6 +96,20 @@ bool handleConfigure(const Protocol::Configure& cfg, bool& complete, bool& error
     complete = false;
     error = false;
 
+    // An explicit empty deployment is one complete command, never a multipart
+    // fragment or a dummy module. It supersedes any in-flight deployment.
+    if (cfg.total_parts == 0 || cfg.module_type == Protocol::MODULE_TYPE_EMPTY) {
+        g_config_state.reset();
+        if (cfg.total_parts != 0 || cfg.part_number != 0 || cfg.module_type != Protocol::MODULE_TYPE_EMPTY) {
+            error = true; return true;
+        }
+        storeToEEPROM(cfg.config_id, nullptr, 0);
+        g_current_config_id = cfg.config_id;
+        g_current_num_modules = 0;
+        complete = true;
+        return true;
+    }
+
     // Check if this is a new configuration or continuation of existing one
     if (!g_config_state.isActive()) {
         // Start new configuration
@@ -252,7 +266,7 @@ bool loadFromEEPROM()
     eeprom_get(EEPROM_NUM_INPUTS_ADDR, g_current_num_modules);
 
     // Validate number of inputs
-    if (g_current_num_modules == 0 || g_current_num_modules > MAX_MODULES) {
+    if (g_current_num_modules > MAX_MODULES) {
         return false;
     }
 

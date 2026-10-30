@@ -127,9 +127,14 @@ size_t Configure::encode(uint8_t* buffer, size_t buffer_size) const
     // Common header: 1 type + 4 config_id + 1 total_parts + 1 part_number + 1 module_type = 8 bytes
     constexpr size_t HEADER_SIZE = 8;
 
+    if ((total_parts == 0 || module_type == MODULE_TYPE_EMPTY) &&
+        !(total_parts == 0 && part_number == 0 && module_type == MODULE_TYPE_EMPTY)) return 0;
+
     // Calculate required size based on module_type
     size_t payload_size = 0;
     switch (module_type) {
+    case MODULE_TYPE_EMPTY:
+        break;
     case MODULE_TYPE_ANALOG:
         payload_size = 2; // pin + sensitivity
         break;
@@ -228,6 +233,10 @@ bool Configure::decode(const uint8_t* buffer, size_t length)
 
     // module_type (u8)
     module_type = buffer[offset++];
+
+    if (total_parts == 0 || module_type == MODULE_TYPE_EMPTY) {
+        return total_parts == 0 && part_number == 0 && module_type == MODULE_TYPE_EMPTY && length == HEADER_SIZE;
+    }
 
     // Type-specific payload
     switch (module_type) {

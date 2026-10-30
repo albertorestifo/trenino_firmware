@@ -151,6 +151,17 @@ Reconnect sequence: Identity; query capabilities; Reset; Configure each axis;
 explicit Home or Reference; then MoveTo. Reset on reconnect is intentional even
 if the board did not reboot. A reboot always loses axis config and reference.
 
+An axis-only device can retain the host deployment identity without configuring
+dummy inputs or displays. Before axis Configure, deploy the empty legacy module
+list with the exact8-byte packet `02 <config_id:u32LE> 00 00 ff`. It is acknowledged
+with ConfigurationStored and the config_id survives reboot with zero legacy
+modules. It supersedes any unfinished multipart deployment. This is available
+from firmware3.1.0; earlier firmware rejects it. Like other completed legacy
+deployments it removes old module instances and resets/releases all axes, but
+preserves shield registration. It does not clear independent digital SetOutput
+states or blank removed displays. Complete deployment and retries before axis
+configuration/referencing; do not replay it after starting motion.
+
 ## Status packet (type17, exactly23 bytes)
 
 | Offset | Type | Meaning |

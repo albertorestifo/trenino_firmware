@@ -145,14 +145,14 @@ void test_load_fails_with_invalid_num_inputs()
     EEPROM.put(ConfigManager::EEPROM_VERSION_ADDR, EEPROM_FORMAT_VERSION);
     uint32_t config_id = 12345;
     EEPROM.put(ConfigManager::EEPROM_CONFIG_ID_ADDR, config_id);
-    uint8_t num_modules = 0; // Invalid: 0 modules
+    uint8_t num_modules = ConfigManager::MAX_MODULES + 1;
     EEPROM.put(ConfigManager::EEPROM_NUM_INPUTS_ADDR, num_modules);
 
     bool result = ConfigManager::loadFromEEPROM();
     TEST_ASSERT_FALSE(result);
 
-    // Try with too many modules
-    num_modules = ConfigManager::MAX_MODULES + 1;
+    // Another out-of-range count must also fail.
+    num_modules = 255;
     EEPROM.put(ConfigManager::EEPROM_NUM_INPUTS_ADDR, num_modules);
 
     result = ConfigManager::loadFromEEPROM();
@@ -175,6 +175,34 @@ void test_shield_registration_roundtrip_and_corruption()
     TEST_ASSERT_EQUAL(0, ConfigManager::getRegisteredShieldAddress());
 }
 
+void test_empty_configuration_retains_identity_after_reboot_and_cancels_partial()
+{
+    ConfigManager::ModuleConfig mod; mod.module_type = Protocol::MODULE_TYPE_ANALOG; mod.analog.pin = 1;
+    ConfigManager::storeToEEPROM(100,&mod,1); ConfigManager::init();
+    uint8_t count = 0; ConfigManager::getCurrentConfig(count); TEST_ASSERT_EQUAL(1,count);
+    ConfigManager::g_config_state.start(200,2);
+    Protocol::Configure cfg; cfg.config_id = 0x12345678; cfg.module_type = 0xff; cfg.total_parts = 0; cfg.part_number = 0;
+    bool complete = false, error = false;
+    TEST_ASSERT_TRUE(ConfigManager::handleConfigure(cfg,complete,error));
+    TEST_ASSERT_TRUE(complete); TEST_ASSERT_FALSE(error);
+    TEST_ASSERT_FALSE(ConfigManager::g_config_state.isActive());
+    ConfigManager::getCurrentConfig(count); TEST_ASSERT_EQUAL(0,count);
+    TEST_ASSERT_EQUAL_HEX32(0x12345678,ConfigManager::getCurrentConfigId());
+    ConfigManager::init(); // loads EEPROM, rather than preserving volatile globals
+    ConfigManager::getCurrentConfig(count); TEST_ASSERT_EQUAL(0,count);
+    TEST_ASSERT_EQUAL_HEX32(0x12345678,ConfigManager::getCurrentConfigId());
+}
+void test_noncanonical_empty_config_does_not_clear_modules()
+{
+    ConfigManager::ModuleConfig mod; ConfigManager::storeToEEPROM(100,&mod,1); ConfigManager::init();
+    Protocol::Configure cfg; cfg.config_id = 200; cfg.module_type = 0xff; cfg.total_parts = 0; cfg.part_number = 1;
+    bool complete = true, error = false;
+    ConfigManager::handleConfigure(cfg,complete,error);
+    TEST_ASSERT_FALSE(complete); TEST_ASSERT_TRUE(error);
+    uint8_t count; ConfigManager::getCurrentConfig(count); TEST_ASSERT_EQUAL(1,count);
+    TEST_ASSERT_EQUAL(100,ConfigManager::getCurrentConfigId());
+}
+
 int main()
 {
     UNITY_BEGIN();
@@ -185,6 +213,8 @@ int main()
     RUN_TEST(test_load_fails_with_no_magic);
     RUN_TEST(test_load_fails_with_invalid_num_inputs);
     RUN_TEST(test_shield_registration_roundtrip_and_corruption);
+    RUN_TEST(test_empty_configuration_retains_identity_after_reboot_and_cancels_partial);
+    RUN_TEST(test_noncanonical_empty_config_does_not_clear_modules);
 
     return UNITY_END();
 }

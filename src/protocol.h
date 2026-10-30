@@ -28,6 +28,9 @@ constexpr uint8_t MODULE_TYPE_BUTTON = 1;
 constexpr uint8_t MODULE_TYPE_MATRIX = 2;
 // Note: 3 is reserved (formerly BLDC)
 constexpr uint8_t MODULE_TYPE_HT16K33 = 4;
+// Configure-only sentinel for an explicit empty legacy module deployment.
+// Canonical header: total_parts=0, part_number=0, no payload.
+constexpr uint8_t MODULE_TYPE_EMPTY = 0xff;
 
 // Maximum number of pins for matrix configuration (row_pins + col_pins)
 constexpr uint8_t MAX_MATRIX_PINS = 16;

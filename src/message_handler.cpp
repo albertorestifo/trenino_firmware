@@ -130,7 +130,9 @@ void handleConfigure(const Protocol::Configure& cfg)
         // Apply configuration to sensors
         uint8_t num_modules = 0;
         const ConfigManager::ModuleConfig* modules = ConfigManager::getCurrentConfig(num_modules);
-        if (StepperService::canApplyModules()) ModuleManager::applyConfiguration(modules, num_modules);
+        // Removing every legacy module requires no I2C initialization and must
+        // still work when a registered shield prevented boot-time module init.
+        if (num_modules == 0 || StepperService::canApplyModules()) ModuleManager::applyConfiguration(modules, num_modules);
 
         sendConfigurationStored(cfg.config_id);
 
