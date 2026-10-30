@@ -1,5 +1,9 @@
 # Protocol Specification
 
+Firmware3.1.0 adds optional message types16/17 for configurable stepper axes.
+See [the stepper extension contract](STEPPER_PROTOCOL.md) for exact sizes,
+capabilities, referencing, watchdog, retry and commissioning requirements.
+
 Binary protocol over serial using COBS framing (PacketSerial library).
 
 ## Transport

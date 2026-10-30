@@ -46,6 +46,28 @@ void eeprom_commit()
 
 namespace ConfigManager {
 
+uint8_t getRegisteredShieldAddress()
+{
+    uint8_t data[5];
+    eeprom_get(500, data);
+    if (data[0] != 0x53 || data[1] != 0x54 || data[2] != 1 ||
+        data[3] < 0x60 || data[3] > 0x77 || data[4] != uint8_t(~data[3])) return 0;
+    return data[3];
+}
+
+void registerShieldAddress(uint8_t address)
+{
+    if (getRegisteredShieldAddress() == address) return;
+    // Commit marker last; interrupted writes cannot authorize an unrelated address.
+    const uint8_t invalid = 0;
+    eeprom_put(500, invalid);
+    const uint8_t tail[4] = {0x54, 1, address, uint8_t(~address)};
+    eeprom_put(501, tail);
+    const uint8_t marker = 0x53;
+    eeprom_put(500, marker);
+    eeprom_commit();
+}
+
 // Global state
 ConfigState g_config_state;
 uint32_t g_current_config_id = 0;

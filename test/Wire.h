@@ -27,7 +27,7 @@
 namespace MockWire {
 
 constexpr uint8_t MAX_TRANSACTIONS = 32;
-constexpr uint8_t MAX_BYTES_PER_TRANSACTION = 24;
+constexpr uint8_t MAX_BYTES_PER_TRANSACTION = 32;
 constexpr uint8_t MAX_ADDRESSES = 8;
 
 struct Transaction {

@@ -5,6 +5,7 @@ namespace OutputManager {
 
 // Bitmask tracking which pins have been configured as OUTPUT (pins 0-31)
 static uint32_t g_output_pins = 0;
+bool isOutputPin(uint8_t pin) { return pin < 32 && (g_output_pins & (1UL << pin)); }
 
 void init()
 {

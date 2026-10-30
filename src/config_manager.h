@@ -19,6 +19,12 @@
 
 namespace ConfigManager {
 
+// Independent versioned driver-registration record at bytes500..504. Legacy
+// variable-length module records occupy at most162 bytes. Axis motion config
+// stays volatile; registration only allows safe shield shutdown before displays.
+uint8_t getRegisteredShieldAddress();
+void registerShieldAddress(uint8_t address);
+
 // Maximum number of inputs that can be configured
 constexpr uint8_t MAX_MODULES = 8;
 

@@ -159,6 +159,22 @@ void test_load_fails_with_invalid_num_inputs()
     TEST_ASSERT_FALSE(result);
 }
 
+void test_shield_registration_roundtrip_and_corruption()
+{
+    TEST_ASSERT_EQUAL(0, ConfigManager::getRegisteredShieldAddress());
+    ConfigManager::registerShieldAddress(0x61);
+    TEST_ASSERT_EQUAL(0x61, ConfigManager::getRegisteredShieldAddress());
+    TEST_ASSERT_EQUAL(0x53, mock_eeprom_storage[500]);
+    TEST_ASSERT_EQUAL(1, mock_eeprom_storage[502]);
+    mock_eeprom_storage[504] ^= 1;
+    TEST_ASSERT_EQUAL(0, ConfigManager::getRegisteredShieldAddress());
+    ConfigManager::registerShieldAddress(0x60);
+    ConfigManager::storeToEEPROM(12345, nullptr, 0);
+    TEST_ASSERT_EQUAL(0x60, ConfigManager::getRegisteredShieldAddress());
+    ConfigManager::registerShieldAddress(0);
+    TEST_ASSERT_EQUAL(0, ConfigManager::getRegisteredShieldAddress());
+}
+
 int main()
 {
     UNITY_BEGIN();
@@ -168,6 +184,7 @@ int main()
     RUN_TEST(test_load_fails_with_mismatched_version);
     RUN_TEST(test_load_fails_with_no_magic);
     RUN_TEST(test_load_fails_with_invalid_num_inputs);
+    RUN_TEST(test_shield_registration_roundtrip_and_corruption);
 
     return UNITY_END();
 }

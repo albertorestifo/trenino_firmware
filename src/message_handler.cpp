@@ -4,6 +4,7 @@
 #include "ht16k33_module.h"
 #include "output_manager.h"
 #include "sensor_manager.h"
+#include "stepper_service.h"
 
 namespace MessageHandler {
 
@@ -40,10 +41,15 @@ void init(PacketSerial_<COBS>* serial)
 
     // Initialize heartbeat manager with 2 second interval and callback
     g_heartbeat_manager = new Heartbeat::HeartbeatManager(HEARTBEAT_INTERVAL_MS, sendHeartbeat);
+    StepperService::init([](const uint8_t* bytes, size_t size) {
+        if (g_packet_serial) g_packet_serial->send(bytes, size);
+        if (g_heartbeat_manager) g_heartbeat_manager->notifyMessageSent(millis());
+    });
 }
 
 void onPacketReceived(const uint8_t* buffer, size_t size)
 {
+    if (StepperService::onPacket(buffer, size)) return;
     // Decode the protocol message
     Protocol::Message msg;
     if (!msg.decode(buffer, size)) {
@@ -69,6 +75,7 @@ void onPacketReceived(const uint8_t* buffer, size_t size)
 
 void update()
 {
+    StepperService::update();
     // Update heartbeat manager (automatically sends heartbeat if needed)
     g_heartbeat_manager->update(millis());
 
@@ -84,6 +91,7 @@ void update()
     Modules::Reading reading;
     while (ModuleManager::getNextReading(reading)) {
         sendInputValue(reading);
+        StepperService::update();
     }
 }
 
@@ -91,6 +99,7 @@ void handleIdentityRequest(uint32_t request_id)
 {
     uint32_t config_id = ConfigManager::getCurrentConfigId();
     sendIdentityResponse(request_id, config_id);
+    if (StepperService::bootFaultAddress()) sendModuleError(StepperService::bootFaultAddress(), 0);
 
     // Drain any pending module-init errors and report them to the host.
     // This catches errors from the boot-time applyConfiguration() in setup()
@@ -107,16 +116,21 @@ void handleIdentityRequest(uint32_t request_id)
 
 void handleConfigure(const Protocol::Configure& cfg)
 {
+    if (StepperService::conflicts(cfg)) {
+        ConfigManager::g_config_state.reset();
+        sendConfigurationError(cfg.config_id); return;
+    }
     bool complete = false;
     bool error = false;
 
     ConfigManager::handleConfigure(cfg, complete, error);
 
     if (complete) {
+        if (!StepperService::reset()) sendModuleError(ConfigManager::getRegisteredShieldAddress(), 0);
         // Apply configuration to sensors
         uint8_t num_modules = 0;
         const ConfigManager::ModuleConfig* modules = ConfigManager::getCurrentConfig(num_modules);
-        ModuleManager::applyConfiguration(modules, num_modules);
+        if (StepperService::canApplyModules()) ModuleManager::applyConfiguration(modules, num_modules);
 
         sendConfigurationStored(cfg.config_id);
 
@@ -133,6 +147,7 @@ void handleConfigure(const Protocol::Configure& cfg)
 
 void handleSetOutput(const Protocol::SetOutput& cmd)
 {
+    if (StepperService::reservesPin(cmd.pin)) return;
     OutputManager::setOutput(cmd.pin, cmd.value);
 }
 

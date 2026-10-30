@@ -30,3 +30,4 @@ void digitalWrite(uint8_t pin, uint8_t val);
 void delay(unsigned long ms);
 void delayMicroseconds(unsigned int us);
 unsigned long millis();
+unsigned long micros();

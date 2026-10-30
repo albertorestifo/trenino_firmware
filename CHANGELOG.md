@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Configurable stepper axis extension (wire revision1, firmware3.1.0): two axes on
+  one Adafruit PCA9685/TB6612 shield, Switec six-state and conventional bipolar
+  full/half-step modes, bounded asynchronous home/backoff, limits, acceleration,
+  host lease and reference-aware status. Host retains application calibration.
+- Explicit persistent shield address registration for safe startup before0x70
+  displays; legacy EEPROM module format5 remains compatible. See
+  [stepper protocol](docs/STEPPER_PROTOCOL.md) for commissioning and limitations.
+
 ## [3.0.0] - 2026-05-03
 
 ### Added

@@ -2,6 +2,7 @@
 #include "message_handler.h"
 #include "output_manager.h"
 #include "sensor_manager.h"
+#include "stepper_service.h"
 #include <Arduino.h>
 #include <PacketSerial.h>
 
@@ -26,7 +27,7 @@ void setup()
     // Apply loaded configuration to sensors
     uint8_t num_modules = 0;
     const ConfigManager::ModuleConfig* modules = ConfigManager::getCurrentConfig(num_modules);
-    ModuleManager::applyConfiguration(modules, num_modules);
+    if (StepperService::canApplyModules()) ModuleManager::applyConfiguration(modules, num_modules);
 }
 
 void loop()
