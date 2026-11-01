@@ -29,14 +29,7 @@ void init()
 bool applyConfiguration(const ConfigManager::ModuleConfig* modules, uint8_t module_count)
 {
     // Clear existing modules
-    for (uint8_t i = 0; i < MAX_MODULES; i++) {
-        if (g_modules[i] != nullptr) {
-            delete g_modules[i];
-            g_modules[i] = nullptr;
-        }
-    }
-    g_module_count = 0;
-    g_next_reading_index = 0;
+    init();
     g_init_error_count = 0;
 
     // Validate module count
