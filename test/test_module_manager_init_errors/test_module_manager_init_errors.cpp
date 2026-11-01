@@ -44,6 +44,7 @@ EEPROMClass EEPROM;
 #include "../../src/analog_sensor.h"
 #include "../../src/button_sensor.h"
 #include "../../src/matrix_sensor.h"
+#include "../../src/matrix_core.cpp"
 #include "../../src/ht16k33_module.h"
 
 namespace Modules {
@@ -87,8 +88,6 @@ MatrixSensor::MatrixSensor(uint8_t rows, uint8_t cols,
 bool MatrixSensor::begin() { return true; }
 void MatrixSensor::scan() {}
 Reading MatrixSensor::getReading() { return Reading(); }
-void MatrixSensor::scanButton(uint8_t, uint8_t, bool) {}
-void MatrixSensor::enqueueEvent(uint8_t, bool) {}
 
 // HT16K33Module stubs — applyConfiguration() calls `new HT16K33Module(...)` so we
 // need a definition, but no test here exercises the real I2C logic.
