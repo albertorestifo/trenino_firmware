@@ -61,6 +61,13 @@ static void queueResetRead(const uint8_t* reset_cfg)
     MockWire::queueRead(ADDR, reset_cfg, 2);
 }
 
+// The read-back of a recovery attempt on a healthy, idle chip (OS reads set).
+static void queueRecoveryReadback()
+{
+    const uint8_t idle[2] = { 0xC1, 0xA3 };
+    MockWire::queueRead(ADDR, idle, 2);
+}
+
 static Ads1115Module plain(uint8_t mask, const uint8_t* sens = SENS10)
 {
     return Ads1115Module(ADDR, BASE, mask, 0, NO_REF, sens);
@@ -367,6 +374,7 @@ void test_recovery_reports_code_2()
     }
     TEST_ASSERT_EQUAL_UINT8(1, m.takeRuntimeError());
     g_now += 1000;
+    queueRecoveryReadback();
     m.scan();
     TEST_ASSERT_EQUAL_UINT8(2, m.takeRuntimeError());
     TEST_ASSERT_EQUAL_UINT8(MODULE_ERROR_NONE, m.activeError());
@@ -391,6 +399,7 @@ void test_absent_at_boot_then_connected_recovers()
     m.scan();
     TEST_ASSERT_EQUAL_UINT8(before, MockWire::transaction_count);
     g_now = 1000;
+    queueRecoveryReadback();
     m.scan();
     TEST_ASSERT_EQUAL_UINT8(2, m.takeRuntimeError());
     TEST_ASSERT_EQUAL_UINT8(MODULE_ERROR_NONE, m.activeError());
@@ -451,6 +460,7 @@ void test_recovery_with_reference_lost_ends_on_code_3()
     }
     TEST_ASSERT_EQUAL_UINT8(1, m.takeRuntimeError());
     g_now += 1000;
+    queueRecoveryReadback();
     m.scan();
     TEST_ASSERT_EQUAL_UINT8(2, m.takeRuntimeError());
     TEST_ASSERT_EQUAL_UINT8(3, m.takeRuntimeError());
@@ -516,8 +526,9 @@ void test_repeated_config_mismatch_reaches_failed_state()
     m.scan();
     TEST_ASSERT_EQUAL_UINT8(before, MockWire::transaction_count);
     g_now += 500;
+    queueRecoveryReadback();
     m.scan();
-    TEST_ASSERT_EQUAL_UINT8(before + 1, MockWire::transaction_count);
+    TEST_ASSERT_EQUAL_UINT8(before + 2, MockWire::transaction_count); // write, read-back pointer
     TEST_ASSERT_EQUAL_UINT8(2, m.takeRuntimeError());
 }
 
@@ -645,6 +656,35 @@ void test_os_clear_after_3_retries_is_a_mismatch()
     TEST_ASSERT_EQUAL_INT16(50, m.getReading().value);
 }
 
+void test_recovery_with_wrong_config_stays_failed()
+{
+    Ads1115Module m = plain(0x01);
+    MockWire::scheduleNacks(ADDR, 1);
+    TEST_ASSERT_FALSE(m.begin());
+
+    g_now = 1000;
+    const uint8_t wrong[2] = { 0xFF, 0xFF }; // acknowledges everything, keeps nothing
+    MockWire::queueRead(ADDR, wrong, 2);
+    m.scan();
+    TEST_ASSERT_TRUE(m.health().failed());
+    TEST_ASSERT_EQUAL_UINT8(1, m.activeError());
+    TEST_ASSERT_EQUAL_UINT8(MODULE_ERROR_NONE, m.takeRuntimeError());
+
+    // Still no flapping a second later, and no read-back at all fails too.
+    g_now = 2000;
+    m.scan();
+    TEST_ASSERT_TRUE(m.health().failed());
+    TEST_ASSERT_EQUAL_UINT8(MODULE_ERROR_NONE, m.takeRuntimeError());
+
+    // The right chip comes back; OS reads set on an idle chip.
+    g_now = 3000;
+    const uint8_t idle[2] = { 0xC1, 0xA3 };
+    MockWire::queueRead(ADDR, idle, 2);
+    m.scan();
+    TEST_ASSERT_FALSE(m.health().failed());
+    TEST_ASSERT_EQUAL_UINT8(2, m.takeRuntimeError());
+}
+
 int main()
 {
     UNITY_BEGIN();
@@ -679,5 +719,6 @@ int main()
     RUN_TEST(test_reset_between_reads_discards_result);
     RUN_TEST(test_os_clear_discards_and_rereads_without_failure);
     RUN_TEST(test_os_clear_after_3_retries_is_a_mismatch);
+    RUN_TEST(test_recovery_with_wrong_config_stays_failed);
     return UNITY_END();
 }

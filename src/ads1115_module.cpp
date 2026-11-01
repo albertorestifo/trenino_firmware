@@ -133,10 +133,14 @@ void Ads1115Module::clearFresh()
     for (uint8_t i = 0; i < CHANNELS; i++) fresh_[i] = false;
 }
 
-// Same probe as begin(); per-channel state and the reference are kept.
+// Same probe as begin(), plus a read-back because a wrong device at this address
+// acknowledges writes too. OS reads differently from what was written, so it is
+// ignored. Per-channel state and the reference are kept.
 void Ads1115Module::recover(unsigned long now)
 {
-    if (writeConfig((uint16_t)(configWord(0) & ~OS_BIT))) {
+    const uint16_t idle = (uint16_t)(configWord(0) & ~OS_BIT);
+    uint16_t cfg;
+    if (writeConfig(idle) && readRegister(REG_CONFIG, cfg) && (cfg & ~OS_BIT) == idle) {
         health_.noteSuccess();
         health_.push(2);
         if (ref_lost_) health_.push(3); // code 2 clears the host's error; the reference is still gone

@@ -60,14 +60,14 @@ static void simulateChipReset()
     g_iodir = 0xFFFF;
 }
 
-// OLAT bytes of 0xDE 0xAD in a scripted 4-byte read mean "whatever the
+// OLAT bytes of 0xDE 0xAD at the end of a scripted read mean "whatever the
 // simulated chip holds when the read is served".
 static void fixupRead(uint8_t, uint8_t* bytes, uint8_t length)
 {
-    if (length == 4 && bytes[2] == 0xDE && bytes[3] == 0xAD) {
+    if (length >= 2 && bytes[length - 2] == 0xDE && bytes[length - 1] == 0xAD) {
         syncChip();
-        bytes[2] = (uint8_t)(g_olat & 0xFF);
-        bytes[3] = (uint8_t)(g_olat >> 8);
+        bytes[length - 2] = (uint8_t)(g_olat & 0xFF);
+        bytes[length - 1] = (uint8_t)(g_olat >> 8);
     }
     if (g_reset_after_read) {
         g_reset_after_read = false;
@@ -129,6 +129,13 @@ static void queueNext(const Mcp23017Module&, uint8_t gpioA, uint8_t gpioB)
 {
     const uint8_t bytes[4] = { gpioA, gpioB, 0xDE, 0xAD };
     MockWire::queueRead(ADDR, bytes, 4);
+}
+
+// The read-back of a recovery attempt on a healthy chip.
+static void queueOlatReadback()
+{
+    const uint8_t bytes[2] = { 0xDE, 0xAD };
+    MockWire::queueRead(ADDR, bytes, 2);
 }
 
 static void queueShort()
@@ -675,8 +682,9 @@ void test_repeated_olat_mismatch_reaches_failed_state()
     m.scan();
     TEST_ASSERT_EQUAL_UINT8(0, MockWire::transaction_count);
     g_now += 500;
+    queueOlatReadback();
     m.scan();
-    TEST_ASSERT_EQUAL_UINT8(4, MockWire::transaction_count);
+    TEST_ASSERT_EQUAL_UINT8(5, MockWire::transaction_count); // 4 writes, read-back pointer
     TEST_ASSERT_EQUAL_UINT8(2, m.takeRuntimeError());
 }
 
@@ -715,6 +723,7 @@ static void matrixOutage(Mcp23017Module& m)
     for (uint8_t i = 0; i < 3; i++) tick2(m);
     TEST_ASSERT_TRUE(m.health().failed());
     g_now += 1000;
+    queueOlatReadback();
     m.scan();
     TEST_ASSERT_FALSE(m.health().failed());
 }
@@ -844,6 +853,7 @@ void test_held_button_stays_held_through_outage()
     failChip(m); // failed at 25
     TEST_ASSERT_FALSE(m.getReading().has_value);
     g_now = 1025;
+    queueOlatReadback();
     m.scan(); // recovers
     TEST_ASSERT_EQUAL_UINT8(MODULE_ERROR_NONE, m.activeError());
     TEST_ASSERT_FALSE(m.getReading().has_value); // no phantom release
@@ -897,8 +907,9 @@ void test_failed_chip_stops_polling_and_retries_every_1000ms()
     m.scan();
     TEST_ASSERT_EQUAL_UINT8(1, MockWire::transaction_count);
     g_now = 2015;
+    queueOlatReadback();
     m.scan();
-    TEST_ASSERT_EQUAL_UINT8(5, MockWire::transaction_count); // full reinit
+    TEST_ASSERT_EQUAL_UINT8(6, MockWire::transaction_count); // full reinit, read-back pointer
     TEST_ASSERT_FALSE(m.health().failed());
 }
 
@@ -910,8 +921,9 @@ void test_recovery_reports_code_2_and_reinitializes()
     TEST_ASSERT_EQUAL_UINT8(1, m.takeRuntimeError());
     resetTransactions();
     g_now = 1015;
+    queueOlatReadback();
     m.scan();
-    TEST_ASSERT_EQUAL_UINT8(4, MockWire::transaction_count);
+    TEST_ASSERT_EQUAL_UINT8(5, MockWire::transaction_count);
     TEST_ASSERT_EQUAL_UINT8(0x0A, MockWire::transactions[0].data[0]);
     TEST_ASSERT_EQUAL_UINT8(0x14, MockWire::transactions[1].data[0]);
     TEST_ASSERT_EQUAL_UINT8(0x0C, MockWire::transactions[2].data[0]);
@@ -931,6 +943,7 @@ void test_change_during_outage_reported_after_recovery()
     m.scan();
     TEST_ASSERT_FALSE(m.getReading().has_value);
     g_now = 1015;
+    queueOlatReadback();
     m.scan(); // recovers
     TEST_ASSERT_FALSE(m.getReading().has_value);
     for (uint8_t i = 0; i < 2; i++) { queueSample(0xFE, 0xFF); tick(m); }
@@ -956,10 +969,12 @@ void test_absent_at_boot_then_connected_recovers()
     }
     TEST_ASSERT_EQUAL_UINT8(0, MockWire::transaction_count);
     MockWire::read_request_count = 0;
+    MockWire::read_queue_count = 0; // drop the samples that were never read
 
     g_now = 1000;
+    queueOlatReadback();
     m.scan();
-    TEST_ASSERT_EQUAL_UINT8(4, MockWire::transaction_count);
+    TEST_ASSERT_EQUAL_UINT8(5, MockWire::transaction_count);
     TEST_ASSERT_EQUAL_UINT8(2, m.takeRuntimeError());
     TEST_ASSERT_EQUAL_UINT8(MODULE_ERROR_NONE, m.takeRuntimeError());
     TEST_ASSERT_FALSE(m.getReading().has_value);
@@ -1012,6 +1027,7 @@ void test_olat_mismatch_with_failed_reinit_reports_code_1_once_then_2()
     m.scan();
     TEST_ASSERT_TRUE(m.health().failed());
     g_now = 1005;
+    queueOlatReadback();
     m.scan();
     TEST_ASSERT_FALSE(m.health().failed());
     TEST_ASSERT_EQUAL_UINT8(2, m.takeRuntimeError());
@@ -1026,6 +1042,7 @@ void test_active_error_is_1_while_failed()
     failChip(m);
     TEST_ASSERT_EQUAL_UINT8(1, m.activeError());
     g_now = 1015;
+    queueOlatReadback();
     m.scan();
     TEST_ASSERT_EQUAL_UINT8(MODULE_ERROR_NONE, m.activeError());
 }
@@ -1151,6 +1168,58 @@ void test_matrix_periodic_rewrite_failure_takes_failure_path()
     TEST_ASSERT_EQUAL_UINT8(MODULE_ERROR_NONE, m.takeRuntimeError());
 }
 
+// What a wrong device answers when recovery reads OLAT back.
+static void queueOlatBytes(uint8_t low, uint8_t high)
+{
+    const uint8_t bytes[2] = { low, high };
+    MockWire::queueRead(ADDR, bytes, 2);
+}
+
+void test_recovery_with_wrong_olat_stays_failed()
+{
+    Mcp23017Module& m = make(0x0001, 1);
+    m.begin();
+    failChip(m);
+    TEST_ASSERT_EQUAL_UINT8(1, m.takeRuntimeError());
+
+    g_now = 1015;
+    queueOlatBytes(0xFF, 0xFF); // acknowledges everything, keeps nothing
+    m.scan();
+    TEST_ASSERT_TRUE(m.health().failed());
+    TEST_ASSERT_EQUAL_UINT8(1, m.activeError());
+    TEST_ASSERT_EQUAL_UINT8(MODULE_ERROR_NONE, m.takeRuntimeError());
+
+    // Still no flapping a second later, and no read-back at all fails too.
+    g_now = 2015;
+    m.scan();
+    TEST_ASSERT_TRUE(m.health().failed());
+    TEST_ASSERT_EQUAL_UINT8(MODULE_ERROR_NONE, m.takeRuntimeError());
+
+    // The right chip comes back.
+    g_now = 3015;
+    queueOlatBytes(0x01, 0x00);
+    m.scan();
+    TEST_ASSERT_FALSE(m.health().failed());
+    TEST_ASSERT_EQUAL_UINT8(2, m.takeRuntimeError());
+}
+
+void test_recovery_reads_olat_back_after_the_writes()
+{
+    Mcp23017Module& m = make(0x0001, 1);
+    m.begin();
+    failChip(m);
+    resetTransactions();
+    MockWire::read_request_count = 0;
+    g_now = 1015;
+    queueOlatBytes(0x01, 0x00);
+    m.scan();
+    TEST_ASSERT_EQUAL_UINT8(5, MockWire::transaction_count);
+    TEST_ASSERT_EQUAL_UINT8(1, MockWire::transactions[4].length);
+    TEST_ASSERT_EQUAL_HEX8(0x14, MockWire::transactions[4].data[0]);
+    TEST_ASSERT_EQUAL_UINT8(1, MockWire::read_request_count);
+    TEST_ASSERT_EQUAL_UINT8(2, MockWire::last_request_quantity);
+}
+
 int main(int, char**)
 {
     UNITY_BEGIN();
@@ -1202,5 +1271,7 @@ int main(int, char**)
     RUN_TEST(test_matrix_periodic_rewrite_catches_reset_during_select);
     RUN_TEST(test_matrix_periodic_rewrite_keeps_input_state);
     RUN_TEST(test_matrix_periodic_rewrite_failure_takes_failure_path);
+    RUN_TEST(test_recovery_with_wrong_olat_stays_failed);
+    RUN_TEST(test_recovery_reads_olat_back_after_the_writes);
     return UNITY_END();
 }

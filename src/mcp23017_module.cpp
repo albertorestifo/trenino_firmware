@@ -122,10 +122,13 @@ uint16_t Mcp23017Module::expectedOlat() const
 }
 
 // Retry while failed. Uses initRegisters(), never begin(): begin() would clear
-// input state and lose held buttons and their release events.
+// input state and lose held buttons and their release events. OLAT is read back
+// because a wrong device at this address acknowledges writes too.
 void Mcp23017Module::recover(unsigned long now)
 {
-    if (ensureMatrix() && initRegisters()) {
+    uint8_t olat[2];
+    if (ensureMatrix() && initRegisters()
+        && I2CBus::readRegisters(address_, REG_OLAT, olat, sizeof(olat)) && olatMatches(olat)) {
         health_.noteSuccess();
         health_.push(2);
         last_sample_ms_ = now;
