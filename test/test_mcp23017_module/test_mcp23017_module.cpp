@@ -22,20 +22,25 @@ void delay(unsigned long) {}
 static const uint8_t ADDR = 0x20;
 static const uint8_t BASE = 200;
 
-// Simulated chip: OLAT is latched from the successful register-0x14 writes
-// recorded by the mock, and a reset clears it. `g_seen` is how many recorded
-// transactions have been applied.
+// Simulated chip: OLAT, GPPU and IODIR are latched from the successful register
+// writes recorded by the mock, and a reset returns them to their power-on
+// values. `g_seen` is how many recorded transactions have been applied.
 static uint16_t g_olat = 0;
+static uint16_t g_gppu = 0;
+static uint16_t g_iodir = 0xFFFF;
 static uint8_t g_seen = 0;
+static bool g_reset_after_read = false; // reset right after the next sample
 
 static void syncChip()
 {
     if (MockWire::transaction_count < g_seen) g_seen = 0;
     for (; g_seen < MockWire::transaction_count; g_seen++) {
         const MockWire::Transaction& t = MockWire::transactions[g_seen];
-        if (t.end_status == 0 && t.length == 3 && t.data[0] == 0x14) {
-            g_olat = (uint16_t)(t.data[1] | (t.data[2] << 8));
-        }
+        if (t.end_status != 0 || t.length != 3) continue;
+        uint16_t value = (uint16_t)(t.data[1] | (t.data[2] << 8));
+        if (t.data[0] == 0x14) g_olat = value;
+        if (t.data[0] == 0x0C) g_gppu = value;
+        if (t.data[0] == 0x00) g_iodir = value;
     }
 }
 
@@ -51,6 +56,8 @@ static void simulateChipReset()
 {
     syncChip();
     g_olat = 0;
+    g_gppu = 0;
+    g_iodir = 0xFFFF;
 }
 
 // OLAT bytes of 0xDE 0xAD in a scripted 4-byte read mean "whatever the
@@ -62,6 +69,10 @@ static void fixupRead(uint8_t, uint8_t* bytes, uint8_t length)
         bytes[2] = (uint8_t)(g_olat & 0xFF);
         bytes[3] = (uint8_t)(g_olat >> 8);
     }
+    if (g_reset_after_read) {
+        g_reset_after_read = false;
+        simulateChipReset();
+    }
 }
 
 void setUp()
@@ -71,7 +82,10 @@ void setUp()
     I2CBus::resetForTest();
     g_now = 0;
     g_olat = 0;
+    g_gppu = 0;
+    g_iodir = 0xFFFF;
     g_seen = 0;
+    g_reset_after_read = false;
 }
 
 // Modules cannot be copied, so make() and makeMatrix() build them in static
@@ -1039,6 +1053,104 @@ void test_failed_read_after_good_olat_write_changes_nothing()
     TEST_ASSERT_EQUAL_UINT8(100, r.pin);
 }
 
+// One matrix tick that keeps the mock's transaction log from filling up.
+static void matrixTick(Mcp23017Module& m, uint8_t gpioA = 0xFF, uint8_t gpioB = 0xFF)
+{
+    resetTransactions();
+    queueNext(m, gpioA, gpioB);
+    tick2(m);
+    syncChip();
+}
+
+// True when the tick just run wrote IOCON, GPPU and IODIR.
+static bool rewroteRegisters()
+{
+    bool iocon = false, gppu = false, iodir = false;
+    for (uint8_t i = 0; i < MockWire::transaction_count; i++) {
+        const MockWire::Transaction& t = MockWire::transactions[i];
+        if (t.length == 2 && t.data[0] == 0x0A) iocon = true;
+        if (t.length == 3 && t.data[0] == 0x0C) gppu = true;
+        if (t.length == 3 && t.data[0] == 0x00) iodir = true;
+    }
+    return iocon && gppu && iodir;
+}
+
+void test_matrix_periodic_rewrite_catches_reset_during_select()
+{
+    Mcp23017Module& m = makeMatrix(0x0003, 0x0100, 3);
+    m.begin();
+    syncChip();
+    const uint16_t iodir = g_iodir;
+    const uint16_t gppu = g_gppu;
+
+    // Reset right after a sample: the select write puts the sentinel back, so
+    // OLAT no longer shows the reset but IODIR and GPPU stay at power-on values.
+    g_reset_after_read = true;
+    matrixTick(m);
+    TEST_ASSERT_EQUAL_HEX16(0xFFFF, g_iodir);
+    TEST_ASSERT_EQUAL_HEX16(0, g_gppu);
+
+    // Worst case: 8 scans of 2 rows, less the tick that took the reset.
+    for (uint8_t i = 0; i < 15; i++) matrixTick(m);
+    TEST_ASSERT_EQUAL_HEX16(iodir, g_iodir);
+    TEST_ASSERT_EQUAL_HEX16(gppu, g_gppu);
+    TEST_ASSERT_EQUAL_UINT8(MODULE_ERROR_NONE, m.takeRuntimeError());
+    TEST_ASSERT_FALSE(m.health().failed());
+}
+
+void test_matrix_periodic_rewrite_keeps_input_state()
+{
+    Mcp23017Module& m = makeMatrix(0x0003, 0x0100, 2, 0x0010);
+    m.begin();
+    // Keys in both rows and the direct pin stay held through two rewrites.
+    uint8_t rewrites = 0;
+    for (uint8_t i = 0; i < 32; i++) {
+        matrixTick(m, 0xEF, 0xFE);
+        if (rewroteRegisters()) rewrites++;
+        if (i == 7) {
+            for (uint8_t n = 0; n < 3; n++) TEST_ASSERT_TRUE(m.getReading().has_value);
+            TEST_ASSERT_FALSE(m.getReading().has_value);
+        }
+    }
+    TEST_ASSERT_EQUAL_UINT8(2, rewrites);
+    TEST_ASSERT_FALSE(m.getReading().has_value);
+    TEST_ASSERT_EQUAL_UINT8(MODULE_ERROR_NONE, m.takeRuntimeError());
+    // The scan restarts at row 0, with row 1 idle high and the sentinel set.
+    TEST_ASSERT_EQUAL_HEX16(0x0006, g_olat);
+}
+
+void test_matrix_periodic_rewrite_failure_takes_failure_path()
+{
+    Mcp23017Module& m = makeMatrix(0x0003, 0x0100, 1);
+    m.begin();
+    for (uint8_t i = 0; i < 15; i++) matrixTick(m);
+
+    MockWire::scheduleNacks(ADDR, 1, 2, 1); // pointer write passes, IOCON NACKs
+    matrixTick(m);
+    TEST_ASSERT_EQUAL_UINT8(1, m.health().failures());
+    TEST_ASSERT_EQUAL_UINT8(MODULE_ERROR_NONE, m.takeRuntimeError());
+
+    // The next tick rewrites everything and does not sample.
+    resetTransactions();
+    MockWire::read_request_count = 0;
+    tick2(m);
+    TEST_ASSERT_EQUAL_UINT8(0, MockWire::read_request_count);
+    TEST_ASSERT_TRUE(rewroteRegisters());
+    matrixTick(m);
+    TEST_ASSERT_EQUAL_UINT8(0, m.health().failures());
+
+    // Repeated failures reach the threshold and report code 1 once.
+    for (uint8_t i = 0; i < 14; i++) matrixTick(m);
+    MockWire::scheduleNacks(ADDR, 1, 2, 1);
+    matrixTick(m);
+    MockWire::scheduleNacks(ADDR, 2);
+    tick2(m);
+    tick2(m);
+    TEST_ASSERT_TRUE(m.health().failed());
+    TEST_ASSERT_EQUAL_UINT8(1, m.takeRuntimeError());
+    TEST_ASSERT_EQUAL_UINT8(MODULE_ERROR_NONE, m.takeRuntimeError());
+}
+
 int main(int, char**)
 {
     UNITY_BEGIN();
@@ -1087,5 +1199,8 @@ int main(int, char**)
     RUN_TEST(test_olat_mismatch_with_failed_reinit_reports_code_1_once_then_2);
     RUN_TEST(test_active_error_is_1_while_failed);
     RUN_TEST(test_failed_read_after_good_olat_write_changes_nothing);
+    RUN_TEST(test_matrix_periodic_rewrite_catches_reset_during_select);
+    RUN_TEST(test_matrix_periodic_rewrite_keeps_input_state);
+    RUN_TEST(test_matrix_periodic_rewrite_failure_takes_failure_path);
     return UNITY_END();
 }

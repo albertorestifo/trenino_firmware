@@ -18,6 +18,7 @@ public:
     static constexpr uint16_t OUTPUT_ONLY_MASK = 0x8080;
     static constexpr unsigned long SAMPLE_INTERVAL_MS = 5; // no matrix
     static constexpr unsigned long MATRIX_ROW_INTERVAL_MS = 2; // one row per tick
+    static constexpr uint8_t REWRITE_INTERVAL_SCANS = 8; // full matrix scans
 
     Mcp23017Module(uint8_t address, uint8_t direct_base, uint8_t matrix_base,
         uint8_t debounce, uint16_t direct_mask, uint16_t row_mask, uint16_t col_mask);
@@ -80,6 +81,7 @@ private:
     uint8_t col_count_;
     uint8_t current_row_; // row index (not bit) to sample next
     bool row_selected_; // OLAT for current_row_ was written; false = retry the write
+    uint8_t scans_since_rewrite_; // full scans since initRegisters()
 };
 
 } // namespace Modules

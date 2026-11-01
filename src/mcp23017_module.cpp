@@ -32,6 +32,7 @@ Mcp23017Module::Mcp23017Module(uint8_t address, uint8_t direct_base, uint8_t mat
     , col_count_(0)
     , current_row_(0)
     , row_selected_(false)
+    , scans_since_rewrite_(0)
 {
     // Lowest bit that is not a row. For a direct-only chip this is bit 0.
     uint16_t bit = 1;
@@ -166,6 +167,7 @@ bool Mcp23017Module::initRegisters()
     uint16_t inputs = (uint16_t) ~(row_mask_ | OUTPUT_ONLY_MASK);
     current_row_ = 0;
     row_selected_ = false;
+    scans_since_rewrite_ = 0;
     uint16_t olat = expectedOlat();
     if (!writeIocon()) return false;
     if (!writeRegisters(REG_OLAT, olat)) return false;
@@ -232,6 +234,12 @@ void Mcp23017Module::scan()
 // on the next tick by rewriting every register (the chip may be mid-reset), not
 // just OLAT, and without sampling, so no row is fed twice. Direct pins are
 // debounced once per full scan.
+//
+// A reset that lands between the sample and the select write is invisible: the
+// select restores OLAT while IODIR and GPPU stay at reset. Every
+// REWRITE_INTERVAL_SCANS full scans all registers are rewritten to bound how
+// long that lasts. Input state is kept and no code is sent; a failed rewrite is
+// handled like a failed select.
 void Mcp23017Module::scanMatrixRow(unsigned long now)
 {
     if (!row_selected_) {
@@ -268,6 +276,10 @@ void Mcp23017Module::scanMatrixRow(unsigned long now)
     if (++current_row_ >= row_count_) {
         current_row_ = 0;
         debounceDirect(pressed);
+        if (++scans_since_rewrite_ >= REWRITE_INTERVAL_SCANS) {
+            if (!initRegisters()) noteFailure(now);
+            return;
+        }
     }
     selectRow(now);
 }
