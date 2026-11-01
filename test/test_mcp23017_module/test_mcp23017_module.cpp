@@ -106,6 +106,7 @@ void test_reads_four_bytes_from_gpioa()
     TEST_ASSERT_EQUAL_UINT8(1, MockWire::transactions[0].length);
     TEST_ASSERT_EQUAL_UINT8(0x12, MockWire::transactions[0].data[0]);
     TEST_ASSERT_EQUAL_UINT8(1, MockWire::read_request_count);
+    TEST_ASSERT_EQUAL_UINT8(4, MockWire::last_request_quantity);
 }
 
 void test_press_reported_after_debounce_samples()
@@ -165,6 +166,27 @@ void test_held_at_boot_reports_press()
     TEST_ASSERT_TRUE(r.has_value);
     TEST_ASSERT_EQUAL_INT16(1, r.value);
     TEST_ASSERT_EQUAL_UINT8(BASE, r.pin);
+}
+
+void test_register_reinit_keeps_held_state()
+{
+    Mcp23017Module m = make(0x0001, 2);
+    m.begin();
+    for (uint8_t i = 0; i < 2; i++) { queueSample(0xFE, 0xFF); tick(m); }
+    TEST_ASSERT_TRUE(m.getReading().has_value); // press reported
+
+    MockWire::transaction_count = 0;
+    TEST_ASSERT_TRUE(m.reinitRegistersForTest());
+    TEST_ASSERT_EQUAL_UINT8(4, MockWire::transaction_count);
+
+    // Still held after reinit: no new event, and the release debounces normally.
+    queueSample(0xFE, 0xFF);
+    tick(m);
+    TEST_ASSERT_FALSE(m.getReading().has_value);
+    for (uint8_t i = 0; i < 2; i++) { queueSample(0xFF, 0xFF); tick(m); }
+    Reading r = m.getReading();
+    TEST_ASSERT_TRUE(r.has_value);
+    TEST_ASSERT_EQUAL_INT16(0, r.value);
 }
 
 void test_pins_outside_mask_ignored()
@@ -309,6 +331,7 @@ int main(int, char**)
     RUN_TEST(test_release_reported);
     RUN_TEST(test_two_pins_change_two_readings);
     RUN_TEST(test_held_at_boot_reports_press);
+    RUN_TEST(test_register_reinit_keeps_held_state);
     RUN_TEST(test_pins_outside_mask_ignored);
     RUN_TEST(test_short_read_counts_as_failure);
     RUN_TEST(test_pointer_write_nack_counts_as_failure);

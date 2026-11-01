@@ -64,6 +64,13 @@ bool Mcp23017Module::begin()
     for (uint8_t i = 0; i < 16; i++) counts_[i] = 0;
     last_sample_ms_ = millis();
 
+    return initRegisters();
+}
+
+// Register writes only: safe to repeat after an outage without disturbing
+// debounced input state.
+bool Mcp23017Module::initRegisters()
+{
     // Order matters: outputs get their idle level before they become outputs.
     uint16_t inputs = (uint16_t) ~(row_mask_ | OUTPUT_ONLY_MASK);
     if (!writeIocon()) return false;

@@ -30,11 +30,13 @@ public:
 #ifdef UNIT_TEST
     const I2CHealth& health() const { return health_; }
     uint16_t sentinelBit() const { return sentinel_; }
+    bool reinitRegistersForTest() { return initRegisters(); }
 #endif
 
 private:
     bool writeRegisters(uint8_t reg, uint16_t value);
     bool writeIocon();
+    bool initRegisters();
     bool sample(uint16_t& gpio, uint8_t olat[2]);
     void debounceDirect(uint16_t gpio);
 

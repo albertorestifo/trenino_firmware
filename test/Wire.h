@@ -12,6 +12,7 @@
 //   MockWire::transactions[i].data[j];
 //   MockWire::queueRead(0x20, bytes, 2);     // next requestFrom(0x20, n) returns these bytes
 //   MockWire::read_request_count;            // number of requestFrom calls
+//   MockWire::last_request_quantity;         // byte count of the latest requestFrom
 //
 // IMPORTANT — single-TU constraint:
 // All mock state (transactions, nack_table, Wire instance) is declared `static`,
@@ -66,6 +67,7 @@ static uint8_t wire_timeout_call_count = 0;
 static ReadQueue read_queues[MAX_READ_QUEUES];
 static uint8_t read_queue_count = 0;
 static uint8_t read_request_count = 0;
+static uint8_t last_request_quantity = 0;
 static uint8_t rx_buffer[MAX_READ_BYTES];
 static uint8_t rx_length = 0;
 static uint8_t rx_pos = 0;
@@ -86,6 +88,7 @@ static inline void reset() {
     current_length = 0;
     read_queue_count = 0;
     read_request_count = 0;
+    last_request_quantity = 0;
     rx_length = 0;
     rx_pos = 0;
 }
@@ -178,6 +181,7 @@ public:
 
     uint8_t requestFrom(uint8_t address, uint8_t quantity) {
         MockWire::read_request_count++;
+        MockWire::last_request_quantity = quantity;
         MockWire::rx_length = 0;
         MockWire::rx_pos = 0;
         for (uint8_t i = 0; i < MockWire::read_queue_count; i++) {
