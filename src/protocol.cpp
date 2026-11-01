@@ -122,6 +122,55 @@ bool IdentityResponse::decode(const uint8_t* buffer, size_t length)
 
 // Configure implementation
 
+namespace {
+
+constexpr uint8_t VIRTUAL_PIN_MIN = 128;
+constexpr uint8_t MCP_DIRECT_BLOCK = 16;
+constexpr uint8_t ADS_BLOCK = 4;
+constexpr uint16_t MCP_NO_INPUT_MASK = 0x8080; // GPA7 and GPB7 are output-only
+
+uint8_t popcount16(uint16_t v)
+{
+    uint8_t n = 0;
+    for (; v; v &= v - 1) n++;
+    return n;
+}
+
+// A used block needs a base from 128 up whose last pin is at most 255.
+bool blockFits(uint8_t base, uint8_t size)
+{
+    return base >= VIRTUAL_PIN_MIN && (uint16_t)base + size <= 256;
+}
+
+} // namespace
+
+bool validMcp23017(const Mcp23017Config& c)
+{
+    if (c.debounce == 0) return false;
+    if (!(c.direct_mask | c.row_mask | c.col_mask)) return false;
+    if ((c.direct_mask & c.row_mask) || (c.direct_mask & c.col_mask) || (c.row_mask & c.col_mask)) return false;
+    if ((c.direct_mask | c.col_mask) & MCP_NO_INPUT_MASK) return false;
+    uint8_t rows = popcount16(c.row_mask);
+    uint8_t cols = popcount16(c.col_mask);
+    if (rows > 8 || cols > 8) return false;
+    if ((rows == 0) != (cols == 0)) return false;
+    if (c.direct_mask && !blockFits(c.direct_base, MCP_DIRECT_BLOCK)) return false;
+    if (rows && !blockFits(c.matrix_base, rows * cols)) return false;
+    return true;
+}
+
+bool validAds1115(const Ads1115Config& c)
+{
+    if (c.channel_mask == 0 || (c.channel_mask & 0xF0)) return false;
+    if (c.gain > 1) return false;
+    if (c.ref_channel != ADS_NO_REFERENCE && (c.ref_channel > 3 || (c.channel_mask & (1 << c.ref_channel)))) return false;
+    if (!blockFits(c.pin_base, ADS_BLOCK)) return false;
+    for (uint8_t i = 0; i < 4; i++) {
+        if ((c.channel_mask & (1 << i)) && (c.sensitivity[i] < 1 || c.sensitivity[i] > 10)) return false;
+    }
+    return true;
+}
+
 size_t Configure::encode(uint8_t* buffer, size_t buffer_size) const
 {
     // Common header: 1 type + 4 config_id + 1 total_parts + 1 part_number + 1 module_type = 8 bytes
@@ -146,6 +195,12 @@ size_t Configure::encode(uint8_t* buffer, size_t buffer_size) const
         break;
     case MODULE_TYPE_HT16K33:
         payload_size = 3; // i2c_address + brightness + num_digits
+        break;
+    case MODULE_TYPE_MCP23017:
+        payload_size = 10;
+        break;
+    case MODULE_TYPE_ADS1115:
+        payload_size = 9;
         break;
     default:
         return 0; // Unknown input type
@@ -200,6 +255,28 @@ size_t Configure::encode(uint8_t* buffer, size_t buffer_size) const
         buffer[offset++] = ht16k33.i2c_address;
         buffer[offset++] = ht16k33.brightness;
         buffer[offset++] = ht16k33.num_digits;
+        break;
+
+    case MODULE_TYPE_MCP23017:
+        buffer[offset++] = mcp23017.i2c_address;
+        buffer[offset++] = mcp23017.direct_base;
+        buffer[offset++] = mcp23017.matrix_base;
+        buffer[offset++] = mcp23017.debounce;
+        buffer[offset++] = mcp23017.direct_mask & 0xFF;
+        buffer[offset++] = mcp23017.direct_mask >> 8;
+        buffer[offset++] = mcp23017.row_mask & 0xFF;
+        buffer[offset++] = mcp23017.row_mask >> 8;
+        buffer[offset++] = mcp23017.col_mask & 0xFF;
+        buffer[offset++] = mcp23017.col_mask >> 8;
+        break;
+
+    case MODULE_TYPE_ADS1115:
+        buffer[offset++] = ads1115.i2c_address;
+        buffer[offset++] = ads1115.pin_base;
+        buffer[offset++] = ads1115.channel_mask;
+        buffer[offset++] = ads1115.gain;
+        buffer[offset++] = ads1115.ref_channel;
+        for (uint8_t i = 0; i < 4; i++) buffer[offset++] = ads1115.sensitivity[i];
         break;
     }
 
@@ -284,6 +361,43 @@ bool Configure::decode(const uint8_t* buffer, size_t length)
         ht16k33.brightness = buffer[offset++];
         ht16k33.num_digits = buffer[offset++];
         break;
+
+    case MODULE_TYPE_MCP23017: {
+        if (length != HEADER_SIZE + 10) {
+            return false;
+        }
+        Mcp23017Config c;
+        c.i2c_address = buffer[offset++];
+        c.direct_base = buffer[offset++];
+        c.matrix_base = buffer[offset++];
+        c.debounce = buffer[offset++];
+        c.direct_mask = (uint16_t)(buffer[offset] | (buffer[offset + 1] << 8));
+        c.row_mask = (uint16_t)(buffer[offset + 2] | (buffer[offset + 3] << 8));
+        c.col_mask = (uint16_t)(buffer[offset + 4] | (buffer[offset + 5] << 8));
+        if (!validMcp23017(c)) {
+            return false;
+        }
+        mcp23017 = c;
+        break;
+    }
+
+    case MODULE_TYPE_ADS1115: {
+        if (length != HEADER_SIZE + 9) {
+            return false;
+        }
+        Ads1115Config c;
+        c.i2c_address = buffer[offset++];
+        c.pin_base = buffer[offset++];
+        c.channel_mask = buffer[offset++];
+        c.gain = buffer[offset++];
+        c.ref_channel = buffer[offset++];
+        for (uint8_t i = 0; i < 4; i++) c.sensitivity[i] = buffer[offset++];
+        if (!validAds1115(c)) {
+            return false;
+        }
+        ads1115 = c;
+        break;
+    }
 
     default:
         return false; // Unknown input type

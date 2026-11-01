@@ -74,6 +74,12 @@ struct ModuleConfig {
             uint8_t brightness;
             uint8_t num_digits;
         } ht16k33;
+
+        // MODULE_TYPE_MCP23017
+        Protocol::Mcp23017Config mcp23017;
+
+        // MODULE_TYPE_ADS1115
+        Protocol::Ads1115Config ads1115;
     };
 
     ModuleConfig()
@@ -83,6 +89,12 @@ struct ModuleConfig {
         analog.sensitivity = 0;
     }
 };
+
+// The I2C input records share the union with the matrix record, so a
+// ModuleConfig keeps its size (and EEPROM records stay below the registration).
+static_assert(sizeof(Protocol::Mcp23017Config) <= sizeof(ModuleConfig::matrix), "mcp23017 must fit the matrix member");
+static_assert(sizeof(Protocol::Ads1115Config) <= sizeof(ModuleConfig::matrix), "ads1115 must fit the matrix member");
+static_assert(sizeof(ModuleConfig) == sizeof(uint8_t) + sizeof(ModuleConfig::matrix), "ModuleConfig must not grow");
 
 // Configuration state
 class ConfigState {
@@ -156,6 +168,14 @@ public:
             modules[cfg.part_number].ht16k33.i2c_address = cfg.ht16k33.i2c_address;
             modules[cfg.part_number].ht16k33.brightness = cfg.ht16k33.brightness;
             modules[cfg.part_number].ht16k33.num_digits = cfg.ht16k33.num_digits;
+            break;
+
+        case Protocol::MODULE_TYPE_MCP23017:
+            modules[cfg.part_number].mcp23017 = cfg.mcp23017;
+            break;
+
+        case Protocol::MODULE_TYPE_ADS1115:
+            modules[cfg.part_number].ads1115 = cfg.ads1115;
             break;
 
         default:

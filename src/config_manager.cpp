@@ -35,6 +35,21 @@ void eeprom_get(int address, T& value)
 #endif
 }
 
+// Little-endian u16, byte by byte so records do not depend on struct layout.
+void eeprom_put_u16(int address, uint16_t value)
+{
+    eeprom_put(address, uint8_t(value & 0xFF));
+    eeprom_put(address + 1, uint8_t(value >> 8));
+}
+
+uint16_t eeprom_get_u16(int address)
+{
+    uint8_t lo, hi;
+    eeprom_get(address, lo);
+    eeprom_get(address + 1, hi);
+    return uint16_t(lo | (hi << 8));
+}
+
 void eeprom_commit()
 {
 #ifdef EEPROM_NEEDS_COMMIT
@@ -231,6 +246,27 @@ void storeToEEPROM(uint32_t config_id, const ModuleConfig* modules, uint8_t num_
             eeprom_put(addr, modules[i].ht16k33.num_digits);
             addr += sizeof(uint8_t);
             break;
+
+        case Protocol::MODULE_TYPE_MCP23017:
+            eeprom_put(addr, modules[i].mcp23017.i2c_address); addr += 1;
+            eeprom_put(addr, modules[i].mcp23017.direct_base); addr += 1;
+            eeprom_put(addr, modules[i].mcp23017.matrix_base); addr += 1;
+            eeprom_put(addr, modules[i].mcp23017.debounce); addr += 1;
+            eeprom_put_u16(addr, modules[i].mcp23017.direct_mask); addr += 2;
+            eeprom_put_u16(addr, modules[i].mcp23017.row_mask); addr += 2;
+            eeprom_put_u16(addr, modules[i].mcp23017.col_mask); addr += 2;
+            break;
+
+        case Protocol::MODULE_TYPE_ADS1115:
+            eeprom_put(addr, modules[i].ads1115.i2c_address); addr += 1;
+            eeprom_put(addr, modules[i].ads1115.pin_base); addr += 1;
+            eeprom_put(addr, modules[i].ads1115.channel_mask); addr += 1;
+            eeprom_put(addr, modules[i].ads1115.gain); addr += 1;
+            eeprom_put(addr, modules[i].ads1115.ref_channel); addr += 1;
+            for (uint8_t c = 0; c < 4; c++) {
+                eeprom_put(addr, modules[i].ads1115.sensitivity[c]); addr += 1;
+            }
+            break;
         }
     }
 
@@ -315,6 +351,37 @@ bool loadFromEEPROM()
             eeprom_get(addr, g_current_modules[i].ht16k33.num_digits);
             addr += sizeof(uint8_t);
             break;
+
+        case Protocol::MODULE_TYPE_MCP23017: {
+            Protocol::Mcp23017Config& m = g_current_modules[i].mcp23017;
+            eeprom_get(addr, m.i2c_address); addr += 1;
+            eeprom_get(addr, m.direct_base); addr += 1;
+            eeprom_get(addr, m.matrix_base); addr += 1;
+            eeprom_get(addr, m.debounce); addr += 1;
+            m.direct_mask = eeprom_get_u16(addr); addr += 2;
+            m.row_mask = eeprom_get_u16(addr); addr += 2;
+            m.col_mask = eeprom_get_u16(addr); addr += 2;
+            if (!Protocol::validMcp23017(m)) {
+                return false;
+            }
+            break;
+        }
+
+        case Protocol::MODULE_TYPE_ADS1115: {
+            Protocol::Ads1115Config& a = g_current_modules[i].ads1115;
+            eeprom_get(addr, a.i2c_address); addr += 1;
+            eeprom_get(addr, a.pin_base); addr += 1;
+            eeprom_get(addr, a.channel_mask); addr += 1;
+            eeprom_get(addr, a.gain); addr += 1;
+            eeprom_get(addr, a.ref_channel); addr += 1;
+            for (uint8_t c = 0; c < 4; c++) {
+                eeprom_get(addr, a.sensitivity[c]); addr += 1;
+            }
+            if (!Protocol::validAds1115(a)) {
+                return false;
+            }
+            break;
+        }
 
         default:
             return false; // Unknown input type

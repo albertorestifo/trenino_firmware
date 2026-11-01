@@ -46,6 +46,8 @@ bool moduleConflicts(const ConfigManager::ModuleConfig& c, uint8_t address) {
             if (busPin(c.matrix.pins[i])) return true;
         return false;
     case Protocol::MODULE_TYPE_HT16K33: return c.ht16k33.i2c_address == address;
+    case Protocol::MODULE_TYPE_MCP23017: return c.mcp23017.i2c_address == address;
+    case Protocol::MODULE_TYPE_ADS1115: return c.ads1115.i2c_address == address;
     default: return false;
     }
 }
@@ -81,6 +83,8 @@ bool conflicts(const Protocol::Configure& cfg) {
         for (uint8_t i = 0; i < Protocol::MAX_MATRIX_PINS; ++i) c.matrix.pins[i] = cfg.matrix.pins[i];
         break;
     case Protocol::MODULE_TYPE_HT16K33: c.ht16k33.i2c_address = cfg.ht16k33.i2c_address; break;
+    case Protocol::MODULE_TYPE_MCP23017: c.mcp23017.i2c_address = cfg.mcp23017.i2c_address; break;
+    case Protocol::MODULE_TYPE_ADS1115: c.ads1115.i2c_address = cfg.ads1115.i2c_address; break;
     default: return false;
     }
     return moduleConflicts(c, address);

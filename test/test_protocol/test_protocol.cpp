@@ -731,6 +731,326 @@ void tearDown(void)
     // Clean up code (runs after each test)
 }
 
+// ---- MCP23017 / ADS1115 configure ----
+
+static Configure validMcp()
+{
+    Configure c;
+    c.config_id = 7;
+    c.total_parts = 1;
+    c.part_number = 0;
+    c.module_type = MODULE_TYPE_MCP23017;
+    c.mcp23017.i2c_address = 0x20;
+    c.mcp23017.direct_base = 128;
+    c.mcp23017.matrix_base = 144;
+    c.mcp23017.debounce = 3;
+    c.mcp23017.direct_mask = 0x0F00;
+    c.mcp23017.row_mask = 0x0003;
+    c.mcp23017.col_mask = 0x001C;
+    return c;
+}
+
+static Configure validAds()
+{
+    Configure c;
+    c.config_id = 8;
+    c.total_parts = 1;
+    c.part_number = 0;
+    c.module_type = MODULE_TYPE_ADS1115;
+    c.ads1115.i2c_address = 0x48;
+    c.ads1115.pin_base = 200;
+    c.ads1115.channel_mask = 0x07;
+    c.ads1115.gain = 1;
+    c.ads1115.ref_channel = 3;
+    c.ads1115.sensitivity[0] = 1;
+    c.ads1115.sensitivity[1] = 5;
+    c.ads1115.sensitivity[2] = 10;
+    c.ads1115.sensitivity[3] = 99; // disabled channel: ignored
+    return c;
+}
+
+// Encode then decode: true when the part survives validation.
+static bool decodes(const Configure& c)
+{
+    uint8_t buf[64];
+    size_t n = c.encode(buf, sizeof(buf));
+    Configure out;
+    return n != 0 && out.decode(buf, n);
+}
+
+void test_mcp_roundtrip_little_endian()
+{
+    Configure c = validMcp();
+    uint8_t buf[64];
+    size_t n = c.encode(buf, sizeof(buf));
+    TEST_ASSERT_EQUAL(18, n);
+    TEST_ASSERT_EQUAL_UINT8(5, buf[7]);
+    TEST_ASSERT_EQUAL_UINT8(0x20, buf[8]);
+    TEST_ASSERT_EQUAL_UINT8(128, buf[9]);
+    TEST_ASSERT_EQUAL_UINT8(144, buf[10]);
+    TEST_ASSERT_EQUAL_UINT8(3, buf[11]);
+    TEST_ASSERT_EQUAL_UINT8(0x00, buf[12]);
+    TEST_ASSERT_EQUAL_UINT8(0x0F, buf[13]);
+    TEST_ASSERT_EQUAL_UINT8(0x03, buf[14]);
+    TEST_ASSERT_EQUAL_UINT8(0x00, buf[15]);
+    TEST_ASSERT_EQUAL_UINT8(0x1C, buf[16]);
+    TEST_ASSERT_EQUAL_UINT8(0x00, buf[17]);
+
+    Configure out;
+    TEST_ASSERT_TRUE(out.decode(buf, n));
+    TEST_ASSERT_EQUAL_UINT8(MODULE_TYPE_MCP23017, out.module_type);
+    TEST_ASSERT_EQUAL_UINT8(0x20, out.mcp23017.i2c_address);
+    TEST_ASSERT_EQUAL_UINT8(128, out.mcp23017.direct_base);
+    TEST_ASSERT_EQUAL_UINT8(144, out.mcp23017.matrix_base);
+    TEST_ASSERT_EQUAL_UINT8(3, out.mcp23017.debounce);
+    TEST_ASSERT_EQUAL_HEX16(0x0F00, out.mcp23017.direct_mask);
+    TEST_ASSERT_EQUAL_HEX16(0x0003, out.mcp23017.row_mask);
+    TEST_ASSERT_EQUAL_HEX16(0x001C, out.mcp23017.col_mask);
+}
+
+void test_mcp_rejects_wrong_length()
+{
+    Configure c = validMcp();
+    uint8_t buf[64];
+    size_t n = c.encode(buf, sizeof(buf));
+    Configure out;
+    TEST_ASSERT_FALSE(out.decode(buf, n - 1));
+    TEST_ASSERT_FALSE(out.decode(buf, n + 1));
+}
+
+void test_mcp_direct_only_ok()
+{
+    Configure c = validMcp();
+    c.mcp23017.matrix_base = 0;
+    c.mcp23017.row_mask = 0;
+    c.mcp23017.col_mask = 0;
+    TEST_ASSERT_TRUE(decodes(c));
+}
+
+void test_mcp_matrix_only_ok()
+{
+    Configure c = validMcp();
+    c.mcp23017.direct_base = 0;
+    c.mcp23017.direct_mask = 0;
+    TEST_ASSERT_TRUE(decodes(c));
+}
+
+void test_mcp_rejects_no_enabled_pins()
+{
+    Configure c = validMcp();
+    c.mcp23017.direct_base = 0;
+    c.mcp23017.matrix_base = 0;
+    c.mcp23017.direct_mask = 0;
+    c.mcp23017.row_mask = 0;
+    c.mcp23017.col_mask = 0;
+    TEST_ASSERT_FALSE(decodes(c));
+}
+
+void test_mcp_rejects_overlapping_masks()
+{
+    Configure c = validMcp();
+    c.mcp23017.row_mask = 0x0003;
+    c.mcp23017.col_mask = 0x0006;
+    TEST_ASSERT_FALSE(decodes(c));
+    c = validMcp();
+    c.mcp23017.direct_mask = 0x0F01; // overlaps row bit 0
+    TEST_ASSERT_FALSE(decodes(c));
+    c = validMcp();
+    c.mcp23017.direct_mask = 0x0F04; // overlaps col bit 2
+    TEST_ASSERT_FALSE(decodes(c));
+}
+
+void test_mcp_rejects_gpa7_input()
+{
+    Configure c = validMcp();
+    c.mcp23017.direct_mask = 0x0080;
+    TEST_ASSERT_FALSE(decodes(c));
+    c = validMcp();
+    c.mcp23017.direct_mask = 0x8000; // GPB7
+    TEST_ASSERT_FALSE(decodes(c));
+}
+
+void test_mcp_rejects_gpb7_column()
+{
+    Configure c = validMcp();
+    c.mcp23017.col_mask = 0x8000;
+    TEST_ASSERT_FALSE(decodes(c));
+    c = validMcp();
+    c.mcp23017.col_mask = 0x0080;
+    TEST_ASSERT_FALSE(decodes(c));
+}
+
+void test_mcp_allows_gpa7_gpb7_rows()
+{
+    Configure c = validMcp();
+    c.mcp23017.row_mask = 0x8080;
+    c.mcp23017.col_mask = 0x0003;
+    c.mcp23017.direct_mask = 0x0F00;
+    TEST_ASSERT_TRUE(decodes(c));
+}
+
+void test_mcp_rejects_nine_rows()
+{
+    Configure c = validMcp();
+    c.mcp23017.direct_base = 0;
+    c.mcp23017.direct_mask = 0;
+    c.mcp23017.row_mask = 0x01FF;
+    c.mcp23017.col_mask = 0x0200;
+    TEST_ASSERT_FALSE(decodes(c));
+}
+
+void test_mcp_rejects_rows_without_cols()
+{
+    Configure c = validMcp();
+    c.mcp23017.col_mask = 0;
+    TEST_ASSERT_FALSE(decodes(c));
+    c = validMcp();
+    c.mcp23017.row_mask = 0;
+    TEST_ASSERT_FALSE(decodes(c));
+}
+
+void test_mcp_rejects_zero_base_for_used_block()
+{
+    Configure c = validMcp();
+    c.mcp23017.direct_base = 0;
+    TEST_ASSERT_FALSE(decodes(c));
+    c = validMcp();
+    c.mcp23017.matrix_base = 0;
+    TEST_ASSERT_FALSE(decodes(c));
+}
+
+void test_mcp_rejects_block_past_255()
+{
+    Configure c = validMcp();
+    c.mcp23017.direct_base = 241; // 16 pins: 241..256
+    TEST_ASSERT_FALSE(decodes(c));
+    c.mcp23017.direct_base = 240; // 240..255
+    TEST_ASSERT_TRUE(decodes(c));
+
+    c = validMcp(); // 2 rows x 3 cols = 6
+    c.mcp23017.matrix_base = 251; // 251..256
+    TEST_ASSERT_FALSE(decodes(c));
+    c.mcp23017.matrix_base = 250; // 250..255
+    TEST_ASSERT_TRUE(decodes(c));
+}
+
+void test_mcp_rejects_base_below_128()
+{
+    Configure c = validMcp();
+    c.mcp23017.direct_base = 127;
+    TEST_ASSERT_FALSE(decodes(c));
+    c = validMcp();
+    c.mcp23017.matrix_base = 127;
+    TEST_ASSERT_FALSE(decodes(c));
+}
+
+void test_mcp_rejects_debounce_zero()
+{
+    Configure c = validMcp();
+    c.mcp23017.debounce = 0;
+    TEST_ASSERT_FALSE(decodes(c));
+}
+
+void test_ads_roundtrip()
+{
+    Configure c = validAds();
+    uint8_t buf[64];
+    size_t n = c.encode(buf, sizeof(buf));
+    TEST_ASSERT_EQUAL(17, n);
+    TEST_ASSERT_EQUAL_UINT8(6, buf[7]);
+    TEST_ASSERT_EQUAL_UINT8(0x48, buf[8]);
+    TEST_ASSERT_EQUAL_UINT8(200, buf[9]);
+    TEST_ASSERT_EQUAL_UINT8(0x07, buf[10]);
+    TEST_ASSERT_EQUAL_UINT8(1, buf[11]);
+    TEST_ASSERT_EQUAL_UINT8(3, buf[12]);
+    TEST_ASSERT_EQUAL_UINT8(10, buf[15]);
+
+    Configure out;
+    TEST_ASSERT_TRUE(out.decode(buf, n));
+    TEST_ASSERT_EQUAL_UINT8(MODULE_TYPE_ADS1115, out.module_type);
+    TEST_ASSERT_EQUAL_UINT8(0x48, out.ads1115.i2c_address);
+    TEST_ASSERT_EQUAL_UINT8(200, out.ads1115.pin_base);
+    TEST_ASSERT_EQUAL_UINT8(0x07, out.ads1115.channel_mask);
+    TEST_ASSERT_EQUAL_UINT8(1, out.ads1115.gain);
+    TEST_ASSERT_EQUAL_UINT8(3, out.ads1115.ref_channel);
+    TEST_ASSERT_EQUAL_UINT8(5, out.ads1115.sensitivity[1]);
+    TEST_ASSERT_FALSE(out.decode(buf, n - 1));
+    TEST_ASSERT_FALSE(out.decode(buf, n + 1));
+}
+
+void test_ads_rejects_gain_2()
+{
+    Configure c = validAds();
+    c.ads1115.gain = 2;
+    TEST_ASSERT_FALSE(decodes(c));
+    c.ads1115.gain = 0;
+    TEST_ASSERT_TRUE(decodes(c));
+}
+
+void test_ads_rejects_ref_in_channel_mask()
+{
+    Configure c = validAds();
+    c.ads1115.ref_channel = 1;
+    TEST_ASSERT_FALSE(decodes(c));
+}
+
+void test_ads_rejects_ref_4()
+{
+    Configure c = validAds();
+    c.ads1115.ref_channel = 4;
+    TEST_ASSERT_FALSE(decodes(c));
+}
+
+void test_ads_accepts_no_ref()
+{
+    Configure c = validAds();
+    c.ads1115.ref_channel = ADS_NO_REFERENCE;
+    TEST_ASSERT_TRUE(decodes(c));
+}
+
+void test_ads_rejects_mask_bits_above_3()
+{
+    Configure c = validAds();
+    c.ads1115.channel_mask = 0x17;
+    TEST_ASSERT_FALSE(decodes(c));
+}
+
+void test_ads_rejects_empty_channel_mask()
+{
+    Configure c = validAds();
+    c.ads1115.channel_mask = 0;
+    TEST_ASSERT_FALSE(decodes(c));
+}
+
+void test_ads_rejects_block_past_255()
+{
+    Configure c = validAds();
+    c.ads1115.pin_base = 253; // 253..256
+    TEST_ASSERT_FALSE(decodes(c));
+    c.ads1115.pin_base = 252; // 252..255
+    TEST_ASSERT_TRUE(decodes(c));
+    c.ads1115.pin_base = 0;
+    TEST_ASSERT_FALSE(decodes(c));
+    c.ads1115.pin_base = 127;
+    TEST_ASSERT_FALSE(decodes(c));
+}
+
+void test_ads_rejects_sensitivity_11_on_enabled_channel()
+{
+    Configure c = validAds();
+    c.ads1115.sensitivity[2] = 11;
+    TEST_ASSERT_FALSE(decodes(c));
+    c = validAds();
+    c.ads1115.sensitivity[0] = 0;
+    TEST_ASSERT_FALSE(decodes(c));
+}
+
+void test_i2c_union_members_fit_matrix()
+{
+    TEST_ASSERT_TRUE(sizeof(Mcp23017Config) <= 18);
+    TEST_ASSERT_TRUE(sizeof(Ads1115Config) <= 18);
+}
+
 int main(int argc, char** argv)
 {
     UNITY_BEGIN();
@@ -795,6 +1115,32 @@ int main(int argc, char** argv)
 
     // Error handling tests
     RUN_TEST(test_encode_buffer_too_small);
+
+    RUN_TEST(test_mcp_roundtrip_little_endian);
+    RUN_TEST(test_mcp_rejects_wrong_length);
+    RUN_TEST(test_mcp_direct_only_ok);
+    RUN_TEST(test_mcp_matrix_only_ok);
+    RUN_TEST(test_mcp_rejects_no_enabled_pins);
+    RUN_TEST(test_mcp_rejects_overlapping_masks);
+    RUN_TEST(test_mcp_rejects_gpa7_input);
+    RUN_TEST(test_mcp_rejects_gpb7_column);
+    RUN_TEST(test_mcp_allows_gpa7_gpb7_rows);
+    RUN_TEST(test_mcp_rejects_nine_rows);
+    RUN_TEST(test_mcp_rejects_rows_without_cols);
+    RUN_TEST(test_mcp_rejects_zero_base_for_used_block);
+    RUN_TEST(test_mcp_rejects_block_past_255);
+    RUN_TEST(test_mcp_rejects_base_below_128);
+    RUN_TEST(test_mcp_rejects_debounce_zero);
+    RUN_TEST(test_ads_roundtrip);
+    RUN_TEST(test_ads_rejects_gain_2);
+    RUN_TEST(test_ads_rejects_ref_in_channel_mask);
+    RUN_TEST(test_ads_rejects_ref_4);
+    RUN_TEST(test_ads_accepts_no_ref);
+    RUN_TEST(test_ads_rejects_mask_bits_above_3);
+    RUN_TEST(test_ads_rejects_empty_channel_mask);
+    RUN_TEST(test_ads_rejects_block_past_255);
+    RUN_TEST(test_ads_rejects_sensitivity_11_on_enabled_channel);
+    RUN_TEST(test_i2c_union_members_fit_matrix);
 
     return UNITY_END();
 }
