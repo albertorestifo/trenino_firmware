@@ -21,6 +21,25 @@ void begin()
     g_initialized = true;
 }
 
+bool write(uint8_t address, const uint8_t* bytes, uint8_t count)
+{
+    Wire.beginTransmission(address);
+    Wire.write(bytes, count);
+    return Wire.endTransmission() == 0;
+}
+
+bool readRegisters(uint8_t address, uint8_t reg, uint8_t* out, uint8_t count)
+{
+    if (!write(address, &reg, 1)) return false;
+    if (Wire.requestFrom(address, count) != count) return false;
+    for (uint8_t i = 0; i < count; i++) {
+        int v = Wire.read();
+        if (v < 0) return false;
+        out[i] = (uint8_t)v;
+    }
+    return true;
+}
+
 #ifdef UNIT_TEST
 void resetForTest() { g_initialized = false; }
 #endif

@@ -8,8 +8,8 @@
 namespace Stepper {
 namespace {
 bool reg(uint8_t address, uint8_t index, uint8_t value) {
-    Wire.beginTransmission(address); Wire.write(index); Wire.write(value);
-    return Wire.endTransmission() == 0;
+    const uint8_t bytes[2] = {index, value};
+    return I2CBus::write(address, bytes, sizeof(bytes));
 }
 }
 bool ShieldDriver::shutdown(uint8_t address) {

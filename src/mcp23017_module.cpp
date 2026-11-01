@@ -1,7 +1,6 @@
 #include "mcp23017_module.h"
 #include "i2c_bus.h"
 #include <Arduino.h>
-#include <Wire.h>
 
 namespace Modules {
 
@@ -88,19 +87,14 @@ uint16_t Mcp23017Module::nthSetBit(uint16_t mask, uint8_t n)
 
 bool Mcp23017Module::writeRegisters(uint8_t reg, uint16_t value)
 {
-    Wire.beginTransmission(address_);
-    Wire.write(reg);
-    Wire.write((uint8_t)(value & 0xFF));
-    Wire.write((uint8_t)(value >> 8));
-    return Wire.endTransmission() == 0;
+    const uint8_t bytes[3] = { reg, (uint8_t)(value & 0xFF), (uint8_t)(value >> 8) };
+    return I2CBus::write(address_, bytes, sizeof(bytes));
 }
 
 bool Mcp23017Module::writeIocon()
 {
-    Wire.beginTransmission(address_);
-    Wire.write(REG_IOCON);
-    Wire.write((uint8_t)0);
-    return Wire.endTransmission() == 0;
+    const uint8_t bytes[2] = { REG_IOCON, 0 };
+    return I2CBus::write(address_, bytes, sizeof(bytes));
 }
 
 bool Mcp23017Module::begin()
@@ -208,16 +202,8 @@ bool Mcp23017Module::initRegisters()
 
 bool Mcp23017Module::sample(uint16_t& gpio, uint8_t olat[2])
 {
-    Wire.beginTransmission(address_);
-    Wire.write(REG_GPIO);
-    if (Wire.endTransmission() != 0) return false;
-    if (Wire.requestFrom(address_, SAMPLE_BYTES) != SAMPLE_BYTES) return false;
     uint8_t b[SAMPLE_BYTES];
-    for (uint8_t i = 0; i < SAMPLE_BYTES; i++) {
-        int v = Wire.read();
-        if (v < 0) return false;
-        b[i] = (uint8_t)v;
-    }
+    if (!I2CBus::readRegisters(address_, REG_GPIO, b, SAMPLE_BYTES)) return false;
     gpio = (uint16_t)(b[0] | (b[1] << 8));
     olat[0] = b[2];
     olat[1] = b[3];

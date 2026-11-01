@@ -2,7 +2,6 @@
 #include "i2c_bus.h"
 #include "protocol.h"
 #include <Arduino.h>
-#include <Wire.h>
 
 namespace Modules {
 
@@ -67,23 +66,15 @@ uint16_t Ads1115Module::configWord(uint8_t channel) const
 
 bool Ads1115Module::writeConfig(uint16_t word)
 {
-    Wire.beginTransmission(address_);
-    Wire.write(REG_CONFIG);
-    Wire.write((uint8_t)(word >> 8));
-    Wire.write((uint8_t)(word & 0xFF));
-    return Wire.endTransmission() == 0;
+    const uint8_t bytes[3] = { REG_CONFIG, (uint8_t)(word >> 8), (uint8_t)(word & 0xFF) };
+    return I2CBus::write(address_, bytes, sizeof(bytes));
 }
 
 bool Ads1115Module::readRegister(uint8_t reg, uint16_t& value)
 {
-    Wire.beginTransmission(address_);
-    Wire.write(reg);
-    if (Wire.endTransmission() != 0) return false;
-    if (Wire.requestFrom(address_, (uint8_t)2) != 2) return false;
-    int hi = Wire.read();
-    int lo = Wire.read();
-    if (hi < 0 || lo < 0) return false;
-    value = (uint16_t)(((uint16_t)hi << 8) | (uint16_t)lo);
+    uint8_t bytes[2];
+    if (!I2CBus::readRegisters(address_, reg, bytes, sizeof(bytes))) return false;
+    value = (uint16_t)(((uint16_t)bytes[0] << 8) | bytes[1]);
     return true;
 }
 

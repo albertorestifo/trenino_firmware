@@ -20,26 +20,13 @@ HT16K33Module::HT16K33Module(uint8_t i2c_address, uint8_t brightness, uint8_t nu
 
 bool HT16K33Module::runInitSequence()
 {
-    Wire.beginTransmission(i2c_address_);
-    Wire.write((uint8_t)0x21);
-    if (Wire.endTransmission() != 0) return false;
-
-    Wire.beginTransmission(i2c_address_);
-    Wire.write((uint8_t)0x81);
-    if (Wire.endTransmission() != 0) return false;
-
-    Wire.beginTransmission(i2c_address_);
-    Wire.write((uint8_t)(0xE0 | (cached_brightness_ & 0x0F)));
-    if (Wire.endTransmission() != 0) return false;
-
-    Wire.beginTransmission(i2c_address_);
-    Wire.write((uint8_t)0x00);
-    for (uint8_t i = 0; i < 16; i++) {
-        Wire.write((uint8_t)0x00);
+    const uint8_t commands[3] = { 0x21, 0x81, (uint8_t)(0xE0 | (cached_brightness_ & 0x0F)) };
+    for (uint8_t i = 0; i < sizeof(commands); i++) {
+        if (!I2CBus::write(i2c_address_, &commands[i], 1)) return false;
     }
-    if (Wire.endTransmission() != 0) return false;
 
-    return true;
+    const uint8_t clear[17] = { 0 }; // register 0x00, then 16 bytes of display RAM
+    return I2CBus::write(i2c_address_, clear, sizeof(clear));
 }
 
 bool HT16K33Module::begin()
@@ -76,19 +63,12 @@ bool HT16K33Module::writeWithRetry(const uint8_t* data, uint8_t length)
         needs_reinit_ = false;
     }
 
-    Wire.beginTransmission(i2c_address_);
-    Wire.write(data, length);
-    if (Wire.endTransmission() == 0) {
-        failure_count_ = 0;
-        return true;
-    }
-
-    delay(1);
-    Wire.beginTransmission(i2c_address_);
-    Wire.write(data, length);
-    if (Wire.endTransmission() == 0) {
-        failure_count_ = 0;
-        return true;
+    for (uint8_t attempt = 0; attempt < 2; attempt++) {
+        if (attempt > 0) delay(1);
+        if (I2CBus::write(i2c_address_, data, length)) {
+            failure_count_ = 0;
+            return true;
+        }
     }
 
     failure_count_++;
