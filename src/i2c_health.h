@@ -39,6 +39,14 @@ public:
         return was_failed;
     }
 
+    // Enters the failed state at once (a failed begin()); no code is queued.
+    void markFailed(unsigned long now)
+    {
+        failures_ = FAILURE_THRESHOLD;
+        failed_ = true;
+        last_attempt_ = now;
+    }
+
     bool failed() const { return failed_; }
 
     // True once per RETRY_INTERVAL_MS while failed.

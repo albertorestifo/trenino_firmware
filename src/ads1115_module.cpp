@@ -119,7 +119,7 @@ bool Ads1115Module::begin()
 
 void Ads1115Module::markFailed(unsigned long now)
 {
-    for (uint8_t i = 0; i < I2CHealth::FAILURE_THRESHOLD; i++) health_.noteFailure(now);
+    health_.markFailed(now);
     state_ = State::IDLE;
     clearFresh();
 }
@@ -147,8 +147,12 @@ void Ads1115Module::recover(unsigned long now)
     if (writeConfig((uint16_t)(configWord(0) & ~OS_BIT))) {
         health_.noteSuccess();
         health_.push(2);
+        if (ref_lost_) health_.push(3); // code 2 clears the host's error; the reference is still gone
         state_ = State::IDLE;
         retry_wait_ = false;
+        // Values and last-sent state are kept; the silent outage must not make
+        // the first sample after it count as 100 ms overdue.
+        for (uint8_t i = 0; i < CHANNELS; i++) last_send_ms_[i] = now;
     } else {
         health_.noteFailure(now); // restarts the retry timer
     }
@@ -211,7 +215,14 @@ void Ads1115Module::finishConversion(unsigned long now)
         return;
     }
     if ((cfg & CONFIG_CHECK_MASK) != (configWord(channel_) & CONFIG_CHECK_MASK)) {
-        health_.noteSuccess();
+        // A mismatch is a failure: repeated resets (or another device answering
+        // at this address) must reach the threshold, not loop through 1/2 pairs.
+        if (health_.noteFailure(now)) {
+            health_.push(1);
+            clearFresh();
+            state_ = State::IDLE;
+            return;
+        }
         handleReset(now);
         return;
     }
@@ -239,6 +250,7 @@ void Ads1115Module::handleReset(unsigned long now)
     clearFresh();
     if (writeConfig(configWord(channel_))) {
         health_.push(2);
+        if (ref_lost_) health_.push(3);
         start_ms_ = now;
     } else {
         markFailed(now); // code 1 already queued; recovers through the retry

@@ -365,10 +365,12 @@ void test_recovery_reports_code_2()
     TEST_ASSERT_EQUAL_UINT8(2, m.takeRuntimeError());
     TEST_ASSERT_EQUAL_UINT8(MODULE_ERROR_NONE, m.activeError());
 
-    // Channel state survives: a still lever reports again once 100 ms passed.
-    // (last sent 50, same value, last send long ago)
-    cycle(m, 0, 1600);
-    TEST_ASSERT_EQUAL_INT16(50, m.getReading().value);
+    // Channel state survives: last sent 50, so 51 is inside the dead zone and,
+    // the 100 ms timers restart on recovery, so nothing is sent.
+    cycle(m, 0, 51 << 5);
+    TEST_ASSERT_FALSE(m.getReading().has_value);
+    cycle(m, 0, 54 << 5); // outside the dead zone: sent
+    TEST_ASSERT_EQUAL_INT16(54, m.getReading().value);
 }
 
 void test_absent_at_boot_then_connected_recovers()
@@ -426,6 +428,116 @@ void test_config_mismatch_discards_conversion()
     TEST_ASSERT_EQUAL_INT16(50, r.value);
 }
 
+static void drainCodes(Ads1115Module& m, uint8_t* out, uint8_t& n)
+{
+    n = 0;
+    for (uint8_t c = m.takeRuntimeError(); c != MODULE_ERROR_NONE && n < 8; c = m.takeRuntimeError()) out[n++] = c;
+}
+
+void test_recovery_with_reference_lost_ends_on_code_3()
+{
+    Ads1115Module m = withRef(0x01);
+    m.begin();
+    seedRef(m);
+    cycle(m, 0, 0);
+    cycle(m, 3, 100); // reference lost
+    TEST_ASSERT_EQUAL_UINT8(3, m.takeRuntimeError());
+    MockWire::scheduleNacks(ADDR, 3);
+    for (int i = 0; i < 3; i++) {
+        g_now += 5;
+        m.scan();
+    }
+    TEST_ASSERT_EQUAL_UINT8(1, m.takeRuntimeError());
+    g_now += 1000;
+    m.scan();
+    TEST_ASSERT_EQUAL_UINT8(2, m.takeRuntimeError());
+    TEST_ASSERT_EQUAL_UINT8(3, m.takeRuntimeError());
+    TEST_ASSERT_EQUAL_UINT8(MODULE_ERROR_NONE, m.takeRuntimeError());
+    TEST_ASSERT_EQUAL_UINT8(3, m.activeError());
+    TEST_ASSERT_FALSE(m.getReading().has_value);
+    cycle(m, 3, 100); // still gone: values stay stopped
+    TEST_ASSERT_FALSE(m.getReading().has_value);
+    TEST_ASSERT_EQUAL_UINT8(MODULE_ERROR_NONE, m.takeRuntimeError());
+}
+
+void test_reset_with_reference_lost_ends_on_code_3()
+{
+    Ads1115Module m = withRef(0x01);
+    m.begin();
+    seedRef(m);
+    cycle(m, 0, 0);
+    cycle(m, 3, 100);
+    TEST_ASSERT_EQUAL_UINT8(3, m.takeRuntimeError());
+    m.scan(); // starts the reference conversion
+    g_now += 5;
+    const uint8_t reset_cfg[2] = { 0x85, 0x83 };
+    MockWire::queueRead(ADDR, reset_cfg, 2);
+    m.scan();
+    TEST_ASSERT_EQUAL_UINT8(1, m.takeRuntimeError());
+    TEST_ASSERT_EQUAL_UINT8(2, m.takeRuntimeError());
+    TEST_ASSERT_EQUAL_UINT8(3, m.takeRuntimeError());
+    TEST_ASSERT_EQUAL_UINT8(MODULE_ERROR_NONE, m.takeRuntimeError());
+    TEST_ASSERT_EQUAL_UINT8(3, m.activeError());
+    TEST_ASSERT_FALSE(m.getReading().has_value);
+}
+
+void test_repeated_config_mismatch_reaches_failed_state()
+{
+    Ads1115Module m = plain(0x01);
+    m.begin();
+    m.scan();
+    const uint8_t reset_cfg[2] = { 0x85, 0x83 };
+    uint8_t codes[8];
+    uint8_t n;
+    for (int i = 0; i < 2; i++) {
+        g_now += 5;
+        MockWire::queueRead(ADDR, reset_cfg, 2);
+        m.scan();
+        drainCodes(m, codes, n);
+        TEST_ASSERT_EQUAL_UINT8(2, n); // a single mismatch: code 1 then 2
+        TEST_ASSERT_EQUAL_UINT8(1, codes[0]);
+        TEST_ASSERT_EQUAL_UINT8(2, codes[1]);
+        TEST_ASSERT_FALSE(m.health().failed());
+    }
+    g_now += 5;
+    MockWire::queueRead(ADDR, reset_cfg, 2);
+    m.scan();
+    drainCodes(m, codes, n);
+    TEST_ASSERT_EQUAL_UINT8(1, n);
+    TEST_ASSERT_EQUAL_UINT8(1, codes[0]);
+    TEST_ASSERT_TRUE(m.health().failed());
+    TEST_ASSERT_EQUAL_UINT8(1, m.activeError());
+    TEST_ASSERT_FALSE(m.getReading().has_value);
+
+    uint8_t before = MockWire::transaction_count;
+    g_now += 500;
+    m.scan();
+    TEST_ASSERT_EQUAL_UINT8(before, MockWire::transaction_count);
+    g_now += 500;
+    m.scan();
+    TEST_ASSERT_EQUAL_UINT8(before + 1, MockWire::transaction_count);
+    TEST_ASSERT_EQUAL_UINT8(2, m.takeRuntimeError());
+}
+
+void test_good_conversion_clears_mismatch_count()
+{
+    Ads1115Module m = plain(0x01);
+    m.begin();
+    m.scan();
+    g_now += 5;
+    const uint8_t reset_cfg[2] = { 0x85, 0x83 };
+    MockWire::queueRead(ADDR, reset_cfg, 2);
+    m.scan();
+    TEST_ASSERT_EQUAL_UINT8(1, m.health().failures());
+    g_now += 5;
+    const uint8_t cfg[2] = { 0xC1, 0xA3 };
+    const uint8_t res[2] = { 0x06, 0x40 };
+    MockWire::queueRead(ADDR, cfg, 2);
+    MockWire::queueRead(ADDR, res, 2);
+    m.scan();
+    TEST_ASSERT_EQUAL_UINT8(0, m.health().failures());
+}
+
 void test_identity_accessors()
 {
     Ads1115Module m = plain(0x01);
@@ -459,6 +571,10 @@ int main()
     RUN_TEST(test_recovery_reports_code_2);
     RUN_TEST(test_absent_at_boot_then_connected_recovers);
     RUN_TEST(test_config_mismatch_discards_conversion);
+    RUN_TEST(test_recovery_with_reference_lost_ends_on_code_3);
+    RUN_TEST(test_reset_with_reference_lost_ends_on_code_3);
+    RUN_TEST(test_repeated_config_mismatch_reaches_failed_state);
+    RUN_TEST(test_good_conversion_clears_mismatch_count);
     RUN_TEST(test_identity_accessors);
     return UNITY_END();
 }

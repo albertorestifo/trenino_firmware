@@ -601,6 +601,39 @@ void test_reset_during_failed_select_is_not_hidden()
     TEST_ASSERT_FALSE(m.getReading().has_value);
 }
 
+void test_repeated_olat_mismatch_reaches_failed_state()
+{
+    Mcp23017Module m = make(0x0003);
+    m.begin();
+    const uint8_t bad[4] = { 0xFF, 0xFF, 0x77, 0x77 }; // not what was written
+    for (int i = 0; i < 2; i++) {
+        MockWire::queueRead(ADDR, bad, 4);
+        tick(m);
+        TEST_ASSERT_EQUAL_UINT8(1, m.takeRuntimeError()); // a single mismatch: 1 then 2
+        TEST_ASSERT_EQUAL_UINT8(2, m.takeRuntimeError());
+        TEST_ASSERT_EQUAL_UINT8(MODULE_ERROR_NONE, m.takeRuntimeError());
+        TEST_ASSERT_FALSE(m.health().failed());
+    }
+    resetTransactions();
+    MockWire::queueRead(ADDR, bad, 4);
+    tick(m);
+    TEST_ASSERT_TRUE(m.health().failed());
+    TEST_ASSERT_EQUAL_UINT8(1, m.takeRuntimeError());
+    TEST_ASSERT_EQUAL_UINT8(MODULE_ERROR_NONE, m.takeRuntimeError());
+    TEST_ASSERT_EQUAL_UINT8(1, m.activeError());
+    TEST_ASSERT_EQUAL_UINT8(1, MockWire::transaction_count); // no reinit; just the sample pointer write
+
+    // No polling while failed; the normal retry reinitializes and reports 2.
+    resetTransactions();
+    g_now += 500;
+    m.scan();
+    TEST_ASSERT_EQUAL_UINT8(0, MockWire::transaction_count);
+    g_now += 500;
+    m.scan();
+    TEST_ASSERT_EQUAL_UINT8(4, MockWire::transaction_count);
+    TEST_ASSERT_EQUAL_UINT8(2, m.takeRuntimeError());
+}
+
 void test_matrix_reset_detected_with_no_failed_transaction()
 {
     Mcp23017Module m = makeMatrix(0x0003, 0x0100, 1);
@@ -1002,6 +1035,7 @@ int main(int, char**)
     RUN_TEST(test_matrix_select_write_failure_retries_without_feeding_twice);
     RUN_TEST(test_failing_select_retries_reach_the_threshold);
     RUN_TEST(test_reset_during_failed_select_is_not_hidden);
+    RUN_TEST(test_repeated_olat_mismatch_reaches_failed_state);
     RUN_TEST(test_matrix_reset_detected_with_no_failed_transaction);
     RUN_TEST(test_matrix_held_key_stays_held_through_outage);
     RUN_TEST(test_matrix_key_released_during_outage_reports_release);

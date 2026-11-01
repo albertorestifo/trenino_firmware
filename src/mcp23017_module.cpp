@@ -141,7 +141,7 @@ bool Mcp23017Module::ensureMatrix()
 
 void Mcp23017Module::markFailed(unsigned long now)
 {
-    for (uint8_t i = 0; i < I2CHealth::FAILURE_THRESHOLD; i++) health_.noteFailure(now);
+    health_.markFailed(now);
 }
 
 uint16_t Mcp23017Module::expectedOlat() const
@@ -248,11 +248,17 @@ void Mcp23017Module::scan()
         noteFailure(now);
         return;
     }
-    health_.noteSuccess();
     if (!olatMatches(olat)) {
-        handleReset(now);
+        // A mismatch counts as a failure so that repeated resets reach the
+        // threshold; only a good sample clears the count.
+        if (health_.noteFailure(now)) {
+            health_.push(1);
+        } else {
+            handleReset(now);
+        }
         return;
     }
+    health_.noteSuccess();
 
     debounceDirect(~gpio); // pull-ups: pressed = low
 }
@@ -279,11 +285,17 @@ void Mcp23017Module::scanMatrixRow(unsigned long now)
         noteFailure(now);
         return;
     }
-    health_.noteSuccess();
     if (!olatMatches(olat)) {
-        handleReset(now);
+        // A mismatch counts as a failure so that repeated resets reach the
+        // threshold; only a good sample clears the count.
+        if (health_.noteFailure(now)) {
+            health_.push(1);
+        } else {
+            handleReset(now);
+        }
         return;
     }
+    health_.noteSuccess();
 
     uint16_t pressed = ~gpio; // pull-ups: pressed = low
     for (uint8_t c = 0; c < col_count_; c++) {
