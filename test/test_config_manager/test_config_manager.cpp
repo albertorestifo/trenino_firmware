@@ -292,6 +292,19 @@ void test_eeprom_loads_3_1_0_record()
     TEST_ASSERT_EQUAL_UINT8(4, l[3].ht16k33.num_digits);
 }
 
+void test_eeprom_rejects_wrapped_matrix_pin_count()
+{
+    const uint8_t record[] = {
+        0x34, 0x12, 0xFF, 0xC0,       // magic 0xC0FF1234 LE
+        EEPROM_FORMAT_VERSION,
+        0x2A, 0x00, 0x00, 0x00,       // config_id 42
+        1,                            // inputs
+        2, 250, 10, 6, 7, 8, 9,       // matrix 250 + 10 pins wraps to 4
+    };
+    for (size_t i = 0; i < sizeof(record); i++) mock_eeprom_storage[i] = record[i];
+    TEST_ASSERT_FALSE(ConfigManager::loadFromEEPROM());
+}
+
 void test_max_records_stay_below_shield_registration()
 {
     ConfigManager::ModuleConfig m[ConfigManager::MAX_MODULES];
@@ -324,6 +337,7 @@ int main()
     RUN_TEST(test_eeprom_round_trip_mcp23017);
     RUN_TEST(test_eeprom_round_trip_ads1115);
     RUN_TEST(test_eeprom_loads_3_1_0_record);
+    RUN_TEST(test_eeprom_rejects_wrapped_matrix_pin_count);
     RUN_TEST(test_max_records_stay_below_shield_registration);
 
     return UNITY_END();

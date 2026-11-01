@@ -342,18 +342,18 @@ bool Configure::decode(const uint8_t* buffer, size_t length)
     }
 
     // The matrix payload length depends on its own first two bytes.
-    uint8_t total_pins = 0;
+    uint16_t total_pins = 0;
     if (module_type == MODULE_TYPE_MATRIX) {
         if (length < HEADER_SIZE + 2) {
             return false; // Not enough data for matrix header
         }
-        total_pins = buffer[offset] + buffer[offset + 1];
+        total_pins = (uint16_t)buffer[offset] + buffer[offset + 1];
         if (total_pins > MAX_MATRIX_PINS) {
             return false; // Too many pins
         }
     }
 
-    uint8_t payload_size = modulePayloadSize(module_type, total_pins);
+    uint8_t payload_size = modulePayloadSize(module_type, (uint8_t)total_pins);
     if (payload_size == 0) {
         return false; // Unknown input type
     }

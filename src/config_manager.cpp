@@ -205,8 +205,8 @@ void storeToEEPROM(uint32_t config_id, const ModuleConfig* modules, uint8_t num_
         eeprom_put(addr, module.module_type);
         addr += sizeof(uint8_t);
 
-        uint8_t total_pins = module.matrix.num_row_pins + module.matrix.num_col_pins;
-        uint8_t payload_size = Protocol::modulePayloadSize(module.module_type, total_pins);
+        uint16_t total_pins = (uint16_t)module.matrix.num_row_pins + module.matrix.num_col_pins;
+        uint8_t payload_size = Protocol::modulePayloadSize(module.module_type, (uint8_t)total_pins);
         eeprom_put_bytes(addr, &module.matrix, payload_size);
         addr += payload_size;
     }
@@ -255,16 +255,16 @@ bool loadFromEEPROM()
         addr += sizeof(uint8_t);
 
         // The matrix payload length depends on its own first two bytes.
-        uint8_t total_pins = 0;
+        uint16_t total_pins = 0;
         if (module.module_type == Protocol::MODULE_TYPE_MATRIX) {
             eeprom_get_bytes(addr, &module.matrix, 2);
-            total_pins = module.matrix.num_row_pins + module.matrix.num_col_pins;
+            total_pins = (uint16_t)module.matrix.num_row_pins + module.matrix.num_col_pins;
             if (total_pins > MAX_MATRIX_PINS) {
                 return false; // Invalid matrix config
             }
         }
 
-        uint8_t payload_size = Protocol::modulePayloadSize(module.module_type, total_pins);
+        uint8_t payload_size = Protocol::modulePayloadSize(module.module_type, (uint8_t)total_pins);
         if (payload_size == 0) {
             return false; // Unknown input type
         }

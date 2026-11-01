@@ -470,6 +470,24 @@ void test_configure_matrix_decode_too_many_pins()
     TEST_ASSERT_FALSE(result);
 }
 
+// 250 + 10 is 260, which wraps to 4 pins in a uint8_t
+void test_configure_matrix_decode_pin_count_does_not_wrap()
+{
+    uint8_t buffer[] = {
+        MESSAGE_TYPE_CONFIGURE,
+        0x03, 0x00, 0x00, 0x00, // config_id
+        0x01, // total_parts
+        0x00, // part_number
+        MODULE_TYPE_MATRIX,
+        250, // num_row_pins
+        10, // num_col_pins
+        0x02, 0x03, 0x04, 0x05, // the 4 pins of a wrapped count
+    };
+
+    Configure cfg;
+    TEST_ASSERT_FALSE(cfg.decode(buffer, sizeof(buffer)));
+}
+
 // Test Configure decode with unknown input type
 void test_configure_decode_unknown_type()
 {
@@ -1084,6 +1102,7 @@ int main(int argc, char** argv)
     RUN_TEST(test_configure_matrix_roundtrip);
     RUN_TEST(test_configure_matrix_decode_insufficient_data);
     RUN_TEST(test_configure_matrix_decode_too_many_pins);
+    RUN_TEST(test_configure_matrix_decode_pin_count_does_not_wrap);
     RUN_TEST(test_configure_decode_unknown_type);
 
     // ConfigurationStored tests
