@@ -17,11 +17,44 @@ void delay(unsigned long) {}
 static const uint8_t ADDR = 0x20;
 static const uint8_t BASE = 200;
 
+// Simulated chip: OLAT is latched from the successful register-0x14 writes
+// recorded by the mock, and a reset clears it. `g_seen` is how many recorded
+// transactions have been applied.
+static uint16_t g_olat = 0;
+static uint8_t g_seen = 0;
+
+static void syncChip()
+{
+    if (MockWire::transaction_count < g_seen) g_seen = 0;
+    for (; g_seen < MockWire::transaction_count; g_seen++) {
+        const MockWire::Transaction& t = MockWire::transactions[g_seen];
+        if (t.end_status == 0 && t.length == 3 && t.data[0] == 0x14) {
+            g_olat = (uint16_t)(t.data[1] | (t.data[2] << 8));
+        }
+    }
+}
+
+// Clears the recorded transactions without losing the simulated chip state.
+static void resetTransactions()
+{
+    syncChip();
+    MockWire::transaction_count = 0;
+    g_seen = 0;
+}
+
+static void simulateChipReset()
+{
+    syncChip();
+    g_olat = 0;
+}
+
 void setUp()
 {
     MockWire::reset();
     I2CBus::resetForTest();
     g_now = 0;
+    g_olat = 0;
+    g_seen = 0;
 }
 
 void tearDown() {}
@@ -33,11 +66,11 @@ static void queueSample(uint8_t gpioA, uint8_t gpioB)
     MockWire::queueRead(ADDR, bytes, 4);
 }
 
-// Sample whose OLAT bytes are what the module wrote for its next scan step.
-static void queueNext(const Mcp23017Module& m, uint8_t gpioA, uint8_t gpioB)
+// Sample whose OLAT bytes are what the simulated chip currently holds.
+static void queueNext(const Mcp23017Module&, uint8_t gpioA, uint8_t gpioB)
 {
-    uint16_t olat = m.nextOlatForTest();
-    const uint8_t bytes[4] = { gpioA, gpioB, (uint8_t)(olat & 0xFF), (uint8_t)(olat >> 8) };
+    syncChip();
+    const uint8_t bytes[4] = { gpioA, gpioB, (uint8_t)(g_olat & 0xFF), (uint8_t)(g_olat >> 8) };
     MockWire::queueRead(ADDR, bytes, 4);
 }
 
@@ -108,7 +141,7 @@ void test_reads_four_bytes_from_gpioa()
 {
     Mcp23017Module m = make();
     m.begin();
-    MockWire::transaction_count = 0;
+    resetTransactions();
     queueSample(0xFF, 0xFF);
     tick(m);
     TEST_ASSERT_EQUAL_UINT8(1, MockWire::transaction_count);
@@ -184,7 +217,7 @@ void test_register_reinit_keeps_held_state()
     for (uint8_t i = 0; i < 2; i++) { queueSample(0xFE, 0xFF); tick(m); }
     TEST_ASSERT_TRUE(m.getReading().has_value); // press reported
 
-    MockWire::transaction_count = 0;
+    resetTransactions();
     TEST_ASSERT_TRUE(m.reinitRegistersForTest());
     TEST_ASSERT_EQUAL_UINT8(4, MockWire::transaction_count);
 
@@ -257,7 +290,7 @@ void test_sentinel_exists_for_direct_only_chip()
     Mcp23017Module m2 = make(0x0000, 2, 0x0007);
     TEST_ASSERT_EQUAL_UINT16(0x0008, m2.sentinelBit());
     m2.begin();
-    TEST_ASSERT_EQUAL_UINT8(0x0F, MockWire::transactions[1].data[1]);
+    TEST_ASSERT_EQUAL_UINT8(0x0E, MockWire::transactions[1].data[1]); // row 0 selected, others high
 }
 
 void test_timer_survives_millis_wrap()
@@ -294,7 +327,7 @@ void test_matrix_scans_one_row_every_2ms()
 {
     Mcp23017Module m = makeMatrix(0x0003, 0x0100);
     m.begin();
-    MockWire::transaction_count = 0;
+    resetTransactions();
     g_now = 1;
     m.scan();
     TEST_ASSERT_EQUAL_UINT8(0, MockWire::transaction_count);
@@ -303,8 +336,9 @@ void test_matrix_scans_one_row_every_2ms()
     queueNext(m, 0xFF, 0xFF);
     g_now = 2;
     m.scan();
-    TEST_ASSERT_EQUAL_UINT8(2, MockWire::transaction_count); // OLAT write + pointer write
-    TEST_ASSERT_EQUAL_UINT8(0x14, MockWire::transactions[0].data[0]);
+    TEST_ASSERT_EQUAL_UINT8(2, MockWire::transaction_count); // pointer write + next-row select
+    TEST_ASSERT_EQUAL_UINT8(0x12, MockWire::transactions[0].data[0]);
+    TEST_ASSERT_EQUAL_UINT8(0x14, MockWire::transactions[1].data[0]);
     TEST_ASSERT_EQUAL_UINT8(1, MockWire::read_request_count);
     TEST_ASSERT_EQUAL_UINT8(4, MockWire::last_request_quantity);
 
@@ -324,12 +358,14 @@ void test_matrix_row_low_others_high()
 {
     Mcp23017Module m = makeMatrix(0x0007, 0x0100); // sentinel is bit 3
     m.begin();
-    MockWire::transaction_count = 0;
-    const uint8_t expect_low[4] = { 0x0E, 0x0D, 0x0B, 0x0E }; // rows 0,1,2, then wraps to row 0
+    TEST_ASSERT_EQUAL_UINT8(0x0E, MockWire::transactions[1].data[1]); // begin leaves row 0 selected
+    resetTransactions();
+    // Each tick reads the selected row, then selects the next: 1, 2, 0, 1.
+    const uint8_t expect_low[4] = { 0x0D, 0x0B, 0x0E, 0x0D };
     for (uint8_t i = 0; i < 4; i++) {
         queueNext(m, 0xFF, 0xFF);
         tick2(m);
-        const MockWire::Transaction& t = MockWire::transactions[i * 2];
+        const MockWire::Transaction& t = MockWire::transactions[i * 2 + 1];
         TEST_ASSERT_EQUAL_UINT8(0x14, t.data[0]);
         TEST_ASSERT_EQUAL_UINT8(expect_low[i], t.data[1]);
         TEST_ASSERT_EQUAL_UINT8(0x00, t.data[2]);
@@ -371,16 +407,18 @@ void test_matrix_uses_rows_on_gpa7_gpb7_with_cols_on_both_ports()
     m.begin();
     TEST_ASSERT_EQUAL_UINT8(0x7F, MockWire::transactions[3].data[1]); // IODIR: GPA7 output
     TEST_ASSERT_EQUAL_UINT8(0x7F, MockWire::transactions[3].data[2]); // IODIR: GPB7 output
-    MockWire::transaction_count = 0;
+    TEST_ASSERT_EQUAL_UINT8(0x01, MockWire::transactions[1].data[1]); // begin selects row 0 (GPA7 low)
+    TEST_ASSERT_EQUAL_UINT8(0x80, MockWire::transactions[1].data[2]);
+    resetTransactions();
 
-    queueNext(m, 0xFD, 0xFF); // row 0 (GPA7 low): GPA1 = column 0
+    queueNext(m, 0xFD, 0xFF); // row 0: GPA1 = column 0
     tick2(m);
-    TEST_ASSERT_EQUAL_UINT8(0x01, MockWire::transactions[0].data[1]);
-    TEST_ASSERT_EQUAL_UINT8(0x80, MockWire::transactions[0].data[2]);
-    queueNext(m, 0xFF, 0xFD); // row 1 (GPB7 low): GPB1 = column 1
+    TEST_ASSERT_EQUAL_UINT8(0x81, MockWire::transactions[1].data[1]); // selects row 1 (GPB7 low)
+    TEST_ASSERT_EQUAL_UINT8(0x00, MockWire::transactions[1].data[2]);
+    queueNext(m, 0xFF, 0xFD); // row 1: GPB1 = column 1
     tick2(m);
-    TEST_ASSERT_EQUAL_UINT8(0x81, MockWire::transactions[2].data[1]);
-    TEST_ASSERT_EQUAL_UINT8(0x00, MockWire::transactions[2].data[2]);
+    TEST_ASSERT_EQUAL_UINT8(0x01, MockWire::transactions[3].data[1]);
+    TEST_ASSERT_EQUAL_UINT8(0x80, MockWire::transactions[3].data[2]);
 
     Reading a = m.getReading();
     Reading b = m.getReading();
@@ -459,22 +497,126 @@ void test_matrix_failed_row_is_retried_without_events()
 {
     Mcp23017Module m = makeMatrix(0x0003, 0x0100, 1);
     m.begin();
-    MockWire::transaction_count = 0;
-    MockWire::scheduleNacks(ADDR, 1); // OLAT write for row 0 fails
+    resetTransactions();
+    MockWire::scheduleNacks(ADDR, 1); // pointer write for the row 0 read fails
     tick2(m);
     TEST_ASSERT_EQUAL_UINT8(1, m.health().failures());
     TEST_ASSERT_EQUAL_UINT8(0, MockWire::read_request_count);
     TEST_ASSERT_FALSE(m.getReading().has_value);
 
-    // Same row again: OLAT selects row 0 (bit 0 low).
+    // Row 0 is read again (it is still selected), not skipped.
     queueNext(m, 0xFF, 0xFE); // column pressed on row 0
     tick2(m);
-    TEST_ASSERT_EQUAL_UINT8(0x02, MockWire::transactions[0].data[1] & 0x03);
-    TEST_ASSERT_EQUAL_UINT8(0x02, MockWire::transactions[1].data[1] & 0x03);
+    TEST_ASSERT_EQUAL_UINT8(0x12, MockWire::transactions[1].data[0]);
+    TEST_ASSERT_EQUAL_UINT8(0x01, MockWire::transactions[2].data[1] & 0x03); // row 1 selected next
     TEST_ASSERT_EQUAL_UINT8(0, m.health().failures());
     Reading r = m.getReading();
     TEST_ASSERT_TRUE(r.has_value);
     TEST_ASSERT_EQUAL_UINT8(100, r.pin);
+}
+
+void test_matrix_select_write_failure_retries_without_feeding_twice()
+{
+    Mcp23017Module m = makeMatrix(0x0003, 0x0100, 1);
+    m.begin();
+    resetTransactions();
+    queueNext(m, 0xFF, 0xFE); // row 0 pressed
+    MockWire::scheduleNacks(ADDR, 1, 2, 1); // pointer write passes, row-1 select NACKs
+    tick2(m);
+    TEST_ASSERT_EQUAL_UINT8(1, m.health().failures());
+    Reading r = m.getReading();
+    TEST_ASSERT_TRUE(r.has_value);
+    TEST_ASSERT_EQUAL_UINT8(100, r.pin);
+
+    // Retry: the write is repeated and nothing is read or fed.
+    uint8_t reads = MockWire::read_request_count;
+    tick2(m);
+    TEST_ASSERT_EQUAL_UINT8(reads, MockWire::read_request_count);
+    TEST_ASSERT_EQUAL_UINT8(0, m.health().failures());
+    TEST_ASSERT_FALSE(m.getReading().has_value);
+
+    // Row 1 is the next one read, against the value that was written.
+    queueNext(m, 0xFF, 0xFE); // row 1 pressed
+    tick2(m);
+    r = m.getReading();
+    TEST_ASSERT_TRUE(r.has_value);
+    TEST_ASSERT_EQUAL_UINT8(100 + 1, r.pin);
+    TEST_ASSERT_FALSE(m.getReading().has_value);
+}
+
+void test_matrix_reset_detected_with_no_failed_transaction()
+{
+    Mcp23017Module m = makeMatrix(0x0003, 0x0100, 1);
+    m.begin();
+    queueNext(m, 0xFF, 0xFF);
+    tick2(m);
+    simulateChipReset(); // OLAT cleared, pull-ups gone, every transaction still ACKs
+    resetTransactions();
+    queueNext(m, 0x00, 0x00); // floating pins read low
+    tick2(m);
+    TEST_ASSERT_FALSE(m.getReading().has_value);
+    TEST_ASSERT_EQUAL_UINT8(1, m.takeRuntimeError());
+    TEST_ASSERT_EQUAL_UINT8(2, m.takeRuntimeError());
+    TEST_ASSERT_EQUAL_UINT8(MODULE_ERROR_NONE, m.takeRuntimeError());
+    // pointer write, then IOCON, OLAT, GPPU, IODIR rewritten.
+    TEST_ASSERT_EQUAL_UINT8(5, MockWire::transaction_count);
+    TEST_ASSERT_EQUAL_UINT8(0x0A, MockWire::transactions[1].data[0]);
+    TEST_ASSERT_EQUAL_UINT8(0x0C, MockWire::transactions[3].data[0]);
+    TEST_ASSERT_EQUAL_UINT8(0x00, MockWire::transactions[4].data[0]);
+
+    // Scan restarts at row 0, which is selected again.
+    queueNext(m, 0xFF, 0xFE);
+    tick2(m);
+    Reading r = m.getReading();
+    TEST_ASSERT_TRUE(r.has_value);
+    TEST_ASSERT_EQUAL_UINT8(100, r.pin);
+}
+
+// Presses the row 1 key, drains its event, then loses the chip for 3 polls and
+// recovers it 1000 ms later.
+static void matrixOutage(Mcp23017Module& m)
+{
+    MockWire::scheduleNacks(ADDR, 3);
+    for (uint8_t i = 0; i < 3; i++) tick2(m);
+    TEST_ASSERT_TRUE(m.health().failed());
+    g_now += 1000;
+    m.scan();
+    TEST_ASSERT_FALSE(m.health().failed());
+}
+
+void test_matrix_held_key_stays_held_through_outage()
+{
+    Mcp23017Module m = makeMatrix(0x0003, 0x0100, 1);
+    m.begin();
+    scanCycle(m, true);
+    TEST_ASSERT_TRUE(m.getReading().has_value); // press
+    TEST_ASSERT_FALSE(m.getReading().has_value);
+
+    matrixOutage(m);
+    TEST_ASSERT_FALSE(m.getReading().has_value);
+    scanCycle(m, true); // still held
+    TEST_ASSERT_FALSE(m.getReading().has_value); // no duplicate press
+    scanCycle(m, false);
+    Reading r = m.getReading();
+    TEST_ASSERT_TRUE(r.has_value);
+    TEST_ASSERT_EQUAL_INT16(0, r.value);
+    TEST_ASSERT_EQUAL_UINT8(101, r.pin);
+}
+
+void test_matrix_key_released_during_outage_reports_release()
+{
+    Mcp23017Module m = makeMatrix(0x0003, 0x0100, 1);
+    m.begin();
+    scanCycle(m, true);
+    TEST_ASSERT_TRUE(m.getReading().has_value); // press
+
+    matrixOutage(m);
+    scanCycle(m, false); // released while the chip was gone
+    Reading r = m.getReading();
+    TEST_ASSERT_TRUE(r.has_value);
+    TEST_ASSERT_EQUAL_INT16(0, r.value);
+    TEST_ASSERT_EQUAL_UINT8(101, r.pin);
+    TEST_ASSERT_FALSE(m.getReading().has_value);
 }
 
 // --- I2CHealth ---
@@ -606,7 +748,7 @@ void test_failed_chip_stops_polling_and_retries_every_1000ms()
     Mcp23017Module m = make(0x0001, 1);
     m.begin();
     failChip(m); // failed at 15
-    MockWire::transaction_count = 0;
+    resetTransactions();
     MockWire::read_request_count = 0;
     MockWire::scheduleNacks(ADDR, 1); // first retry fails
     for (g_now = 20; g_now < 1015; g_now += 5) m.scan();
@@ -631,7 +773,7 @@ void test_recovery_reports_code_2_and_reinitializes()
     m.begin();
     failChip(m);
     TEST_ASSERT_EQUAL_UINT8(1, m.takeRuntimeError());
-    MockWire::transaction_count = 0;
+    resetTransactions();
     g_now = 1015;
     m.scan();
     TEST_ASSERT_EQUAL_UINT8(4, MockWire::transaction_count);
@@ -671,7 +813,7 @@ void test_absent_at_boot_then_connected_recovers()
     TEST_ASSERT_EQUAL_UINT8(1, m.activeError());
     TEST_ASSERT_EQUAL_UINT8(MODULE_ERROR_NONE, m.takeRuntimeError()); // no runtime code 1
 
-    MockWire::transaction_count = 0;
+    resetTransactions();
     for (g_now = 5; g_now < 1000; g_now += 5) {
         queueSample(0xFE, 0xFF); // chip not there yet: never read
         m.scan();
@@ -692,7 +834,7 @@ void test_olat_mismatch_discards_sample_and_reinitializes()
 {
     Mcp23017Module m = make(0x0001, 1);
     m.begin();
-    MockWire::transaction_count = 0;
+    resetTransactions();
     queueOlatZero(); // pins read low: would be a press if it were used
     tick(m);
     TEST_ASSERT_FALSE(m.getReading().has_value);
@@ -757,8 +899,8 @@ void test_failed_read_after_good_olat_write_changes_nothing()
 {
     Mcp23017Module m = makeMatrix(0x0003, 0x0100, 1);
     m.begin();
-    MockWire::transaction_count = 0;
-    queueShort(); // OLAT write for row 0 succeeds, then the read comes back short
+    resetTransactions();
+    queueShort(); // the read of row 0 comes back short
     tick2(m);
     TEST_ASSERT_EQUAL_UINT8(1, m.health().failures());
     TEST_ASSERT_FALSE(m.getReading().has_value);
@@ -767,9 +909,10 @@ void test_failed_read_after_good_olat_write_changes_nothing()
     // Row 0 is retried (not skipped) and its press is seen normally.
     queueNext(m, 0xFF, 0xFE);
     tick2(m);
-    TEST_ASSERT_EQUAL_UINT8(0x14, MockWire::transactions[0].data[0]);
+    TEST_ASSERT_EQUAL_UINT8(0x12, MockWire::transactions[0].data[0]); // short read, nothing selected
+    TEST_ASSERT_EQUAL_UINT8(0x12, MockWire::transactions[1].data[0]); // same row read again
     TEST_ASSERT_EQUAL_UINT8(0x14, MockWire::transactions[2].data[0]);
-    TEST_ASSERT_EQUAL_UINT8(0x02, MockWire::transactions[2].data[1] & 0x03);
+    TEST_ASSERT_EQUAL_UINT8(0x01, MockWire::transactions[2].data[1] & 0x03); // then row 1
     Reading r = m.getReading();
     TEST_ASSERT_TRUE(r.has_value);
     TEST_ASSERT_EQUAL_UINT8(100, r.pin);
@@ -800,6 +943,10 @@ int main(int, char**)
     RUN_TEST(test_direct_pins_debounce_once_per_cycle_on_mixed_chip);
     RUN_TEST(test_direct_and_matrix_readings_both_drain);
     RUN_TEST(test_matrix_failed_row_is_retried_without_events);
+    RUN_TEST(test_matrix_select_write_failure_retries_without_feeding_twice);
+    RUN_TEST(test_matrix_reset_detected_with_no_failed_transaction);
+    RUN_TEST(test_matrix_held_key_stays_held_through_outage);
+    RUN_TEST(test_matrix_key_released_during_outage_reports_release);
     RUN_TEST(test_health_threshold_and_recovery);
     RUN_TEST(test_health_success_resets_count);
     RUN_TEST(test_health_retry_every_1000ms_across_wrap);

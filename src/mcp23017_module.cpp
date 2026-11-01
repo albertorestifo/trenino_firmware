@@ -32,13 +32,13 @@ Mcp23017Module::Mcp23017Module(uint8_t address, uint8_t direct_base, uint8_t mat
     , row_count_(0)
     , col_count_(0)
     , current_row_(0)
+    , row_selected_(false)
 {
     // Lowest bit that is not a row. For a direct-only chip this is bit 0.
     uint16_t bit = 1;
     while (bit != 0 && (row_mask_ & bit)) bit <<= 1;
     sentinel_ = bit;
     olat_expected_ = row_mask_ | sentinel_;
-    olat_read_[0] = olat_read_[1] = 0;
     for (uint8_t i = 0; i < 16; i++) counts_[i] = 0;
     for (uint16_t m = row_mask_; m; m &= m - 1) row_count_++;
     for (uint16_t m = col_mask_ & ~(row_mask_ | OUTPUT_ONLY_MASK); m; m &= m - 1) col_count_++;
@@ -65,9 +65,8 @@ Mcp23017Module::Mcp23017Module(const Mcp23017Module& o)
     , row_count_(o.row_count_)
     , col_count_(o.col_count_)
     , current_row_(o.current_row_)
+    , row_selected_(o.row_selected_)
 {
-    olat_read_[0] = o.olat_read_[0];
-    olat_read_[1] = o.olat_read_[1];
     for (uint8_t i = 0; i < 16; i++) counts_[i] = o.counts_[i];
 }
 
@@ -112,25 +111,30 @@ bool Mcp23017Module::begin()
     reported_ = 0;
     for (uint8_t i = 0; i < 16; i++) counts_[i] = 0;
     current_row_ = 0;
+    row_selected_ = false;
     unsigned long now = millis();
     last_sample_ms_ = now;
 
     // No runtime code 1 here: ModuleManager reports a failed begin() as code 0.
     // The chip is failed at once so that it retries; recovery reports code 2.
+    // Matrix state is cleared here only, never on recovery.
     if (!ensureMatrix() || !initRegisters()) {
         markFailed(now);
         return false;
     }
+    if (matrix_) matrix_->reset();
     return true;
 }
 
+// Allocation only: recovery must not touch matrix state.
 bool Mcp23017Module::ensureMatrix()
 {
     if (row_mask_ == 0) return true;
-    if (!matrix_) matrix_ = new MatrixCore(row_count_, col_count_, debounce_);
-    if (!matrix_) return false;
-    matrix_->reset();
-    return true;
+    if (!matrix_) {
+        matrix_ = new MatrixCore(row_count_, col_count_, debounce_);
+        if (matrix_) matrix_->reset();
+    }
+    return matrix_ != nullptr;
 }
 
 void Mcp23017Module::markFailed(unsigned long now)
@@ -151,7 +155,6 @@ void Mcp23017Module::recover(unsigned long now)
     if (ensureMatrix() && initRegisters()) {
         health_.noteSuccess();
         health_.push(2);
-        current_row_ = 0;
         last_sample_ms_ = now;
     } else {
         health_.noteFailure(now); // restarts the retry timer
@@ -159,11 +162,11 @@ void Mcp23017Module::recover(unsigned long now)
 }
 
 // The chip answered but OLAT is not what was written: it was reset. The sample
-// is discarded and the scan restarts at row 0.
+// is discarded and the scan restarts at row 0
+// (initRegisters leaves row 0 selected).
 void Mcp23017Module::handleReset(unsigned long now)
 {
     health_.push(1);
-    current_row_ = 0;
     last_sample_ms_ = now;
     if (initRegisters()) {
         health_.push(2);
@@ -183,15 +186,21 @@ uint8_t Mcp23017Module::activeError() const
 }
 
 // Register writes only: safe to repeat after an outage without disturbing
-// debounced input state.
+// debounced input state. A matrix chip is left with row 0 selected, and that
+// OLAT value is the expected one.
 bool Mcp23017Module::initRegisters()
 {
-    // Order matters: outputs get their idle level before they become outputs.
+    // Order matters: outputs get their level before they become outputs.
     uint16_t inputs = (uint16_t) ~(row_mask_ | OUTPUT_ONLY_MASK);
+    current_row_ = 0;
+    row_selected_ = false;
+    uint16_t olat = expectedOlat();
     if (!writeIocon()) return false;
-    if (!writeRegisters(REG_OLAT, (uint16_t)(row_mask_ | sentinel_))) return false; // rows idle high
+    if (!writeRegisters(REG_OLAT, olat)) return false;
+    olat_expected_ = olat;
     if (!writeRegisters(REG_GPPU, inputs)) return false;
     if (!writeRegisters(REG_IODIR, inputs)) return false;
+    row_selected_ = true;
     return true;
 }
 
@@ -238,7 +247,6 @@ void Mcp23017Module::scan()
         return;
     }
     health_.noteSuccess();
-    olat_expected_ = expectedOlat();
     if (!olatMatches(olat)) {
         handleReset(now);
         return;
@@ -247,16 +255,22 @@ void Mcp23017Module::scan()
     debounceDirect(~gpio); // pull-ups: pressed = low
 }
 
-// Selects the current row (OLAT write), reads the inputs, and feeds that row's
-// columns to the matrix. If either transaction fails the row is not fed and
-// is retried on the next tick. Direct pins are debounced once per full scan.
+// Reads the row selected on the previous tick, checks OLAT against the value
+// last written, feeds that row, then selects the next row. Reading before
+// selecting means a chip reset is seen before any write can hide it. A failed
+// read leaves the row selected and is retried; a failed select write is retried
+// on the next tick without sampling, so no row is fed twice. Direct pins are
+// debounced once per full scan.
 void Mcp23017Module::scanMatrixRow(unsigned long now)
 {
-    olat_expected_ = expectedOlat();
+    if (!row_selected_) {
+        selectRow(now);
+        return;
+    }
 
     uint16_t gpio;
     uint8_t olat[2];
-    if (!writeRegisters(REG_OLAT, olat_expected_) || !sample(gpio, olat)) {
+    if (!sample(gpio, olat)) {
         noteFailure(now);
         return;
     }
@@ -276,6 +290,22 @@ void Mcp23017Module::scanMatrixRow(unsigned long now)
         current_row_ = 0;
         debounceDirect(pressed);
     }
+    selectRow(now);
+}
+
+// Writes OLAT for current_row_. The expected value only changes when the write
+// succeeds.
+void Mcp23017Module::selectRow(unsigned long now)
+{
+    uint16_t olat = expectedOlat();
+    if (!writeRegisters(REG_OLAT, olat)) {
+        row_selected_ = false;
+        noteFailure(now);
+        return;
+    }
+    olat_expected_ = olat;
+    row_selected_ = true;
+    health_.noteSuccess();
 }
 
 void Mcp23017Module::noteFailure(unsigned long now)
@@ -283,10 +313,8 @@ void Mcp23017Module::noteFailure(unsigned long now)
     if (health_.noteFailure(now)) health_.push(1);
 }
 
-bool Mcp23017Module::olatMatches(const uint8_t olat[2])
+bool Mcp23017Module::olatMatches(const uint8_t olat[2]) const
 {
-    olat_read_[0] = olat[0];
-    olat_read_[1] = olat[1];
     return olat[0] == (uint8_t)(olat_expected_ & 0xFF) && olat[1] == (uint8_t)(olat_expected_ >> 8);
 }
 

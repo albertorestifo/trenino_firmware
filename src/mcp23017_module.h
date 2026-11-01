@@ -40,7 +40,6 @@ public:
     const I2CHealth& health() const { return health_; }
     uint16_t sentinelBit() const { return sentinel_; }
     bool reinitRegistersForTest() { return initRegisters(); }
-    uint16_t nextOlatForTest() const { return expectedOlat(); }
 #endif
 
 private:
@@ -53,7 +52,8 @@ private:
     void recover(unsigned long now);
     void handleReset(unsigned long now);
     void noteFailure(unsigned long now);
-    bool olatMatches(const uint8_t olat[2]);
+    bool olatMatches(const uint8_t olat[2]) const;
+    void selectRow(unsigned long now);
     bool sample(uint16_t& gpio, uint8_t olat[2]);
     void debounceDirect(uint16_t pressed);
     void scanMatrixRow(unsigned long now);
@@ -67,10 +67,9 @@ private:
     uint16_t row_mask_;
     uint16_t col_mask_;
     uint16_t sentinel_;
-    uint16_t olat_expected_; // OLAT value last written by the scan
+    uint16_t olat_expected_; // OLAT value last successfully written
 
     unsigned long last_sample_ms_;
-    uint8_t olat_read_[2]; // OLATA/OLATB from the last good sample
     I2CHealth health_;
 
     uint16_t state_; // debounced, 1 = pressed
@@ -81,6 +80,7 @@ private:
     uint8_t row_count_;
     uint8_t col_count_;
     uint8_t current_row_; // row index (not bit) to sample next
+    bool row_selected_; // OLAT for current_row_ was written; false = retry the write
 };
 
 } // namespace Modules
