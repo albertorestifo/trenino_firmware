@@ -72,6 +72,8 @@ static uint8_t last_request_quantity = 0;
 static uint8_t rx_buffer[MAX_READ_BYTES];
 static uint8_t rx_length = 0;
 static uint8_t rx_pos = 0;
+// Optional: lets a test rewrite the bytes of a read at the moment it is served.
+static void (*read_fixup)(uint8_t address, uint8_t* bytes, uint8_t length) = nullptr;
 
 static uint8_t current_address = 0;
 static uint8_t current_buffer[MAX_BYTES_PER_TRANSACTION];
@@ -196,6 +198,7 @@ public:
             uint8_t n = q.length < quantity ? q.length : quantity;
             for (uint8_t j = 0; j < n; j++) MockWire::rx_buffer[j] = q.data[j];
             MockWire::rx_length = n;
+            if (MockWire::read_fixup) MockWire::read_fixup(address, MockWire::rx_buffer, n);
             // Consume this entry.
             for (uint8_t k = i; k + 1 < MockWire::read_queue_count; k++) {
                 MockWire::read_queues[k] = MockWire::read_queues[k + 1];

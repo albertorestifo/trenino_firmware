@@ -117,12 +117,14 @@ bool Mcp23017Module::begin()
 
     // No runtime code 1 here: ModuleManager reports a failed begin() as code 0.
     // The chip is failed at once so that it retries; recovery reports code 2.
-    // Matrix state is cleared here only, never on recovery.
-    if (!ensureMatrix() || !initRegisters()) {
+    // Matrix state is cleared here only, never on recovery, and even when the
+    // chip is absent.
+    bool allocated = ensureMatrix();
+    if (matrix_) matrix_->reset();
+    if (!allocated || !initRegisters()) {
         markFailed(now);
         return false;
     }
-    if (matrix_) matrix_->reset();
     return true;
 }
 
@@ -259,12 +261,15 @@ void Mcp23017Module::scan()
 // last written, feeds that row, then selects the next row. Reading before
 // selecting means a chip reset is seen before any write can hide it. A failed
 // read leaves the row selected and is retried; a failed select write is retried
-// on the next tick without sampling, so no row is fed twice. Direct pins are
+// on the next tick by rewriting every register (the chip may be mid-reset), not
+// just OLAT, and without sampling, so no row is fed twice. Direct pins are
 // debounced once per full scan.
 void Mcp23017Module::scanMatrixRow(unsigned long now)
 {
     if (!row_selected_) {
-        selectRow(now);
+        // No success is noted here: a chip that keeps NACKing must still reach
+        // the failure threshold, so only a good sample resets the count.
+        if (!initRegisters()) noteFailure(now);
         return;
     }
 
@@ -305,7 +310,6 @@ void Mcp23017Module::selectRow(unsigned long now)
     }
     olat_expected_ = olat;
     row_selected_ = true;
-    health_.noteSuccess();
 }
 
 void Mcp23017Module::noteFailure(unsigned long now)
