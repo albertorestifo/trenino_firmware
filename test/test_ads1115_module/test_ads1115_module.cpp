@@ -685,6 +685,30 @@ void test_recovery_with_wrong_config_stays_failed()
     TEST_ASSERT_EQUAL_UINT8(2, m.takeRuntimeError());
 }
 
+void test_first_sample_offset_delays_the_first_conversion()
+{
+    Ads1115Module m = plain(0x01);
+    m.begin();
+    m.setFirstSampleOffset(7); // longer than a conversion
+    MockWire::transaction_count = 0;
+    g_now = 6;
+    m.scan();
+    TEST_ASSERT_EQUAL_UINT8(0, MockWire::transaction_count);
+    g_now = 7;
+    m.scan();
+    TEST_ASSERT_EQUAL_UINT8(1, MockWire::transaction_count);
+}
+
+void test_zero_offset_starts_at_once()
+{
+    Ads1115Module m = plain(0x01);
+    m.begin();
+    m.setFirstSampleOffset(0);
+    MockWire::transaction_count = 0;
+    m.scan();
+    TEST_ASSERT_EQUAL_UINT8(1, MockWire::transaction_count);
+}
+
 int main()
 {
     UNITY_BEGIN();
@@ -720,5 +744,7 @@ int main()
     RUN_TEST(test_os_clear_discards_and_rereads_without_failure);
     RUN_TEST(test_os_clear_after_3_retries_is_a_mismatch);
     RUN_TEST(test_recovery_with_wrong_config_stays_failed);
+    RUN_TEST(test_first_sample_offset_delays_the_first_conversion);
+    RUN_TEST(test_zero_offset_starts_at_once);
     return UNITY_END();
 }

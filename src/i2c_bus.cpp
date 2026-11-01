@@ -6,6 +6,7 @@ namespace I2CBus {
 
 namespace {
 bool g_initialized = false;
+uint8_t g_transactions = 0;
 }
 
 void begin()
@@ -23,6 +24,7 @@ void begin()
 
 bool write(uint8_t address, const uint8_t* bytes, uint8_t count)
 {
+    g_transactions++;
     Wire.beginTransmission(address);
     Wire.write(bytes, count);
     return Wire.endTransmission() == 0;
@@ -39,6 +41,8 @@ bool readRegisters(uint8_t address, uint8_t reg, uint8_t* out, uint8_t count)
     }
     return true;
 }
+
+uint8_t transactionCount() { return g_transactions; }
 
 #ifdef UNIT_TEST
 void resetForTest() { g_initialized = false; }

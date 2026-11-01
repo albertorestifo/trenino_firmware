@@ -49,6 +49,10 @@ EEPROMClass EEPROM;
 #include "../../src/mcp23017_module.h"
 #include "../../src/ads1115_module.h"
 
+// Offsets handed to the stub I2C modules by applyConfiguration().
+static uint8_t g_offsets[8];
+static uint8_t g_offset_count = 0;
+
 namespace Modules {
 
 AnalogSensor::AnalogSensor(uint8_t pin_number, uint8_t sensitivity_level)
@@ -115,6 +119,7 @@ Mcp23017Module::Mcp23017Module(uint8_t address, uint8_t, uint8_t, uint8_t, uint1
     : address_(address), matrix_(nullptr) {}
 Mcp23017Module::~Mcp23017Module() {}
 bool Mcp23017Module::begin() { return true; }
+void Mcp23017Module::setFirstSampleOffset(uint8_t ms) { g_offsets[g_offset_count++] = ms; }
 void Mcp23017Module::scan() {}
 Reading Mcp23017Module::getReading() { return Reading(); }
 uint8_t Mcp23017Module::takeRuntimeError() { return MODULE_ERROR_NONE; }
@@ -123,6 +128,7 @@ uint8_t Mcp23017Module::activeError() const { return MODULE_ERROR_NONE; }
 Ads1115Module::Ads1115Module(uint8_t address, uint8_t, uint8_t, uint8_t, uint8_t, const uint8_t*)
     : address_(address) {}
 bool Ads1115Module::begin() { return true; }
+void Ads1115Module::setFirstSampleOffset(uint8_t ms) { g_offsets[g_offset_count++] = ms; }
 void Ads1115Module::scan() {}
 Reading Ads1115Module::getReading() { return Reading(); }
 uint8_t Ads1115Module::takeRuntimeError() { return MODULE_ERROR_NONE; }
@@ -131,6 +137,7 @@ uint8_t Ads1115Module::activeError() const { return MODULE_ERROR_NONE; }
 } // namespace Modules
 
 // ---- Now inline-include the unit under test ----
+#include "../../src/i2c_bus.cpp"
 #include "../../src/sensor_manager.cpp"
 
 // ---- Tests ----
@@ -250,6 +257,69 @@ void test_active_errors_list_failed_modules()
     ModuleManager::init();
 }
 
+// Records the order of module scans and callbacks in g_log.
+static char g_log[16];
+static uint8_t g_log_len = 0;
+
+static void logEvent(char c)
+{
+    if (g_log_len + 1 < sizeof(g_log)) g_log[g_log_len++] = c;
+    g_log[g_log_len] = 0;
+}
+
+static void onBusTurn() { logEvent('*'); }
+
+class ScanningModule : public FakeModule {
+public:
+    ScanningModule(char name, bool uses_bus)
+        : FakeModule(0x20, Modules::MODULE_ERROR_NONE), name_(name), uses_bus_(uses_bus) {}
+    void scan() override
+    {
+        logEvent(name_);
+        const uint8_t byte = 0;
+        if (uses_bus_) I2CBus::write(0x20, &byte, 1);
+    }
+
+private:
+    char name_;
+    bool uses_bus_;
+};
+
+void test_bus_turn_callback_runs_after_each_module_that_used_the_bus()
+{
+    ModuleManager::init();
+    g_log_len = 0;
+    g_log[0] = 0;
+    ModuleManager::testAddModule(new ScanningModule('a', true));
+    ModuleManager::testAddModule(new ScanningModule('b', false));
+    ModuleManager::testAddModule(new ScanningModule('c', true));
+
+    ModuleManager::setBusTurnCallback(onBusTurn);
+    ModuleManager::scan();
+    TEST_ASSERT_EQUAL_STRING("a*bc*", g_log);
+
+    ModuleManager::setBusTurnCallback(nullptr);
+    ModuleManager::scan();
+    TEST_ASSERT_EQUAL_STRING("a*bc*abc", g_log);
+    ModuleManager::init();
+}
+
+void test_modules_get_their_index_as_first_sample_offset()
+{
+    ConfigManager::ModuleConfig configs[3];
+    memset(configs, 0, sizeof(configs));
+    configs[0].module_type = Protocol::MODULE_TYPE_MCP23017;
+    configs[1].module_type = Protocol::MODULE_TYPE_ADS1115;
+    configs[2].module_type = Protocol::MODULE_TYPE_MCP23017;
+    g_offset_count = 0;
+    TEST_ASSERT_TRUE(ModuleManager::applyConfiguration(configs, 3));
+    TEST_ASSERT_EQUAL_UINT8(3, g_offset_count);
+    TEST_ASSERT_EQUAL_UINT8(0, g_offsets[0]);
+    TEST_ASSERT_EQUAL_UINT8(1, g_offsets[1]);
+    TEST_ASSERT_EQUAL_UINT8(2, g_offsets[2]);
+    ModuleManager::init();
+}
+
 int main()
 {
     UNITY_BEGIN();
@@ -257,5 +327,7 @@ int main()
     RUN_TEST(test_drain_caps_at_max_count);
     RUN_TEST(test_runtime_errors_drain_with_address);
     RUN_TEST(test_active_errors_list_failed_modules);
+    RUN_TEST(test_bus_turn_callback_runs_after_each_module_that_used_the_bus);
+    RUN_TEST(test_modules_get_their_index_as_first_sample_offset);
     return UNITY_END();
 }

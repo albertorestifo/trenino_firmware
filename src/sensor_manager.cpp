@@ -1,4 +1,5 @@
 #include "sensor_manager.h"
+#include "i2c_bus.h"
 
 namespace ModuleManager {
 
@@ -12,6 +13,13 @@ static uint8_t g_next_reading_index = 0;
 // Init-error list, populated by applyConfiguration, drained by getInitErrors
 static InitError g_init_errors[MAX_MODULES];
 static uint8_t g_init_error_count = 0;
+
+static BusTurnCallback g_bus_turn_callback = nullptr;
+
+void setBusTurnCallback(BusTurnCallback callback)
+{
+    g_bus_turn_callback = callback;
+}
 
 void init()
 {
@@ -112,6 +120,7 @@ bool applyConfiguration(const ConfigManager::ModuleConfig* modules, uint8_t modu
                 g_init_errors[g_init_error_count++] = err;
             }
 
+            module->setFirstSampleOffset(g_module_count);
             g_modules[g_module_count++] = module;
         }
     }
@@ -124,7 +133,11 @@ void scan()
     // Scan all active modules
     for (uint8_t i = 0; i < g_module_count; i++) {
         if (g_modules[i] != nullptr) {
+            uint8_t before = I2CBus::transactionCount();
             g_modules[i]->scan();
+            if (g_bus_turn_callback && I2CBus::transactionCount() != before) {
+                g_bus_turn_callback();
+            }
         }
     }
 }

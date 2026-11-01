@@ -58,6 +58,10 @@ public:
     // Default: no-op for output-only modules.
     virtual void scan() { }
 
+    // Delays the first sample by ms after begin(), so that chips created together
+    // do not share a bus phase. Default: no-op for modules with no timed sampling.
+    virtual void setFirstSampleOffset(uint8_t /*ms*/) { }
+
     // Check if module has a value to report. Default: never has a value
     // (suitable for output-only modules).
     virtual Reading getReading() { return Reading(); }

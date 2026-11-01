@@ -17,6 +17,10 @@ bool write(uint8_t address, const uint8_t* bytes, uint8_t count);
 // a short read or a failed byte; out is only meaningful on success.
 bool readRegisters(uint8_t address, uint8_t reg, uint8_t* out, uint8_t count);
 
+// Counts write transactions, wrapping at 256. It changes whenever a caller used
+// the bus, since every read starts with a pointer write.
+uint8_t transactionCount();
+
 #ifdef UNIT_TEST
 void resetForTest();
 #endif

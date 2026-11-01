@@ -109,6 +109,14 @@ bool Ads1115Module::begin()
     return true;
 }
 
+// Uses the retry wait; start_ms_ may now be in the future, so the check in
+// startConversion() is signed.
+void Ads1115Module::setFirstSampleOffset(uint8_t ms)
+{
+    retry_wait_ = true;
+    start_ms_ += (unsigned long)ms - CONVERSION_MS;
+}
+
 void Ads1115Module::markFailed(unsigned long now)
 {
     health_.markFailed(now);
@@ -183,7 +191,7 @@ void Ads1115Module::scan()
 void Ads1115Module::startConversion(unsigned long now)
 {
     // After a failure, space the retries out so a glitch is not counted three times in microseconds.
-    if (retry_wait_ && (now - start_ms_) < CONVERSION_MS) return;
+    if (retry_wait_ && (long)(now - start_ms_) < (long)CONVERSION_MS) return;
     uint8_t mask = activeMask();
     if (mask == 0) return;
     uint8_t next = channel_;

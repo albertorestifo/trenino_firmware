@@ -35,6 +35,7 @@ public:
     uint8_t getI2CAddress() const override { return address_; }
     uint8_t takeRuntimeError() override;
     uint8_t activeError() const override;
+    void setFirstSampleOffset(uint8_t ms) override;
 
 #ifdef UNIT_TEST
     const I2CHealth& health() const { return health_; }

@@ -110,6 +110,12 @@ bool Mcp23017Module::ensureMatrix()
     return matrix_ != nullptr;
 }
 
+// last_sample_ms_ may now be in the future: the check in scan() is signed.
+void Mcp23017Module::setFirstSampleOffset(uint8_t ms)
+{
+    last_sample_ms_ += ms;
+}
+
 void Mcp23017Module::markFailed(unsigned long now)
 {
     health_.markFailed(now);
@@ -200,7 +206,7 @@ void Mcp23017Module::scan()
         return;
     }
     unsigned long interval = matrix_ ? MATRIX_ROW_INTERVAL_MS : SAMPLE_INTERVAL_MS;
-    if ((now - last_sample_ms_) < interval) return;
+    if ((long)(now - last_sample_ms_) < (long)interval) return;
     last_sample_ms_ = now;
 
     if (matrix_) {

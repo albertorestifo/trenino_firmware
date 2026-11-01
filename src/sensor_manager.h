@@ -24,6 +24,11 @@ struct InitError {
     uint8_t error_code;  // see Protocol::ModuleError error codes (when added)
 };
 
+// Called by scan() after each module that used the I2C bus. A callback keeps this
+// code free of any stepper dependency.
+typedef void (*BusTurnCallback)();
+void setBusTurnCallback(BusTurnCallback callback);
+
 // Initialize sensor manager with configuration from ConfigManager
 void init();
 

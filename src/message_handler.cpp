@@ -44,6 +44,7 @@ void init(PacketSerial_<COBS>* serial)
     // Initialize heartbeat manager with 2 second interval and callback
     g_heartbeat_manager = new Heartbeat::HeartbeatManager(HEARTBEAT_INTERVAL_MS, sendHeartbeat);
     StepperService::init(sendBytes);
+    ModuleManager::setBusTurnCallback(StepperService::update);
 }
 
 void onPacketReceived(const uint8_t* buffer, size_t size)

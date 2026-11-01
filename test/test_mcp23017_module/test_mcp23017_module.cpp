@@ -1220,6 +1220,49 @@ void test_recovery_reads_olat_back_after_the_writes()
     TEST_ASSERT_EQUAL_UINT8(2, MockWire::last_request_quantity);
 }
 
+void test_first_sample_offset_delays_a_direct_chip()
+{
+    Mcp23017Module& m = make();
+    m.begin();
+    m.setFirstSampleOffset(3);
+    g_now = 7;
+    m.scan();
+    TEST_ASSERT_EQUAL_UINT8(0, MockWire::read_request_count);
+    g_now = 8;
+    queueSample(0xFF, 0xFF);
+    m.scan();
+    TEST_ASSERT_EQUAL_UINT8(1, MockWire::read_request_count);
+}
+
+void test_first_sample_offset_delays_a_matrix_chip()
+{
+    Mcp23017Module& m = makeMatrix(0x0003, 0x0100, 1);
+    m.begin();
+    m.setFirstSampleOffset(5); // longer than the 2 ms row interval
+    g_now = 6;
+    m.scan();
+    TEST_ASSERT_EQUAL_UINT8(0, MockWire::read_request_count);
+    g_now = 7;
+    queueNext(m, 0xFF, 0xFF);
+    m.scan();
+    TEST_ASSERT_EQUAL_UINT8(1, MockWire::read_request_count);
+}
+
+void test_first_sample_offset_survives_millis_wrap()
+{
+    g_now = (unsigned long)0 - 2;
+    Mcp23017Module& m = make();
+    m.begin();
+    m.setFirstSampleOffset(1);
+    g_now = 2; // 4 ms later
+    m.scan();
+    TEST_ASSERT_EQUAL_UINT8(0, MockWire::read_request_count);
+    g_now = 4; // 6 ms later
+    queueSample(0xFF, 0xFF);
+    m.scan();
+    TEST_ASSERT_EQUAL_UINT8(1, MockWire::read_request_count);
+}
+
 int main(int, char**)
 {
     UNITY_BEGIN();
@@ -1273,5 +1316,8 @@ int main(int, char**)
     RUN_TEST(test_matrix_periodic_rewrite_failure_takes_failure_path);
     RUN_TEST(test_recovery_with_wrong_olat_stays_failed);
     RUN_TEST(test_recovery_reads_olat_back_after_the_writes);
+    RUN_TEST(test_first_sample_offset_delays_a_direct_chip);
+    RUN_TEST(test_first_sample_offset_delays_a_matrix_chip);
+    RUN_TEST(test_first_sample_offset_survives_millis_wrap);
     return UNITY_END();
 }
