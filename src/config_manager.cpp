@@ -9,45 +9,40 @@ DueFlashStorage dueFlashStorage;
 // Platform-agnostic EEPROM access helpers
 namespace {
 
+void eeprom_put_bytes(int address, const void* bytes, size_t count)
+{
+    const uint8_t* ptr = static_cast<const uint8_t*>(bytes);
+    for (size_t i = 0; i < count; i++) {
+#ifdef EEPROM_USE_DUE_FLASH
+        dueFlashStorage.write(address + i, ptr[i]);
+#else
+        EEPROM.put(address + i, ptr[i]);
+#endif
+    }
+}
+
+void eeprom_get_bytes(int address, void* bytes, size_t count)
+{
+    uint8_t* ptr = static_cast<uint8_t*>(bytes);
+    for (size_t i = 0; i < count; i++) {
+#ifdef EEPROM_USE_DUE_FLASH
+        ptr[i] = dueFlashStorage.read(address + i);
+#else
+        EEPROM.get(address + i, ptr[i]);
+#endif
+    }
+}
+
 template <typename T>
 void eeprom_put(int address, const T& value)
 {
-#ifdef EEPROM_USE_DUE_FLASH
-    const uint8_t* ptr = reinterpret_cast<const uint8_t*>(&value);
-    for (size_t i = 0; i < sizeof(T); i++) {
-        dueFlashStorage.write(address + i, ptr[i]);
-    }
-#else
-    EEPROM.put(address, value);
-#endif
+    eeprom_put_bytes(address, &value, sizeof(T));
 }
 
 template <typename T>
 void eeprom_get(int address, T& value)
 {
-#ifdef EEPROM_USE_DUE_FLASH
-    uint8_t* ptr = reinterpret_cast<uint8_t*>(&value);
-    for (size_t i = 0; i < sizeof(T); i++) {
-        ptr[i] = dueFlashStorage.read(address + i);
-    }
-#else
-    EEPROM.get(address, value);
-#endif
-}
-
-// Little-endian u16, byte by byte so records do not depend on struct layout.
-void eeprom_put_u16(int address, uint16_t value)
-{
-    eeprom_put(address, uint8_t(value & 0xFF));
-    eeprom_put(address + 1, uint8_t(value >> 8));
-}
-
-uint16_t eeprom_get_u16(int address)
-{
-    uint8_t lo, hi;
-    eeprom_get(address, lo);
-    eeprom_get(address + 1, hi);
-    return uint16_t(lo | (hi << 8));
+    eeprom_get_bytes(address, &value, sizeof(T));
 }
 
 void eeprom_commit()
@@ -203,71 +198,17 @@ void storeToEEPROM(uint32_t config_id, const ModuleConfig* modules, uint8_t num_
     // Write number of modules
     eeprom_put(EEPROM_NUM_INPUTS_ADDR, num_modules);
 
-    // Write module configurations (variable size based on type)
+    // Write module configurations: the type, then the payload bytes in wire order
     addr = EEPROM_INPUTS_ADDR;
     for (uint8_t i = 0; i < num_modules; i++) {
-        // Write input type
-        eeprom_put(addr, modules[i].module_type);
+        const ModuleConfig& module = modules[i];
+        eeprom_put(addr, module.module_type);
         addr += sizeof(uint8_t);
 
-        switch (modules[i].module_type) {
-        case Protocol::MODULE_TYPE_ANALOG:
-            eeprom_put(addr, modules[i].analog.pin);
-            addr += sizeof(uint8_t);
-            eeprom_put(addr, modules[i].analog.sensitivity);
-            addr += sizeof(uint8_t);
-            break;
-
-        case Protocol::MODULE_TYPE_BUTTON:
-            eeprom_put(addr, modules[i].button.pin);
-            addr += sizeof(uint8_t);
-            eeprom_put(addr, modules[i].button.debounce);
-            addr += sizeof(uint8_t);
-            break;
-
-        case Protocol::MODULE_TYPE_MATRIX: {
-            eeprom_put(addr, modules[i].matrix.num_row_pins);
-            addr += sizeof(uint8_t);
-            eeprom_put(addr, modules[i].matrix.num_col_pins);
-            addr += sizeof(uint8_t);
-            uint8_t total_pins = modules[i].matrix.num_row_pins + modules[i].matrix.num_col_pins;
-            for (uint8_t p = 0; p < total_pins; p++) {
-                eeprom_put(addr, modules[i].matrix.pins[p]);
-                addr += sizeof(uint8_t);
-            }
-            break;
-        }
-
-        case Protocol::MODULE_TYPE_HT16K33:
-            eeprom_put(addr, modules[i].ht16k33.i2c_address);
-            addr += sizeof(uint8_t);
-            eeprom_put(addr, modules[i].ht16k33.brightness);
-            addr += sizeof(uint8_t);
-            eeprom_put(addr, modules[i].ht16k33.num_digits);
-            addr += sizeof(uint8_t);
-            break;
-
-        case Protocol::MODULE_TYPE_MCP23017:
-            eeprom_put(addr, modules[i].mcp23017.i2c_address); addr += 1;
-            eeprom_put(addr, modules[i].mcp23017.direct_base); addr += 1;
-            eeprom_put(addr, modules[i].mcp23017.matrix_base); addr += 1;
-            eeprom_put(addr, modules[i].mcp23017.debounce); addr += 1;
-            eeprom_put_u16(addr, modules[i].mcp23017.direct_mask); addr += 2;
-            eeprom_put_u16(addr, modules[i].mcp23017.row_mask); addr += 2;
-            eeprom_put_u16(addr, modules[i].mcp23017.col_mask); addr += 2;
-            break;
-
-        case Protocol::MODULE_TYPE_ADS1115:
-            eeprom_put(addr, modules[i].ads1115.i2c_address); addr += 1;
-            eeprom_put(addr, modules[i].ads1115.pin_base); addr += 1;
-            eeprom_put(addr, modules[i].ads1115.channel_mask); addr += 1;
-            eeprom_put(addr, modules[i].ads1115.gain); addr += 1;
-            eeprom_put(addr, modules[i].ads1115.ref_channel); addr += 1;
-            for (uint8_t c = 0; c < 4; c++) {
-                eeprom_put(addr, modules[i].ads1115.sensitivity[c]); addr += 1;
-            }
-            break;
-        }
+        uint8_t total_pins = module.matrix.num_row_pins + module.matrix.num_col_pins;
+        uint8_t payload_size = Protocol::modulePayloadSize(module.module_type, total_pins);
+        eeprom_put_bytes(addr, &module.matrix, payload_size);
+        addr += payload_size;
     }
 
     // Commit changes for platforms that require it
@@ -309,82 +250,32 @@ bool loadFromEEPROM()
     // Read input configurations (variable size based on type)
     int addr = EEPROM_INPUTS_ADDR;
     for (uint8_t i = 0; i < g_current_num_modules; i++) {
-        eeprom_get(addr, g_current_modules[i].module_type);
+        ModuleConfig& module = g_current_modules[i];
+        eeprom_get(addr, module.module_type);
         addr += sizeof(uint8_t);
 
-        switch (g_current_modules[i].module_type) {
-        case Protocol::MODULE_TYPE_ANALOG:
-            eeprom_get(addr, g_current_modules[i].analog.pin);
-            addr += sizeof(uint8_t);
-            eeprom_get(addr, g_current_modules[i].analog.sensitivity);
-            addr += sizeof(uint8_t);
-            break;
-
-        case Protocol::MODULE_TYPE_BUTTON:
-            eeprom_get(addr, g_current_modules[i].button.pin);
-            addr += sizeof(uint8_t);
-            eeprom_get(addr, g_current_modules[i].button.debounce);
-            addr += sizeof(uint8_t);
-            break;
-
-        case Protocol::MODULE_TYPE_MATRIX: {
-            eeprom_get(addr, g_current_modules[i].matrix.num_row_pins);
-            addr += sizeof(uint8_t);
-            eeprom_get(addr, g_current_modules[i].matrix.num_col_pins);
-            addr += sizeof(uint8_t);
-            uint8_t total_pins = g_current_modules[i].matrix.num_row_pins + g_current_modules[i].matrix.num_col_pins;
+        // The matrix payload length depends on its own first two bytes.
+        uint8_t total_pins = 0;
+        if (module.module_type == Protocol::MODULE_TYPE_MATRIX) {
+            eeprom_get_bytes(addr, &module.matrix, 2);
+            total_pins = module.matrix.num_row_pins + module.matrix.num_col_pins;
             if (total_pins > MAX_MATRIX_PINS) {
                 return false; // Invalid matrix config
             }
-            for (uint8_t p = 0; p < total_pins; p++) {
-                eeprom_get(addr, g_current_modules[i].matrix.pins[p]);
-                addr += sizeof(uint8_t);
-            }
-            break;
         }
 
-        case Protocol::MODULE_TYPE_HT16K33:
-            eeprom_get(addr, g_current_modules[i].ht16k33.i2c_address);
-            addr += sizeof(uint8_t);
-            eeprom_get(addr, g_current_modules[i].ht16k33.brightness);
-            addr += sizeof(uint8_t);
-            eeprom_get(addr, g_current_modules[i].ht16k33.num_digits);
-            addr += sizeof(uint8_t);
-            break;
-
-        case Protocol::MODULE_TYPE_MCP23017: {
-            Protocol::Mcp23017Config& m = g_current_modules[i].mcp23017;
-            eeprom_get(addr, m.i2c_address); addr += 1;
-            eeprom_get(addr, m.direct_base); addr += 1;
-            eeprom_get(addr, m.matrix_base); addr += 1;
-            eeprom_get(addr, m.debounce); addr += 1;
-            m.direct_mask = eeprom_get_u16(addr); addr += 2;
-            m.row_mask = eeprom_get_u16(addr); addr += 2;
-            m.col_mask = eeprom_get_u16(addr); addr += 2;
-            if (!Protocol::validMcp23017(m)) {
-                return false;
-            }
-            break;
-        }
-
-        case Protocol::MODULE_TYPE_ADS1115: {
-            Protocol::Ads1115Config& a = g_current_modules[i].ads1115;
-            eeprom_get(addr, a.i2c_address); addr += 1;
-            eeprom_get(addr, a.pin_base); addr += 1;
-            eeprom_get(addr, a.channel_mask); addr += 1;
-            eeprom_get(addr, a.gain); addr += 1;
-            eeprom_get(addr, a.ref_channel); addr += 1;
-            for (uint8_t c = 0; c < 4; c++) {
-                eeprom_get(addr, a.sensitivity[c]); addr += 1;
-            }
-            if (!Protocol::validAds1115(a)) {
-                return false;
-            }
-            break;
-        }
-
-        default:
+        uint8_t payload_size = Protocol::modulePayloadSize(module.module_type, total_pins);
+        if (payload_size == 0) {
             return false; // Unknown input type
+        }
+        eeprom_get_bytes(addr, &module.matrix, payload_size);
+        addr += payload_size;
+
+        if (module.module_type == Protocol::MODULE_TYPE_MCP23017 && !Protocol::validMcp23017(module.mcp23017)) {
+            return false;
+        }
+        if (module.module_type == Protocol::MODULE_TYPE_ADS1115 && !Protocol::validAds1115(module.ads1115)) {
+            return false;
         }
     }
 
