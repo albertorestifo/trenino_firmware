@@ -18,6 +18,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   displays; legacy EEPROM module format5 remains compatible. See
   [stepper protocol](docs/STEPPER_PROTOCOL.md) for commissioning and limitations.
 
+## [3.2.0] - 2026-11-01
+
+### Added
+- **MCP23017 input module** (`MODULE_TYPE_MCP23017 = 5`): up to 16 direct buttons
+  plus an optional 8x8 button matrix per chip, reported as `InputValue` on virtual pins.
+  Detects chip resets and recovers by rewriting its registers.
+- **ADS1115 input module** (`MODULE_TYPE_ADS1115 = 6`): up to 4 single-ended analog
+  channels (0-1023), optionally scaled against a supply reference channel.
+- `ModuleError` codes 1 (communication lost), 2 (recovered) and 3 (supply reference
+  lost), sent at run time and repeated in the reply to `IdentityRequest` while active.
+  See [protocol](docs/PROTOCOL.md).
+- `ModuleManager::getNextRuntimeError()` and `getActiveErrors()`.
+
+### Changed
+- `Configure` rejects an MCP23017 with no enabled pins and an ADS1115 with
+  `channel_mask` 0. Both payloads must have their exact length.
+- Firmware version is 3.2.0. `EEPROM_FORMAT_VERSION` stays 5.
+
 ## [3.0.0] - 2026-05-03
 
 ### Added

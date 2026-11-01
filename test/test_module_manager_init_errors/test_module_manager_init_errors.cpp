@@ -46,6 +46,8 @@ EEPROMClass EEPROM;
 #include "../../src/matrix_sensor.h"
 #include "../../src/matrix_core.cpp"
 #include "../../src/ht16k33_module.h"
+#include "../../src/mcp23017_module.h"
+#include "../../src/ads1115_module.h"
 
 namespace Modules {
 
@@ -107,6 +109,27 @@ bool HT16K33Module::setBrightness(uint8_t) { return true; }
 bool HT16K33Module::runInitSequence() { return true; }
 bool HT16K33Module::writeWithRetry(const uint8_t*, uint8_t) { return true; }
 
+// MCP23017 / ADS1115 stubs — applyConfiguration() references their constructors
+// and vtables; no test here runs their real logic.
+Mcp23017Module::Mcp23017Module(uint8_t address, uint8_t, uint8_t, uint8_t, uint16_t, uint16_t, uint16_t)
+    : address_(address), matrix_(nullptr) {}
+Mcp23017Module::Mcp23017Module(const Mcp23017Module& other)
+    : address_(other.address_), matrix_(nullptr) {}
+Mcp23017Module::~Mcp23017Module() {}
+bool Mcp23017Module::begin() { return true; }
+void Mcp23017Module::scan() {}
+Reading Mcp23017Module::getReading() { return Reading(); }
+uint8_t Mcp23017Module::takeRuntimeError() { return MODULE_ERROR_NONE; }
+uint8_t Mcp23017Module::activeError() const { return MODULE_ERROR_NONE; }
+
+Ads1115Module::Ads1115Module(uint8_t address, uint8_t, uint8_t, uint8_t, uint8_t, const uint8_t*)
+    : address_(address) {}
+bool Ads1115Module::begin() { return true; }
+void Ads1115Module::scan() {}
+Reading Ads1115Module::getReading() { return Reading(); }
+uint8_t Ads1115Module::takeRuntimeError() { return MODULE_ERROR_NONE; }
+uint8_t Ads1115Module::activeError() const { return MODULE_ERROR_NONE; }
+
 } // namespace Modules
 
 // ---- Now inline-include the unit under test ----
@@ -158,10 +181,83 @@ void test_drain_caps_at_max_count()
     TEST_ASSERT_EQUAL_UINT8(0x71, out[1].i2c_address);
 }
 
+// Fake I2C module: queued runtime errors plus a fixed active error.
+class FakeModule : public Modules::IModule {
+public:
+    FakeModule(uint8_t address, uint8_t active)
+        : address_(address), active_(active), pending_count_(0), next_(0) {}
+    void push(uint8_t code) { pending_[pending_count_++] = code; }
+    bool begin() override { return true; }
+    Modules::ModuleType getType() const override { return Modules::ModuleType::MCP23017; }
+    uint8_t getPin() const override { return 0; }
+    uint8_t getI2CAddress() const override { return address_; }
+    uint8_t takeRuntimeError() override
+    {
+        return next_ < pending_count_ ? pending_[next_++] : Modules::MODULE_ERROR_NONE;
+    }
+    uint8_t activeError() const override { return active_; }
+
+private:
+    uint8_t address_;
+    uint8_t active_;
+    uint8_t pending_[4];
+    uint8_t pending_count_;
+    uint8_t next_;
+};
+
+void test_runtime_errors_drain_with_address()
+{
+    ModuleManager::init();
+    FakeModule* a = new FakeModule(0x20, Modules::MODULE_ERROR_NONE);
+    FakeModule* b = new FakeModule(0x48, Modules::MODULE_ERROR_NONE);
+    a->push(1);
+    a->push(2);
+    b->push(3);
+    ModuleManager::testAddModule(a);
+    ModuleManager::testAddModule(b);
+
+    uint8_t address = 0, code = 0;
+    TEST_ASSERT_TRUE(ModuleManager::getNextRuntimeError(address, code));
+    TEST_ASSERT_EQUAL_UINT8(0x20, address);
+    TEST_ASSERT_EQUAL_UINT8(1, code);
+    TEST_ASSERT_TRUE(ModuleManager::getNextRuntimeError(address, code));
+    TEST_ASSERT_EQUAL_UINT8(0x20, address);
+    TEST_ASSERT_EQUAL_UINT8(2, code);
+    TEST_ASSERT_TRUE(ModuleManager::getNextRuntimeError(address, code));
+    TEST_ASSERT_EQUAL_UINT8(0x48, address);
+    TEST_ASSERT_EQUAL_UINT8(3, code);
+    TEST_ASSERT_FALSE(ModuleManager::getNextRuntimeError(address, code));
+    ModuleManager::init();
+}
+
+void test_active_errors_list_failed_modules()
+{
+    ModuleManager::init();
+    ModuleManager::testAddModule(new FakeModule(0x20, 1));
+    ModuleManager::testAddModule(new FakeModule(0x21, Modules::MODULE_ERROR_NONE));
+    ModuleManager::testAddModule(new FakeModule(0x48, 3));
+
+    ModuleManager::InitError out[ModuleManager::MAX_MODULES];
+    uint8_t n = ModuleManager::getActiveErrors(out, ModuleManager::MAX_MODULES);
+    TEST_ASSERT_EQUAL_UINT8(2, n);
+    TEST_ASSERT_EQUAL_UINT8(0x20, out[0].i2c_address);
+    TEST_ASSERT_EQUAL_UINT8(1, out[0].error_code);
+    TEST_ASSERT_EQUAL_UINT8(0x48, out[1].i2c_address);
+    TEST_ASSERT_EQUAL_UINT8(3, out[1].error_code);
+
+    // Not drained: identity requests can repeat the same errors.
+    TEST_ASSERT_EQUAL_UINT8(2, ModuleManager::getActiveErrors(out, ModuleManager::MAX_MODULES));
+    // Capped at max_count.
+    TEST_ASSERT_EQUAL_UINT8(1, ModuleManager::getActiveErrors(out, 1));
+    ModuleManager::init();
+}
+
 int main()
 {
     UNITY_BEGIN();
     RUN_TEST(test_drain_returns_injected_errors);
     RUN_TEST(test_drain_caps_at_max_count);
+    RUN_TEST(test_runtime_errors_drain_with_address);
+    RUN_TEST(test_active_errors_list_failed_modules);
     return UNITY_END();
 }

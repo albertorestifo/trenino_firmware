@@ -4,7 +4,7 @@
 
 // Device version (semantic versioning)
 constexpr uint8_t DEVICE_VERSION_MAJOR = 3;
-constexpr uint8_t DEVICE_VERSION_MINOR = 1;
+constexpr uint8_t DEVICE_VERSION_MINOR = 2;
 constexpr uint8_t DEVICE_VERSION_PATCH = 0;
 
 // EEPROM format version - increment when EEPROM layout changes

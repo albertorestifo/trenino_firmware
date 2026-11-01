@@ -14,6 +14,11 @@ src/
 ├── button_sensor.h/cpp   # Digital button module
 ├── matrix_sensor.h/cpp   # Button matrix module
 ├── ht16k33_module.h/cpp  # HT16K33 14-segment display module (I2C)
+├── mcp23017_module.h/cpp # MCP23017 direct buttons + button matrix (I2C)
+├── ads1115_module.h/cpp  # ADS1115 4-channel ADC with supply reference (I2C)
+├── matrix_core.h/cpp     # Shared matrix debounce and event queue
+├── i2c_bus.h/cpp         # Shared I2C bus setup
+├── i2c_health.h          # Failure counting, retry timing, runtime error queue
 ├── output_manager.h/cpp  # Direct GPIO output pin control
 ├── heartbeat.h/cpp       # Periodic keep-alive
 └── device_info.h         # Version + EEPROM format version
@@ -23,6 +28,8 @@ src/
 - `getModuleByPin(pin)` for hardware-pin modules
 - `getModuleByI2CAddress(addr)` for I2C modules
 - `getInitErrors(out, max)` — drained by `MessageHandler` after `applyConfiguration` to emit `ModuleError` messages
+- `getNextRuntimeError(address, code)` — pops one pending runtime error (`IModule::takeRuntimeError()`); `MessageHandler::update()` sends each as a `ModuleError`
+- `getActiveErrors(out, max)` — modules in an error state right now (`IModule::activeError()`, code 1 or 3); not drained, repeated in the reply to every `IdentityRequest`
 
 ## Data Flow
 
@@ -38,8 +45,7 @@ src/
 ```
 loop() {
     PacketSerial.update()     // Process incoming messages
-    MessageHandler.update()   // Check timeouts, scan modules, send readings
-    delay(1)                  // 1 ms tick
+    MessageHandler.update()   // Check timeouts, scan modules, send readings and runtime errors
 }
 ```
 
@@ -67,6 +73,8 @@ For each module:
     → getReading() — check if a value is ready to report
     → If ready: send InputValue message
 ```
+
+The MCP23017 and ADS1115 never block in `scan()`. The MCP23017 reads the matrix row selected on the previous tick, compares OLAT against the expected value to detect a chip reset, then selects the next row; a failed select is followed by a full register rewrite, and repeated reset detections count as failures. The ADS1115 starts a conversion, reads it on a later `scan()`, and reads back its config register before each result. While the supply reference is lost it converts only the reference channel. Both use `I2CHealth` to count failures, retry every second and queue `ModuleError` codes (1 communication lost, 2 recovered, 3 supply reference lost). After recovery with the reference still lost, the ADS1115 reports 2 then 3.
 
 Output-only modules (e.g. HT16K33) return an empty `Reading` and are never included in `InputValue` traffic.
 
@@ -109,5 +117,4 @@ The following capabilities have been deliberately deferred:
 - **HT16K33 keypad scanning** — the chip supports 13×3 key scanning; `scan()` and `getReading()` are stubs
 - **Multi-bus I2C** — e.g. ESP32 `Wire1`; currently only a single bus is supported
 - **Generic I2CBus namespace** — abstraction layer to allow injecting a mock bus in tests without `Wire.h`
-- **I2C input modules** — e.g. MCP23017 GPIO expander, ADS1115 ADC; the `IModule` interface already supports them
 - **Generic raw I2C passthrough** — a host-driven message to send/receive arbitrary I2C frames

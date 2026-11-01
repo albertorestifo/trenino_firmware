@@ -99,7 +99,7 @@ The message uses a discriminated union based on `module_type`.
 | config_id | Unique configuration identifier |
 | total_parts | Total number of modules to configure |
 | part_number | This module's index (0-based) |
-| module_type | 0 = Analog, 1 = Button, 2 = Matrix, 3 = reserved, 4 = HT16K33 |
+| module_type | 0 = Analog, 1 = Button, 2 = Matrix, 3 = reserved, 4 = HT16K33, 5 = MCP23017, 6 = ADS1115 |
 
 **Analog Payload (module_type = 0)**
 
@@ -149,6 +149,59 @@ Matrix buttons are reported using virtual pins: `pin = 128 + (row * num_cols + c
 | i2c_address | I2C bus address of the HT16K33 chip (e.g. 0x70) |
 | brightness | Initial display brightness (0–15) |
 | num_digits | Number of 14-segment digits driven (determines how many display RAM bytes are valid) |
+
+**MCP23017 Payload (module_type = 5)**
+
+Exactly 10 payload bytes (18 bytes in the whole packet); any other length is rejected.
+
+```
+[i2c_address: u8] [direct_base: u8] [matrix_base: u8] [debounce: u8]
+[direct_mask: u16] [row_mask: u16] [col_mask: u16]
+```
+
+| Field | Description |
+|-------|-------------|
+| i2c_address | I2C bus address (chip range 0x20-0x27) |
+| direct_base | First virtual pin of the 16-pin direct block (pin = direct_base + bit) |
+| matrix_base | First virtual pin of the matrix block (pin = matrix_base + row_index * col_count + col_index) |
+| debounce | Debounce threshold in scans, at least 1 |
+| direct_mask | Pins used as direct buttons. Bit 0-7 = GPA0-7, bit 8-15 = GPB0-7 |
+| row_mask | Pins driven as matrix rows (same bit layout) |
+| col_mask | Pins read as matrix columns |
+
+Row and column indexes count the set bits of the masks from the lowest bit. Inputs use pull-ups; a pressed button reads low and is reported as `1`. Buttons are reported with `InputValue` (1 = pressed, 0 = released).
+
+The decoder rejects the module (the device sends `ConfigurationError`) when:
+
+- `debounce` is 0
+- the three masks are all 0 (no enabled pins)
+- the masks overlap
+- `direct_mask` or `col_mask` contains GPA7 or GPB7 (`0x8080`; output-only on the MCP23017)
+- more than 8 rows or 8 columns are set, or only one of `row_mask` / `col_mask` is set
+- a used block does not fit in virtual pins 128-255 (`direct_base` / `matrix_base` below 128, or the block extends past 255)
+
+A direct block is 16 pins; a matrix block is `rows * cols` pins.
+
+**ADS1115 Payload (module_type = 6)**
+
+Exactly 9 payload bytes (17 bytes in the whole packet); any other length is rejected.
+
+```
+[i2c_address: u8] [pin_base: u8] [channel_mask: u8] [gain: u8] [ref_channel: u8] [sensitivity: u8[4]]
+```
+
+| Field | Description |
+|-------|-------------|
+| i2c_address | I2C bus address (chip range 0x48-0x4B) |
+| pin_base | First virtual pin of the 4-pin block (pin = pin_base + channel) |
+| channel_mask | Reported channels, bit 0-3 = AIN0-3 |
+| gain | Programmable gain: 0 = +/-6.144 V, 1 = +/-4.096 V |
+| ref_channel | Channel wired to the analog supply (0-3), or 0xFF for none |
+| sensitivity | Per-channel sensitivity, 1-10, same meaning as for Analog |
+
+The decoder rejects the module when `channel_mask` is 0 (no enabled channels) or has bits above 3, `gain` is above 1, `ref_channel` is neither 0-3 nor 0xFF, or is also set in `channel_mask`, the 4-pin block does not fit in virtual pins 128-255, or an enabled channel has a sensitivity outside 1-10.
+
+Values are reported with `InputValue` as 0-1023. With a reference channel they are scaled against its smoothed reading so they are correct on any supply voltage. The reference channel itself is never reported. While the reference reads too low (or has not been read yet) the device converts only the reference channel and sends no values.
 
 ### ConfigurationStored (3)
 
@@ -251,9 +304,22 @@ Updates the brightness immediately and caches the value so re-initialization use
 | Field | Description |
 |-------|-------------|
 | i2c_address | I2C address of the module that failed |
-| error_code | 0 = init_failed (chip NACKed during begin()); 1+ reserved |
+| error_code | See the table below |
 
-Sent by the device after `applyConfiguration` completes if one or more I2C modules failed to initialize. The module is registered but inactive; the host may retry by sending a new `Configure` message.
+| Code | Name | Meaning |
+|------|------|---------|
+| 0 | init_failed | The chip NACKed during `begin()` |
+| 1 | communication_lost | Repeated I2C failures (MCP23017, ADS1115, including repeated chip-reset detections) |
+| 2 | recovered | Communication with the chip is working again |
+| 3 | supply_reference_lost | ADS1115 only: the supply reference channel reads too low |
+
+Sent by the device in three situations:
+
+1. After `applyConfiguration` completes, for each module whose `begin()` failed (code 0). The module is registered but inactive; the host may retry by sending a new `Configure` message.
+2. At run time, when an MCP23017 or ADS1115 changes state (codes 1, 2, 3). Several codes may be sent in a row for one chip.
+3. In reply to `IdentityRequest`, after the init errors: one message for every module that is in an error state right now (code 1 or 3), unless that address was already reported in the same reply. A host that connects late therefore learns the current state.
+
+After code 2 an ADS1115 whose reference is still lost reports code 2 and then code 3.
 
 ## Configuration Sequence
 
@@ -269,14 +335,14 @@ Host                              Device
 
 If all parts aren't received within 5 seconds, the device sends `ConfigurationError` and discards partial configuration.
 
-After a successful `ConfigurationStored`, the device may send one `ModuleError (15)` per I2C module that failed to initialize.
+After a successful `ConfigurationStored`, the device may send one `ModuleError (15)` per I2C module that failed to initialize. Later, `ModuleError` is also sent when an MCP23017 or ADS1115 loses or regains communication.
 
 ## Addressing Scheme
 
 Modules are addressed in two ways depending on their type:
 
 - **Hardware-pin modules** (Analog, Button, Matrix): identified by the `pin` field in `Configure` and `InputValue`. Matrix buttons use virtual pin numbers (`128 + row * num_cols + col`).
-- **I2C-addressed modules** (HT16K33, and future modules such as MCP23017 or ADS1115): identified by the `i2c_address` field in `Configure`, `WriteSegments`, `SetModuleBrightness`, and `ModuleError`.
+- **I2C-addressed modules** (HT16K33, MCP23017, ADS1115): identified by the `i2c_address` field in `Configure` and `ModuleError` (and `WriteSegments` / `SetModuleBrightness` for the HT16K33). MCP23017 and ADS1115 inputs are reported with `InputValue` on virtual pins 128-255 chosen by `direct_base`, `matrix_base` and `pin_base`.
 
 **Only one I2C bus is supported.** All I2C modules share the same bus. Each must have a distinct I2C address.
 
@@ -359,7 +425,7 @@ After every `ConfigurationStored`, the device emits zero or more `ModuleError` m
 [type=15] [i2c_address: u8] [error_code: u8]
 ```
 
-Currently only `error_code = 0` (init_failed) is defined. Future codes are reserved.
+`error_code = 0` (init_failed) is the only code an HT16K33 sends. Codes 1-3 come from the MCP23017 and ADS1115 (see `ModuleError (15)`). Other codes are reserved.
 
 ### Reset / reconnect behavior
 

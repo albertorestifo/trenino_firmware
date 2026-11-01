@@ -93,6 +93,13 @@ void update()
         sendInputValue(reading);
         StepperService::update();
     }
+
+    // Report runtime errors raised by I2C modules (lost, recovered, ...)
+    uint8_t error_address;
+    uint8_t error_code;
+    while (ModuleManager::getNextRuntimeError(error_address, error_code)) {
+        sendModuleError(error_address, error_code);
+    }
 }
 
 void handleIdentityRequest(uint32_t request_id)
@@ -111,6 +118,18 @@ void handleIdentityRequest(uint32_t request_id)
     uint8_t error_count = ModuleManager::getInitErrors(errors, ModuleManager::MAX_MODULES);
     for (uint8_t i = 0; i < error_count; i++) {
         sendModuleError(errors[i].i2c_address, errors[i].error_code);
+    }
+
+    // Repeat errors modules are in right now (communication lost, supply
+    // reference lost), skipping any address already reported above.
+    ModuleManager::InitError active[ModuleManager::MAX_MODULES];
+    uint8_t active_count = ModuleManager::getActiveErrors(active, ModuleManager::MAX_MODULES);
+    for (uint8_t i = 0; i < active_count; i++) {
+        bool already_sent = false;
+        for (uint8_t j = 0; j < error_count; j++) {
+            if (errors[j].i2c_address == active[i].i2c_address) already_sent = true;
+        }
+        if (!already_sent) sendModuleError(active[i].i2c_address, active[i].error_code);
     }
 }
 

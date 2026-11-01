@@ -31,6 +31,8 @@ void delayMicroseconds(unsigned int) {}
 #include "../../src/matrix_core.cpp"
 #include "../../src/matrix_sensor.cpp"
 #include "../../src/ht16k33_module.cpp"
+#include "../../src/mcp23017_module.cpp"
+#include "../../src/ads1115_module.cpp"
 #include "../../src/sensor_manager.cpp"
 #include "../../src/message_handler.cpp"
 #include <unity.h>
