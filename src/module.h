@@ -10,8 +10,15 @@ enum class ModuleType : uint8_t {
     Button = 1,
     Matrix = 2,
     // 3 = reserved (formerly BLDCLever)
-    HT16K33 = 4
+    HT16K33 = 4,
+    MCP23017 = 5,
+    ADS1115 = 6
 };
+
+// Returned by takeRuntimeError() / activeError() when there is no error.
+// Error codes: 0 init failed, 1 communication lost, 2 recovered,
+// 3 supply reference lost.
+constexpr uint8_t MODULE_ERROR_NONE = 0xFF;
 
 // Module reading result
 struct Reading {
@@ -63,6 +70,13 @@ public:
 
     // Get the I2C address (0 for hardware-pin modules)
     virtual uint8_t getI2CAddress() const { return 0; }
+
+    // Pops the oldest pending runtime error code, or MODULE_ERROR_NONE.
+    virtual uint8_t takeRuntimeError() { return MODULE_ERROR_NONE; }
+
+    // Error the module is in right now (repeated on IdentityRequest), or
+    // MODULE_ERROR_NONE.
+    virtual uint8_t activeError() const { return MODULE_ERROR_NONE; }
 };
 
 } // namespace Modules
