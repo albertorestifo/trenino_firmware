@@ -3,48 +3,67 @@
 
 namespace Protocol {
 
+namespace {
+
+// Every multi-byte wire field is little endian, like every supported target.
+void putU32(uint8_t* buffer, uint32_t value)
+{
+    memcpy(buffer, &value, sizeof(value));
+}
+
+uint32_t getU32(const uint8_t* buffer)
+{
+    uint32_t value;
+    memcpy(&value, buffer, sizeof(value));
+    return value;
+}
+
+int16_t getI16(const uint8_t* buffer)
+{
+    int16_t value;
+    memcpy(&value, buffer, sizeof(value));
+    return value;
+}
+
+// True if buffer holds at least required bytes and starts with type.
+bool isMessage(const uint8_t* buffer, size_t length, size_t required, uint8_t type)
+{
+    return length >= required && buffer[0] == type;
+}
+
+// Encoder and decoder for the messages made of a type byte and one u32.
+size_t encodeU32Message(uint8_t type, uint32_t value, uint8_t* buffer, size_t buffer_size)
+{
+    constexpr size_t REQUIRED_SIZE = 5;
+    if (buffer_size < REQUIRED_SIZE) {
+        return 0; // Buffer too small
+    }
+    buffer[0] = type;
+    putU32(buffer + 1, value);
+    return REQUIRED_SIZE;
+}
+
+bool decodeU32Message(uint8_t type, uint32_t& value, const uint8_t* buffer, size_t length)
+{
+    if (!isMessage(buffer, length, 5, type)) {
+        return false;
+    }
+    value = getU32(buffer + 1);
+    return true;
+}
+
+} // namespace
+
 // IdentityRequest implementation
 
 size_t IdentityRequest::encode(uint8_t* buffer, size_t buffer_size) const
 {
-    constexpr size_t REQUIRED_SIZE = 5; // 1 byte type + 4 bytes request_id
-
-    if (buffer_size < REQUIRED_SIZE) {
-        return 0; // Buffer too small
-    }
-
-    size_t offset = 0;
-
-    // Message type (u8)
-    buffer[offset++] = MESSAGE_TYPE_IDENTITY_REQUEST;
-
-    // request_id (u32) - little endian
-    buffer[offset++] = (request_id >> 0) & 0xFF;
-    buffer[offset++] = (request_id >> 8) & 0xFF;
-    buffer[offset++] = (request_id >> 16) & 0xFF;
-    buffer[offset++] = (request_id >> 24) & 0xFF;
-
-    return offset;
+    return encodeU32Message(MESSAGE_TYPE_IDENTITY_REQUEST, request_id, buffer, buffer_size);
 }
 
 bool IdentityRequest::decode(const uint8_t* buffer, size_t length)
 {
-    constexpr size_t REQUIRED_SIZE = 5;
-
-    if (length < REQUIRED_SIZE) {
-        return false; // Not enough data
-    }
-
-    if (buffer[0] != MESSAGE_TYPE_IDENTITY_REQUEST) {
-        return false; // Wrong message type
-    }
-
-    size_t offset = 1;
-
-    // request_id (u32) - little endian
-    request_id = ((uint32_t)buffer[offset + 0] << 0) | ((uint32_t)buffer[offset + 1] << 8) | ((uint32_t)buffer[offset + 2] << 16) | ((uint32_t)buffer[offset + 3] << 24);
-
-    return true;
+    return decodeU32Message(MESSAGE_TYPE_IDENTITY_REQUEST, request_id, buffer, length);
 }
 
 // IdentityResponse implementation
@@ -64,10 +83,8 @@ size_t IdentityResponse::encode(uint8_t* buffer, size_t buffer_size) const
     buffer[offset++] = MESSAGE_TYPE_IDENTITY_RESPONSE;
 
     // request_id (u32) - little endian
-    buffer[offset++] = (request_id >> 0) & 0xFF;
-    buffer[offset++] = (request_id >> 8) & 0xFF;
-    buffer[offset++] = (request_id >> 16) & 0xFF;
-    buffer[offset++] = (request_id >> 24) & 0xFF;
+    putU32(buffer + offset, request_id);
+    offset += 4;
 
     // version_major (u8)
     buffer[offset++] = version_major;
@@ -79,30 +96,22 @@ size_t IdentityResponse::encode(uint8_t* buffer, size_t buffer_size) const
     buffer[offset++] = version_patch;
 
     // config_id (u32) - little endian
-    buffer[offset++] = (config_id >> 0) & 0xFF;
-    buffer[offset++] = (config_id >> 8) & 0xFF;
-    buffer[offset++] = (config_id >> 16) & 0xFF;
-    buffer[offset++] = (config_id >> 24) & 0xFF;
+    putU32(buffer + offset, config_id);
+    offset += 4;
 
     return offset;
 }
 
 bool IdentityResponse::decode(const uint8_t* buffer, size_t length)
 {
-    constexpr size_t REQUIRED_SIZE = 12;
-
-    if (length < REQUIRED_SIZE) {
-        return false; // Not enough data
-    }
-
-    if (buffer[0] != MESSAGE_TYPE_IDENTITY_RESPONSE) {
-        return false; // Wrong message type
+    if (!isMessage(buffer, length, 12, MESSAGE_TYPE_IDENTITY_RESPONSE)) {
+        return false;
     }
 
     size_t offset = 1;
 
     // request_id (u32) - little endian
-    request_id = ((uint32_t)buffer[offset + 0] << 0) | ((uint32_t)buffer[offset + 1] << 8) | ((uint32_t)buffer[offset + 2] << 16) | ((uint32_t)buffer[offset + 3] << 24);
+    request_id = getU32(buffer + offset);
     offset += 4;
 
     // version_major (u8)
@@ -115,7 +124,7 @@ bool IdentityResponse::decode(const uint8_t* buffer, size_t length)
     version_patch = buffer[offset++];
 
     // config_id (u32) - little endian
-    config_id = ((uint32_t)buffer[offset + 0] << 0) | ((uint32_t)buffer[offset + 1] << 8) | ((uint32_t)buffer[offset + 2] << 16) | ((uint32_t)buffer[offset + 3] << 24);
+    config_id = getU32(buffer + offset);
 
     return true;
 }
@@ -171,6 +180,25 @@ bool validAds1115(const Ads1115Config& c)
     return true;
 }
 
+uint8_t modulePayloadSize(uint8_t module_type, uint8_t matrix_pins)
+{
+    switch (module_type) {
+    case MODULE_TYPE_ANALOG:
+    case MODULE_TYPE_BUTTON:
+        return 2; // pin + sensitivity or debounce
+    case MODULE_TYPE_MATRIX:
+        return 2 + matrix_pins; // counts + pins
+    case MODULE_TYPE_HT16K33:
+        return 3; // i2c_address + brightness + num_digits
+    case MODULE_TYPE_MCP23017:
+        return sizeof(Mcp23017Config);
+    case MODULE_TYPE_ADS1115:
+        return sizeof(Ads1115Config);
+    default:
+        return 0;
+    }
+}
+
 size_t Configure::encode(uint8_t* buffer, size_t buffer_size) const
 {
     // Common header: 1 type + 4 config_id + 1 total_parts + 1 part_number + 1 module_type = 8 bytes
@@ -217,10 +245,8 @@ size_t Configure::encode(uint8_t* buffer, size_t buffer_size) const
     buffer[offset++] = MESSAGE_TYPE_CONFIGURE;
 
     // config_id (u32) - little endian
-    buffer[offset++] = (config_id >> 0) & 0xFF;
-    buffer[offset++] = (config_id >> 8) & 0xFF;
-    buffer[offset++] = (config_id >> 16) & 0xFF;
-    buffer[offset++] = (config_id >> 24) & 0xFF;
+    putU32(buffer + offset, config_id);
+    offset += 4;
 
     // total_parts (u8)
     buffer[offset++] = total_parts;
@@ -299,7 +325,7 @@ bool Configure::decode(const uint8_t* buffer, size_t length)
     size_t offset = 1;
 
     // config_id (u32) - little endian
-    config_id = ((uint32_t)buffer[offset + 0] << 0) | ((uint32_t)buffer[offset + 1] << 8) | ((uint32_t)buffer[offset + 2] << 16) | ((uint32_t)buffer[offset + 3] << 24);
+    config_id = getU32(buffer + offset);
     offset += 4;
 
     // total_parts (u8)
@@ -315,93 +341,41 @@ bool Configure::decode(const uint8_t* buffer, size_t length)
         return total_parts == 0 && part_number == 0 && module_type == MODULE_TYPE_EMPTY && length == HEADER_SIZE;
     }
 
-    // Type-specific payload
-    switch (module_type) {
-    case MODULE_TYPE_ANALOG:
-        if (length < HEADER_SIZE + 2) {
-            return false; // Not enough data for analog payload
-        }
-        analog.pin = buffer[offset++];
-        analog.sensitivity = buffer[offset++];
-        break;
-
-    case MODULE_TYPE_BUTTON:
-        if (length < HEADER_SIZE + 2) {
-            return false; // Not enough data for button payload
-        }
-        button.pin = buffer[offset++];
-        button.debounce = buffer[offset++];
-        break;
-
-    case MODULE_TYPE_MATRIX: {
+    // The matrix payload length depends on its own first two bytes.
+    uint8_t total_pins = 0;
+    if (module_type == MODULE_TYPE_MATRIX) {
         if (length < HEADER_SIZE + 2) {
             return false; // Not enough data for matrix header
         }
-        matrix.num_row_pins = buffer[offset++];
-        matrix.num_col_pins = buffer[offset++];
-
-        uint8_t total_pins = matrix.num_row_pins + matrix.num_col_pins;
+        total_pins = buffer[offset] + buffer[offset + 1];
         if (total_pins > MAX_MATRIX_PINS) {
             return false; // Too many pins
         }
-        if (length < HEADER_SIZE + 2 + total_pins) {
-            return false; // Not enough data for matrix pins
-        }
-        for (uint8_t i = 0; i < total_pins; i++) {
-            matrix.pins[i] = buffer[offset++];
-        }
-        break;
     }
 
-    case MODULE_TYPE_HT16K33:
-        if (length < HEADER_SIZE + 3) {
-            return false; // Not enough data for HT16K33 payload
-        }
-        ht16k33.i2c_address = buffer[offset++];
-        ht16k33.brightness = buffer[offset++];
-        ht16k33.num_digits = buffer[offset++];
-        break;
-
-    case MODULE_TYPE_MCP23017: {
-        if (length != HEADER_SIZE + 10) {
-            return false;
-        }
-        Mcp23017Config c;
-        c.i2c_address = buffer[offset++];
-        c.direct_base = buffer[offset++];
-        c.matrix_base = buffer[offset++];
-        c.debounce = buffer[offset++];
-        c.direct_mask = (uint16_t)(buffer[offset] | (buffer[offset + 1] << 8));
-        c.row_mask = (uint16_t)(buffer[offset + 2] | (buffer[offset + 3] << 8));
-        c.col_mask = (uint16_t)(buffer[offset + 4] | (buffer[offset + 5] << 8));
-        if (!validMcp23017(c)) {
-            return false;
-        }
-        mcp23017 = c;
-        break;
-    }
-
-    case MODULE_TYPE_ADS1115: {
-        if (length != HEADER_SIZE + 9) {
-            return false;
-        }
-        Ads1115Config c;
-        c.i2c_address = buffer[offset++];
-        c.pin_base = buffer[offset++];
-        c.channel_mask = buffer[offset++];
-        c.gain = buffer[offset++];
-        c.ref_channel = buffer[offset++];
-        for (uint8_t i = 0; i < 4; i++) c.sensitivity[i] = buffer[offset++];
-        if (!validAds1115(c)) {
-            return false;
-        }
-        ads1115 = c;
-        break;
-    }
-
-    default:
+    uint8_t payload_size = modulePayloadSize(module_type, total_pins);
+    if (payload_size == 0) {
         return false; // Unknown input type
     }
+    if (length < HEADER_SIZE + payload_size) {
+        return false; // Not enough data for payload
+    }
+
+    // The union members are the wire payloads, byte for byte.
+    if (module_type == MODULE_TYPE_MCP23017) {
+        Mcp23017Config c;
+        memcpy(&c, buffer + offset, sizeof(c));
+        if (length != HEADER_SIZE + payload_size || !validMcp23017(c)) {
+            return false;
+        }
+    } else if (module_type == MODULE_TYPE_ADS1115) {
+        Ads1115Config c;
+        memcpy(&c, buffer + offset, sizeof(c));
+        if (length != HEADER_SIZE + payload_size || !validAds1115(c)) {
+            return false;
+        }
+    }
+    memcpy(&matrix, buffer + offset, payload_size);
 
     return true;
 }
@@ -410,88 +384,24 @@ bool Configure::decode(const uint8_t* buffer, size_t length)
 
 size_t ConfigurationStored::encode(uint8_t* buffer, size_t buffer_size) const
 {
-    constexpr size_t REQUIRED_SIZE = 5; // 1 type + 4 config_id
-
-    if (buffer_size < REQUIRED_SIZE) {
-        return 0; // Buffer too small
-    }
-
-    size_t offset = 0;
-
-    // Message type (u8)
-    buffer[offset++] = MESSAGE_TYPE_CONFIGURATION_STORED;
-
-    // config_id (u32) - little endian
-    buffer[offset++] = (config_id >> 0) & 0xFF;
-    buffer[offset++] = (config_id >> 8) & 0xFF;
-    buffer[offset++] = (config_id >> 16) & 0xFF;
-    buffer[offset++] = (config_id >> 24) & 0xFF;
-
-    return offset;
+    return encodeU32Message(MESSAGE_TYPE_CONFIGURATION_STORED, config_id, buffer, buffer_size);
 }
 
 bool ConfigurationStored::decode(const uint8_t* buffer, size_t length)
 {
-    constexpr size_t REQUIRED_SIZE = 5;
-
-    if (length < REQUIRED_SIZE) {
-        return false; // Not enough data
-    }
-
-    if (buffer[0] != MESSAGE_TYPE_CONFIGURATION_STORED) {
-        return false; // Wrong message type
-    }
-
-    size_t offset = 1;
-
-    // config_id (u32) - little endian
-    config_id = ((uint32_t)buffer[offset + 0] << 0) | ((uint32_t)buffer[offset + 1] << 8) | ((uint32_t)buffer[offset + 2] << 16) | ((uint32_t)buffer[offset + 3] << 24);
-
-    return true;
+    return decodeU32Message(MESSAGE_TYPE_CONFIGURATION_STORED, config_id, buffer, length);
 }
 
 // ConfigurationError implementation
 
 size_t ConfigurationError::encode(uint8_t* buffer, size_t buffer_size) const
 {
-    constexpr size_t REQUIRED_SIZE = 5; // 1 type + 4 config_id
-
-    if (buffer_size < REQUIRED_SIZE) {
-        return 0; // Buffer too small
-    }
-
-    size_t offset = 0;
-
-    // Message type (u8)
-    buffer[offset++] = MESSAGE_TYPE_CONFIGURATION_ERROR;
-
-    // config_id (u32) - little endian
-    buffer[offset++] = (config_id >> 0) & 0xFF;
-    buffer[offset++] = (config_id >> 8) & 0xFF;
-    buffer[offset++] = (config_id >> 16) & 0xFF;
-    buffer[offset++] = (config_id >> 24) & 0xFF;
-
-    return offset;
+    return encodeU32Message(MESSAGE_TYPE_CONFIGURATION_ERROR, config_id, buffer, buffer_size);
 }
 
 bool ConfigurationError::decode(const uint8_t* buffer, size_t length)
 {
-    constexpr size_t REQUIRED_SIZE = 5;
-
-    if (length < REQUIRED_SIZE) {
-        return false; // Not enough data
-    }
-
-    if (buffer[0] != MESSAGE_TYPE_CONFIGURATION_ERROR) {
-        return false; // Wrong message type
-    }
-
-    size_t offset = 1;
-
-    // config_id (u32) - little endian
-    config_id = ((uint32_t)buffer[offset + 0] << 0) | ((uint32_t)buffer[offset + 1] << 8) | ((uint32_t)buffer[offset + 2] << 16) | ((uint32_t)buffer[offset + 3] << 24);
-
-    return true;
+    return decodeU32Message(MESSAGE_TYPE_CONFIGURATION_ERROR, config_id, buffer, length);
 }
 
 // InputValue implementation
@@ -521,14 +431,8 @@ size_t InputValue::encode(uint8_t* buffer, size_t buffer_size) const
 
 bool InputValue::decode(const uint8_t* buffer, size_t length)
 {
-    constexpr size_t REQUIRED_SIZE = 4;
-
-    if (length < REQUIRED_SIZE) {
-        return false; // Not enough data
-    }
-
-    if (buffer[0] != MESSAGE_TYPE_INPUT_VALUE) {
-        return false; // Wrong message type
+    if (!isMessage(buffer, length, 4, MESSAGE_TYPE_INPUT_VALUE)) {
+        return false;
     }
 
     size_t offset = 1;
@@ -537,7 +441,7 @@ bool InputValue::decode(const uint8_t* buffer, size_t length)
     pin = buffer[offset++];
 
     // value (i16) - little endian
-    value = (int16_t)(((uint16_t)buffer[offset + 0] << 0) | ((uint16_t)buffer[offset + 1] << 8));
+    value = getI16(buffer + offset);
 
     return true;
 }
@@ -559,14 +463,8 @@ size_t Heartbeat::encode(uint8_t* buffer, size_t buffer_size) const
 
 bool Heartbeat::decode(const uint8_t* buffer, size_t length)
 {
-    constexpr size_t REQUIRED_SIZE = 1;
-
-    if (length < REQUIRED_SIZE) {
-        return false; // Not enough data
-    }
-
-    if (buffer[0] != MESSAGE_TYPE_HEARTBEAT) {
-        return false; // Wrong message type
+    if (!isMessage(buffer, length, 1, MESSAGE_TYPE_HEARTBEAT)) {
+        return false;
     }
 
     return true;
@@ -598,14 +496,8 @@ size_t SetOutput::encode(uint8_t* buffer, size_t buffer_size) const
 
 bool SetOutput::decode(const uint8_t* buffer, size_t length)
 {
-    constexpr size_t REQUIRED_SIZE = 3;
-
-    if (length < REQUIRED_SIZE) {
-        return false; // Not enough data
-    }
-
-    if (buffer[0] != MESSAGE_TYPE_SET_OUTPUT) {
-        return false; // Wrong message type
+    if (!isMessage(buffer, length, 3, MESSAGE_TYPE_SET_OUTPUT)) {
+        return false;
     }
 
     size_t offset = 1;
@@ -642,14 +534,8 @@ size_t EncoderError::encode(uint8_t* buffer, size_t buffer_size) const
 
 bool EncoderError::decode(const uint8_t* buffer, size_t length)
 {
-    constexpr size_t REQUIRED_SIZE = 2;
-
-    if (length < REQUIRED_SIZE) {
-        return false; // Not enough data
-    }
-
-    if (buffer[0] != MESSAGE_TYPE_ENCODER_ERROR) {
-        return false; // Wrong message type
+    if (!isMessage(buffer, length, 2, MESSAGE_TYPE_ENCODER_ERROR)) {
+        return false;
     }
 
     size_t offset = 1;
@@ -703,14 +589,8 @@ size_t LoadBLDCProfile::encode(uint8_t* buffer, size_t buffer_size) const
 
 bool LoadBLDCProfile::decode(const uint8_t* buffer, size_t length)
 {
-    constexpr size_t REQUIRED_SIZE = 10;
-
-    if (length < REQUIRED_SIZE) {
-        return false; // Not enough data
-    }
-
-    if (buffer[0] != MESSAGE_TYPE_LOAD_BLDC_PROFILE) {
-        return false; // Wrong message type
+    if (!isMessage(buffer, length, 10, MESSAGE_TYPE_LOAD_BLDC_PROFILE)) {
+        return false;
     }
 
     size_t offset = 1;
@@ -731,11 +611,11 @@ bool LoadBLDCProfile::decode(const uint8_t* buffer, size_t length)
     endstop_strength = buffer[offset++];
 
     // position_start (i16) - little endian
-    position_start = (int16_t)(((uint16_t)buffer[offset + 0] << 0) | ((uint16_t)buffer[offset + 1] << 8));
+    position_start = getI16(buffer + offset);
     offset += 2;
 
     // position_end (i16) - little endian
-    position_end = (int16_t)(((uint16_t)buffer[offset + 0] << 0) | ((uint16_t)buffer[offset + 1] << 8));
+    position_end = getI16(buffer + offset);
     offset += 2;
 
     return true;
@@ -764,14 +644,8 @@ size_t DeactivateBLDCProfile::encode(uint8_t* buffer, size_t buffer_size) const
 
 bool DeactivateBLDCProfile::decode(const uint8_t* buffer, size_t length)
 {
-    constexpr size_t REQUIRED_SIZE = 2;
-
-    if (length < REQUIRED_SIZE) {
-        return false; // Not enough data
-    }
-
-    if (buffer[0] != MESSAGE_TYPE_DEACTIVATE_BLDC_PROFILE) {
-        return false; // Wrong message type
+    if (!isMessage(buffer, length, 2, MESSAGE_TYPE_DEACTIVATE_BLDC_PROFILE)) {
+        return false;
     }
 
     size_t offset = 1;
@@ -806,8 +680,7 @@ size_t WriteSegments::encode(uint8_t* buffer, size_t buffer_size) const
 
 bool WriteSegments::decode(const uint8_t* buffer, size_t length)
 {
-    if (length < 3) return false;
-    if (buffer[0] != MESSAGE_TYPE_WRITE_SEGMENTS) return false;
+    if (!isMessage(buffer, length, 3, MESSAGE_TYPE_WRITE_SEGMENTS)) return false;
 
     i2c_address = buffer[1];
     num_bytes = buffer[2];
@@ -833,8 +706,7 @@ size_t SetModuleBrightness::encode(uint8_t* buffer, size_t buffer_size) const
 
 bool SetModuleBrightness::decode(const uint8_t* buffer, size_t length)
 {
-    if (length < 3) return false;
-    if (buffer[0] != MESSAGE_TYPE_SET_MODULE_BRIGHTNESS) return false;
+    if (!isMessage(buffer, length, 3, MESSAGE_TYPE_SET_MODULE_BRIGHTNESS)) return false;
     i2c_address = buffer[1];
     brightness = buffer[2];
     return true;
@@ -853,8 +725,7 @@ size_t ModuleError::encode(uint8_t* buffer, size_t buffer_size) const
 
 bool ModuleError::decode(const uint8_t* buffer, size_t length)
 {
-    if (length < 3) return false;
-    if (buffer[0] != MESSAGE_TYPE_MODULE_ERROR) return false;
+    if (!isMessage(buffer, length, 3, MESSAGE_TYPE_MODULE_ERROR)) return false;
     i2c_address = buffer[1];
     error_code = buffer[2];
     return true;

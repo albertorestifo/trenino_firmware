@@ -5,6 +5,9 @@
 
 namespace Protocol {
 
+// Records are copied as raw bytes between structs, the wire and EEPROM.
+static_assert(__BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__, "wire and EEPROM formats are little endian");
+
 // Message Type constants
 constexpr uint8_t MESSAGE_TYPE_IDENTITY_REQUEST = 0;
 constexpr uint8_t MESSAGE_TYPE_IDENTITY_RESPONSE = 1;
@@ -97,6 +100,10 @@ struct __attribute__((packed)) Ads1115Config {
 // Validation applied by Configure::decode; false means ConfigurationError.
 bool validMcp23017(const Mcp23017Config& config);
 bool validAds1115(const Ads1115Config& config);
+
+// Payload bytes of a module record, on the wire and in EEPROM; 0 if module_type
+// is unknown. matrix_pins (row + col pins) only matters for a matrix.
+uint8_t modulePayloadSize(uint8_t module_type, uint8_t matrix_pins);
 
 // Configure message - sent by host to configure device inputs
 // Uses a discriminated union based on module_type
