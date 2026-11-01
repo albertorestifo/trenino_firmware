@@ -21,6 +21,7 @@ public:
     static constexpr int16_t REF_MIN_RAW = 4000;
     static constexpr uint16_t DEAD_ZONE = 2; // 10-bit units
     static constexpr unsigned long MAX_SEND_INTERVAL_MS = 100;
+    static constexpr uint8_t MAX_NOT_DONE_RETRIES = 3; // re-reads while OS is clear
 
     Ads1115Module(uint8_t address, uint8_t pin_base, uint8_t channel_mask, uint8_t gain,
         uint8_t ref_channel, const uint8_t* sensitivity);
@@ -72,6 +73,7 @@ private:
     uint8_t channel_; // channel of the latest conversion; the next one follows it
     unsigned long start_ms_; // conversion start, or time of the last failure
     bool retry_wait_; // after a failed transaction, wait before starting again
+    uint8_t not_done_reads_; // re-reads of this conversion while OS was clear
 
     bool ref_seeded_;
     bool ref_lost_;

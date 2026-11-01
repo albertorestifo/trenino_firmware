@@ -48,9 +48,17 @@ static void cycle(Ads1115Module& m, uint8_t channel, int16_t raw, uint8_t gain =
     g_now += 5;
     const uint8_t cfg[2] = { (uint8_t)(w >> 8), (uint8_t)(w & 0xFF) };
     const uint8_t res[2] = { (uint8_t)((uint16_t)raw >> 8), (uint8_t)((uint16_t)raw & 0xFF) };
-    MockWire::queueRead(ADDR, cfg, 2);
     MockWire::queueRead(ADDR, res, 2);
+    MockWire::queueRead(ADDR, cfg, 2);
     m.scan();
+}
+
+// A reset chip: any result, then the power-on config.
+static void queueResetRead(const uint8_t* reset_cfg)
+{
+    const uint8_t res[2] = { 0x7F, 0xFF };
+    MockWire::queueRead(ADDR, res, 2);
+    MockWire::queueRead(ADDR, reset_cfg, 2);
 }
 
 static Ads1115Module plain(uint8_t mask, const uint8_t* sens = SENS10)
@@ -122,8 +130,8 @@ void test_no_read_before_5ms()
     g_now += 1;
     const uint8_t cfg[2] = { 0xC1, 0xA3 };
     const uint8_t res[2] = { 0x06, 0x40 };
-    MockWire::queueRead(ADDR, cfg, 2);
     MockWire::queueRead(ADDR, res, 2);
+    MockWire::queueRead(ADDR, cfg, 2);
     m.scan();
     TEST_ASSERT_EQUAL_UINT8(2, MockWire::read_request_count);
     TEST_ASSERT_EQUAL_UINT8(2, MockWire::last_request_quantity);
@@ -299,7 +307,7 @@ void test_nack_produces_no_value()
     m.scan(); // start
     g_now += 5;
     MockWire::scheduleNacks(ADDR, 1);
-    m.scan(); // the config readback NACKs
+    m.scan(); // the conversion read NACKs
     TEST_ASSERT_FALSE(m.getReading().has_value);
     TEST_ASSERT_EQUAL_UINT8(MODULE_ERROR_NONE, m.takeRuntimeError());
     TEST_ASSERT_EQUAL_UINT8(1, m.health().failures());
@@ -311,9 +319,7 @@ void test_short_read_produces_no_value()
     m.begin();
     m.scan();
     g_now += 5;
-    const uint8_t cfg[2] = { 0xC1, 0xA3 };
     const uint8_t one[1] = { 0x12 };
-    MockWire::queueRead(ADDR, cfg, 2);
     MockWire::queueRead(ADDR, one, 1);
     m.scan();
     TEST_ASSERT_FALSE(m.getReading().has_value);
@@ -400,17 +406,13 @@ void test_config_mismatch_discards_conversion()
     g_now += 5;
     MockWire::transaction_count = 0;
     const uint8_t reset_cfg[2] = { 0x85, 0x83 }; // power-on default
-    const uint8_t res[2] = { 0x7F, 0xFF };
-    MockWire::queueRead(ADDR, reset_cfg, 2);
-    MockWire::queueRead(ADDR, res, 2);
+    queueResetRead(reset_cfg);
     m.scan();
     TEST_ASSERT_FALSE(m.getReading().has_value);
     TEST_ASSERT_EQUAL_UINT8(1, m.takeRuntimeError());
     TEST_ASSERT_EQUAL_UINT8(2, m.takeRuntimeError());
     TEST_ASSERT_EQUAL_UINT8(MODULE_ERROR_NONE, m.takeRuntimeError());
-    // The conversion register was not read; channel 0 was started again.
-    TEST_ASSERT_EQUAL_UINT8(1, MockWire::read_request_count);
-    MockWire::read_queue_count = 0; // drop the unread result
+    // The result was discarded; channel 0 was started again.
     const MockWire::Transaction& t = MockWire::transactions[MockWire::transaction_count - 1];
     TEST_ASSERT_EQUAL_UINT8(3, t.length);
     TEST_ASSERT_EQUAL_HEX8(0xC1, t.data[1]);
@@ -419,8 +421,8 @@ void test_config_mismatch_discards_conversion()
     g_now += 5;
     const uint8_t cfg[2] = { 0xC1, 0xA3 };
     const uint8_t ok[2] = { 0x06, 0x40 };
-    MockWire::queueRead(ADDR, cfg, 2);
     MockWire::queueRead(ADDR, ok, 2);
+    MockWire::queueRead(ADDR, cfg, 2);
     m.scan();
     Reading r = m.getReading();
     TEST_ASSERT_TRUE(r.has_value);
@@ -471,7 +473,7 @@ void test_reset_with_reference_lost_ends_on_code_3()
     m.scan(); // starts the reference conversion
     g_now += 5;
     const uint8_t reset_cfg[2] = { 0x85, 0x83 };
-    MockWire::queueRead(ADDR, reset_cfg, 2);
+    queueResetRead(reset_cfg);
     m.scan();
     TEST_ASSERT_EQUAL_UINT8(1, m.takeRuntimeError());
     TEST_ASSERT_EQUAL_UINT8(2, m.takeRuntimeError());
@@ -491,7 +493,7 @@ void test_repeated_config_mismatch_reaches_failed_state()
     uint8_t n;
     for (int i = 0; i < 2; i++) {
         g_now += 5;
-        MockWire::queueRead(ADDR, reset_cfg, 2);
+        queueResetRead(reset_cfg);
         m.scan();
         drainCodes(m, codes, n);
         TEST_ASSERT_EQUAL_UINT8(2, n); // a single mismatch: code 1 then 2
@@ -500,7 +502,7 @@ void test_repeated_config_mismatch_reaches_failed_state()
         TEST_ASSERT_FALSE(m.health().failed());
     }
     g_now += 5;
-    MockWire::queueRead(ADDR, reset_cfg, 2);
+    queueResetRead(reset_cfg);
     m.scan();
     drainCodes(m, codes, n);
     TEST_ASSERT_EQUAL_UINT8(1, n);
@@ -526,14 +528,14 @@ void test_good_conversion_clears_mismatch_count()
     m.scan();
     g_now += 5;
     const uint8_t reset_cfg[2] = { 0x85, 0x83 };
-    MockWire::queueRead(ADDR, reset_cfg, 2);
+    queueResetRead(reset_cfg);
     m.scan();
     TEST_ASSERT_EQUAL_UINT8(1, m.health().failures());
     g_now += 5;
     const uint8_t cfg[2] = { 0xC1, 0xA3 };
     const uint8_t res[2] = { 0x06, 0x40 };
-    MockWire::queueRead(ADDR, cfg, 2);
     MockWire::queueRead(ADDR, res, 2);
+    MockWire::queueRead(ADDR, cfg, 2);
     m.scan();
     TEST_ASSERT_EQUAL_UINT8(0, m.health().failures());
 }
@@ -544,6 +546,103 @@ void test_identity_accessors()
     TEST_ASSERT_EQUAL_UINT8(0, m.getPin());
     TEST_ASSERT_EQUAL_UINT8(ADDR, m.getI2CAddress());
     TEST_ASSERT_EQUAL(ModuleType::ADS1115, m.getType());
+}
+
+// What a finished read serves: the conversion register, then the config register.
+static void queueFinish(uint16_t result, uint16_t config)
+{
+    const uint8_t res[2] = { (uint8_t)(result >> 8), (uint8_t)(result & 0xFF) };
+    const uint8_t cfg[2] = { (uint8_t)(config >> 8), (uint8_t)(config & 0xFF) };
+    MockWire::queueRead(ADDR, res, 2);
+    MockWire::queueRead(ADDR, cfg, 2);
+}
+
+static const uint16_t CFG_DONE = 0xC1A3; // channel 0, OS set: finished
+static const uint16_t CFG_BUSY = 0x41A3; // channel 0, OS clear: still converting
+static const uint16_t CFG_RESET = 0x8583; // power-on default
+
+void test_reads_conversion_before_config()
+{
+    Ads1115Module m = plain(0x01);
+    m.begin();
+    m.scan();
+    g_now += 5;
+    MockWire::transaction_count = 0;
+    queueFinish(0x0640, CFG_DONE);
+    m.scan();
+    TEST_ASSERT_EQUAL_UINT8(2, MockWire::transaction_count);
+    TEST_ASSERT_EQUAL_HEX8(0x00, MockWire::transactions[0].data[0]);
+    TEST_ASSERT_EQUAL_HEX8(0x01, MockWire::transactions[1].data[0]);
+    TEST_ASSERT_EQUAL_INT16(50, m.getReading().value);
+}
+
+void test_reset_between_reads_discards_result()
+{
+    Ads1115Module m = plain(0x01);
+    m.begin();
+    m.scan();
+    g_now += 5;
+    MockWire::transaction_count = 0;
+    queueFinish(0x7FFF, CFG_RESET); // good result, then the chip resets
+    m.scan();
+    TEST_ASSERT_FALSE(m.getReading().has_value);
+    TEST_ASSERT_EQUAL_UINT8(1, m.takeRuntimeError());
+    TEST_ASSERT_EQUAL_UINT8(2, m.takeRuntimeError());
+    TEST_ASSERT_EQUAL_UINT8(MODULE_ERROR_NONE, m.takeRuntimeError());
+    TEST_ASSERT_EQUAL_UINT8(1, m.health().failures());
+}
+
+void test_os_clear_discards_and_rereads_without_failure()
+{
+    Ads1115Module m = plain(0x01);
+    m.begin();
+    m.scan();
+    g_now += 5;
+    MockWire::read_request_count = 0;
+    MockWire::transaction_count = 0;
+    queueFinish(0x7FFF, CFG_BUSY);
+    m.scan();
+    TEST_ASSERT_FALSE(m.getReading().has_value);
+    TEST_ASSERT_EQUAL_UINT8(0, m.health().failures());
+    TEST_ASSERT_EQUAL_UINT8(MODULE_ERROR_NONE, m.takeRuntimeError());
+
+    // The next scan reads again, with no new conversion started.
+    queueFinish(0x0640, CFG_DONE);
+    m.scan();
+    TEST_ASSERT_EQUAL_UINT8(4, MockWire::read_request_count);
+    TEST_ASSERT_EQUAL_UINT8(4, MockWire::transaction_count); // pointer writes only
+    TEST_ASSERT_EQUAL_INT16(50, m.getReading().value);
+}
+
+void test_os_clear_after_3_retries_is_a_mismatch()
+{
+    Ads1115Module m = plain(0x01);
+    m.begin();
+    m.scan();
+    g_now += 5;
+    for (uint8_t i = 0; i < 3; i++) { // the first read and 2 retries
+        queueFinish(0x7FFF, CFG_BUSY);
+        m.scan();
+        TEST_ASSERT_EQUAL_UINT8(0, m.health().failures());
+    }
+    queueFinish(0x7FFF, CFG_BUSY); // the third retry
+    m.scan();
+    TEST_ASSERT_EQUAL_UINT8(1, m.health().failures());
+    TEST_ASSERT_FALSE(m.getReading().has_value);
+    TEST_ASSERT_EQUAL_UINT8(1, m.takeRuntimeError());
+    TEST_ASSERT_EQUAL_UINT8(2, m.takeRuntimeError());
+
+    // The retry budget starts over with the restarted conversion.
+    g_now += 5;
+    for (uint8_t i = 0; i < 3; i++) {
+        queueFinish(0x7FFF, CFG_BUSY);
+        m.scan();
+        TEST_ASSERT_EQUAL_UINT8(1, m.health().failures());
+    }
+    queueFinish(0x0640, CFG_DONE);
+    m.scan();
+    TEST_ASSERT_EQUAL_UINT8(0, m.health().failures());
+    TEST_ASSERT_EQUAL_INT16(50, m.getReading().value);
 }
 
 int main()
@@ -576,5 +675,9 @@ int main()
     RUN_TEST(test_repeated_config_mismatch_reaches_failed_state);
     RUN_TEST(test_good_conversion_clears_mismatch_count);
     RUN_TEST(test_identity_accessors);
+    RUN_TEST(test_reads_conversion_before_config);
+    RUN_TEST(test_reset_between_reads_discards_result);
+    RUN_TEST(test_os_clear_discards_and_rereads_without_failure);
+    RUN_TEST(test_os_clear_after_3_retries_is_a_mismatch);
     return UNITY_END();
 }

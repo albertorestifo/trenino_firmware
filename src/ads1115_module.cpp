@@ -28,6 +28,7 @@ Ads1115Module::Ads1115Module(uint8_t address, uint8_t pin_base, uint8_t channel_
     , channel_(CHANNELS - 1)
     , start_ms_(0)
     , retry_wait_(false)
+    , not_done_reads_(0)
     , ref_seeded_(false)
     , ref_lost_(false)
     , ref_(0)
@@ -193,19 +194,32 @@ void Ads1115Module::startConversion(unsigned long now)
     channel_ = next;
     state_ = State::CONVERTING;
     start_ms_ = now;
+    not_done_reads_ = 0;
     retry_wait_ = false;
 }
 
+// The conversion register is read first, then the config register: a reset at
+// any point before the second read leaves default MUX/PGA/MODE in the read-back,
+// so a result from a reset chip (wrong channel and gain) is never used.
 void Ads1115Module::finishConversion(unsigned long now)
 {
-    // A reset chip has default MUX/PGA/MODE; a result read now would belong to
-    // the wrong channel and gain.
+    uint16_t word;
     uint16_t cfg;
-    if (!readRegister(REG_CONFIG, cfg)) {
+    if (!readRegister(REG_CONVERSION, word) || !readRegister(REG_CONFIG, cfg)) {
         noteFailure(now);
         return;
     }
-    if ((cfg & CONFIG_CHECK_MASK) != (configWord(channel_) & CONFIG_CHECK_MASK)) {
+    bool mismatch = (cfg & CONFIG_CHECK_MASK) != (configWord(channel_) & CONFIG_CHECK_MASK);
+    if (!mismatch && !(cfg & OS_BIT)) {
+        // Still converting: not a failure, read again on the next scan.
+        if (not_done_reads_ < MAX_NOT_DONE_RETRIES) {
+            not_done_reads_++;
+            return;
+        }
+        mismatch = true;
+    }
+    not_done_reads_ = 0;
+    if (mismatch) {
         // A mismatch is a failure: repeated resets (or another device answering
         // at this address) must reach the threshold, not loop through 1/2 pairs.
         if (health_.noteFailure(now)) {
@@ -215,11 +229,6 @@ void Ads1115Module::finishConversion(unsigned long now)
             return;
         }
         handleReset(now);
-        return;
-    }
-    uint16_t word;
-    if (!readRegister(REG_CONVERSION, word)) {
-        noteFailure(now);
         return;
     }
     health_.noteSuccess();
