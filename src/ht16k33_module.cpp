@@ -1,16 +1,9 @@
 #include "ht16k33_module.h"
 #include <Arduino.h>
 #include <Wire.h>
+#include "i2c_bus.h"
 
 namespace Modules {
-
-namespace {
-bool g_wire_initialized = false;
-}
-
-#ifdef UNIT_TEST
-void ht16k33_reset_wire_state() { g_wire_initialized = false; }
-#endif
 
 HT16K33Module::HT16K33Module(uint8_t i2c_address, uint8_t brightness, uint8_t num_digits)
     : i2c_address_(i2c_address)
@@ -51,16 +44,7 @@ bool HT16K33Module::runInitSequence()
 
 bool HT16K33Module::begin()
 {
-    if (!g_wire_initialized) {
-        Wire.begin();
-#ifdef ARDUINO_ARCH_AVR
-        // Bound any single I2C transaction so a stuck bus (no pull-ups, shorted
-        // SDA, missing slave) does not hang the firmware. 25 ms is comfortably
-        // longer than any HT16K33 transaction at 100 kHz.
-        Wire.setWireTimeout(25000, true);
-#endif
-        g_wire_initialized = true;
-    }
+    I2CBus::begin();
 
     if (runInitSequence()) {
         failure_count_ = 0;

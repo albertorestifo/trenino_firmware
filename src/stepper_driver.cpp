@@ -3,6 +3,7 @@
 // Copyright(c)2012. BSD license and disclaimer: docs/THIRD_PARTY_NOTICES.md.
 #include <Arduino.h>
 #include <Wire.h>
+#include "i2c_bus.h"
 
 namespace Stepper {
 namespace {
@@ -10,15 +11,9 @@ bool reg(uint8_t address, uint8_t index, uint8_t value) {
     Wire.beginTransmission(address); Wire.write(index); Wire.write(value);
     return Wire.endTransmission() == 0;
 }
-void startWire() {
-    Wire.begin();
-#ifdef ARDUINO_ARCH_AVR
-    Wire.setWireTimeout(25000, true);
-#endif
-}
 }
 bool ShieldDriver::shutdown(uint8_t address) {
-    startWire();
+    I2CBus::begin();
     // AI on, awake, ALLCALL and every SUBCALL disabled. Never address 0x70
     // as a broadcast. MODE2=OUTDRV, changes take effect at STOP.
     if (!reg(address, 0x00, 0x20) || !reg(address, 0x01, 0x04)) return false;

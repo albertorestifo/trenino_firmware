@@ -115,10 +115,6 @@ bool HT16K33Module::setBrightness(uint8_t) { return true; }
 bool HT16K33Module::runInitSequence() { return true; }
 bool HT16K33Module::writeWithRetry(const uint8_t*, uint8_t) { return true; }
 
-// ht16k33_module.cpp uses a file-scope g_wire_initialized; provide the
-// UNIT_TEST reset helper so any future include doesn't fail to link.
-void ht16k33_reset_wire_state() {}
-
 } // namespace Modules
 
 // ---- Now inline-include the unit under test ----
