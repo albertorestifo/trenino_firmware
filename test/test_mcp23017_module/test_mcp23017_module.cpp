@@ -33,6 +33,14 @@ static void queueSample(uint8_t gpioA, uint8_t gpioB)
     MockWire::queueRead(ADDR, bytes, 4);
 }
 
+// Sample whose OLAT bytes are what the module wrote for its next scan step.
+static void queueNext(const Mcp23017Module& m, uint8_t gpioA, uint8_t gpioB)
+{
+    uint16_t olat = m.nextOlatForTest();
+    const uint8_t bytes[4] = { gpioA, gpioB, (uint8_t)(olat & 0xFF), (uint8_t)(olat >> 8) };
+    MockWire::queueRead(ADDR, bytes, 4);
+}
+
 static void queueShort()
 {
     const uint8_t bytes[3] = { 0xFF, 0xFF, 0x01 };
@@ -292,7 +300,7 @@ void test_matrix_scans_one_row_every_2ms()
     TEST_ASSERT_EQUAL_UINT8(0, MockWire::transaction_count);
     TEST_ASSERT_EQUAL_UINT8(0, MockWire::read_request_count);
 
-    queueSample(0xFF, 0xFF);
+    queueNext(m, 0xFF, 0xFF);
     g_now = 2;
     m.scan();
     TEST_ASSERT_EQUAL_UINT8(2, MockWire::transaction_count); // OLAT write + pointer write
@@ -305,7 +313,7 @@ void test_matrix_scans_one_row_every_2ms()
     TEST_ASSERT_EQUAL_UINT8(2, MockWire::transaction_count);
     TEST_ASSERT_EQUAL_UINT8(1, MockWire::read_request_count);
 
-    queueSample(0xFF, 0xFF);
+    queueNext(m, 0xFF, 0xFF);
     g_now = 4;
     m.scan();
     TEST_ASSERT_EQUAL_UINT8(4, MockWire::transaction_count);
@@ -319,7 +327,7 @@ void test_matrix_row_low_others_high()
     MockWire::transaction_count = 0;
     const uint8_t expect_low[4] = { 0x0E, 0x0D, 0x0B, 0x0E }; // rows 0,1,2, then wraps to row 0
     for (uint8_t i = 0; i < 4; i++) {
-        queueSample(0xFF, 0xFF);
+        queueNext(m, 0xFF, 0xFF);
         tick2(m);
         const MockWire::Transaction& t = MockWire::transactions[i * 2];
         TEST_ASSERT_EQUAL_UINT8(0x14, t.data[0]);
@@ -335,9 +343,9 @@ void test_matrix_cell_pin_number()
     // columns on bits 9 and 12 (GPB1, GPB4).
     Mcp23017Module m = makeMatrix(0x000A, 0x1200, 1, 0, 100);
     m.begin();
-    queueSample(0xFF, 0xFF); // row 0: nothing
+    queueNext(m, 0xFF, 0xFF); // row 0: nothing
     tick2(m);
-    queueSample(0xFF, 0xEF); // row 1: column 1 (bit 12 = GPB4) low
+    queueNext(m, 0xFF, 0xEF); // row 1: column 1 (bit 12 = GPB4) low
     tick2(m);
     Reading r = m.getReading();
     TEST_ASSERT_TRUE(r.has_value);
@@ -347,9 +355,9 @@ void test_matrix_cell_pin_number()
     TEST_ASSERT_FALSE(m.getReading().has_value);
 
     // Row 0, column 0 (bit 9 = GPB1).
-    queueSample(0xFF, 0xFD);
+    queueNext(m, 0xFF, 0xFD);
     tick2(m);
-    queueSample(0xFF, 0xEF);
+    queueNext(m, 0xFF, 0xEF);
     tick2(m);
     r = m.getReading();
     TEST_ASSERT_TRUE(r.has_value);
@@ -365,11 +373,11 @@ void test_matrix_uses_rows_on_gpa7_gpb7_with_cols_on_both_ports()
     TEST_ASSERT_EQUAL_UINT8(0x7F, MockWire::transactions[3].data[2]); // IODIR: GPB7 output
     MockWire::transaction_count = 0;
 
-    queueSample(0xFD, 0xFF); // row 0 (GPA7 low): GPA1 = column 0
+    queueNext(m, 0xFD, 0xFF); // row 0 (GPA7 low): GPA1 = column 0
     tick2(m);
     TEST_ASSERT_EQUAL_UINT8(0x01, MockWire::transactions[0].data[1]);
     TEST_ASSERT_EQUAL_UINT8(0x80, MockWire::transactions[0].data[2]);
-    queueSample(0xFF, 0xFD); // row 1 (GPB7 low): GPB1 = column 1
+    queueNext(m, 0xFF, 0xFD); // row 1 (GPB7 low): GPB1 = column 1
     tick2(m);
     TEST_ASSERT_EQUAL_UINT8(0x81, MockWire::transactions[2].data[1]);
     TEST_ASSERT_EQUAL_UINT8(0x00, MockWire::transactions[2].data[2]);
@@ -386,9 +394,9 @@ void test_matrix_uses_rows_on_gpa7_gpb7_with_cols_on_both_ports()
 // Runs one full scan of a 2-row matrix. `pressed_row1` holds the column on row 1.
 static void scanCycle(Mcp23017Module& m, bool pressed_row1, uint8_t gpioA = 0xFF)
 {
-    queueSample(gpioA, 0xFF);
+    queueNext(m, gpioA, 0xFF);
     tick2(m);
-    queueSample(gpioA, pressed_row1 ? 0xFE : 0xFF);
+    queueNext(m, gpioA, pressed_row1 ? 0xFE : 0xFF);
     tick2(m);
 }
 
@@ -417,15 +425,15 @@ void test_direct_pins_debounce_once_per_cycle_on_mixed_chip()
     // Direct pin GPA4 held low throughout; debounce 2 counts scans, not samples.
     Mcp23017Module m = makeMatrix(0x0003, 0x0100, 2, 0x0010);
     m.begin();
-    queueSample(0xEF, 0xFF);
+    queueNext(m, 0xEF, 0xFF);
     tick2(m);
-    queueSample(0xEF, 0xFF);
+    queueNext(m, 0xEF, 0xFF);
     tick2(m); // two samples, but only one full scan
     TEST_ASSERT_FALSE(m.getReading().has_value);
-    queueSample(0xEF, 0xFF);
+    queueNext(m, 0xEF, 0xFF);
     tick2(m);
     TEST_ASSERT_FALSE(m.getReading().has_value);
-    queueSample(0xEF, 0xFF);
+    queueNext(m, 0xEF, 0xFF);
     tick2(m); // second full scan
     Reading r = m.getReading();
     TEST_ASSERT_TRUE(r.has_value);
@@ -459,7 +467,7 @@ void test_matrix_failed_row_is_retried_without_events()
     TEST_ASSERT_FALSE(m.getReading().has_value);
 
     // Same row again: OLAT selects row 0 (bit 0 low).
-    queueSample(0xFF, 0xFE); // column pressed on row 0
+    queueNext(m, 0xFF, 0xFE); // column pressed on row 0
     tick2(m);
     TEST_ASSERT_EQUAL_UINT8(0x02, MockWire::transactions[0].data[1] & 0x03);
     TEST_ASSERT_EQUAL_UINT8(0x02, MockWire::transactions[1].data[1] & 0x03);
@@ -523,6 +531,250 @@ void test_health_error_queue()
     TEST_ASSERT_EQUAL_UINT8(MODULE_ERROR_NONE, h.take());
 }
 
+// --- Failure and reset handling ---
+
+// Three failed polls: from g_now 0 the chip becomes failed at 15.
+static void failChip(Mcp23017Module& m)
+{
+    MockWire::scheduleNacks(ADDR, 3);
+    for (uint8_t i = 0; i < 3; i++) tick(m);
+}
+
+static void queueOlatZero()
+{
+    const uint8_t bytes[4] = { 0x00, 0x00, 0x00, 0x00 };
+    MockWire::queueRead(ADDR, bytes, 4);
+}
+
+void test_nack_during_poll_produces_no_event()
+{
+    Mcp23017Module m = make(0x0001, 1);
+    m.begin();
+    MockWire::scheduleNacks(ADDR, 1);
+    queueSample(0xFE, 0xFF);
+    tick(m);
+    TEST_ASSERT_FALSE(m.getReading().has_value);
+    TEST_ASSERT_EQUAL_UINT8(MODULE_ERROR_NONE, m.takeRuntimeError());
+}
+
+void test_held_button_stays_held_through_outage()
+{
+    Mcp23017Module m = make(0x0001, 2);
+    m.begin();
+    for (uint8_t i = 0; i < 2; i++) { queueSample(0xFE, 0xFF); tick(m); }
+    TEST_ASSERT_TRUE(m.getReading().has_value); // press reported
+
+    failChip(m); // failed at 25
+    TEST_ASSERT_FALSE(m.getReading().has_value);
+    g_now = 1025;
+    m.scan(); // recovers
+    TEST_ASSERT_EQUAL_UINT8(MODULE_ERROR_NONE, m.activeError());
+    TEST_ASSERT_FALSE(m.getReading().has_value); // no phantom release
+
+    queueSample(0xFE, 0xFF);
+    tick(m);
+    TEST_ASSERT_FALSE(m.getReading().has_value); // still held, no new press
+    for (uint8_t i = 0; i < 2; i++) { queueSample(0xFF, 0xFF); tick(m); }
+    Reading r = m.getReading();
+    TEST_ASSERT_TRUE(r.has_value);
+    TEST_ASSERT_EQUAL_INT16(0, r.value); // release debounces normally
+}
+
+void test_three_failures_report_code_1_once()
+{
+    Mcp23017Module m = make(0x0001, 1);
+    m.begin();
+    MockWire::scheduleNacks(ADDR, 2);
+    tick(m);
+    tick(m);
+    TEST_ASSERT_EQUAL_UINT8(MODULE_ERROR_NONE, m.takeRuntimeError());
+    MockWire::scheduleNacks(ADDR, 1);
+    tick(m);
+    TEST_ASSERT_EQUAL_UINT8(1, m.takeRuntimeError());
+    TEST_ASSERT_EQUAL_UINT8(MODULE_ERROR_NONE, m.takeRuntimeError());
+
+    // A retry that fails does not report code 1 again.
+    MockWire::scheduleNacks(ADDR, 1);
+    g_now = 1015;
+    m.scan();
+    TEST_ASSERT_TRUE(m.health().failed());
+    TEST_ASSERT_EQUAL_UINT8(MODULE_ERROR_NONE, m.takeRuntimeError());
+}
+
+void test_failed_chip_stops_polling_and_retries_every_1000ms()
+{
+    Mcp23017Module m = make(0x0001, 1);
+    m.begin();
+    failChip(m); // failed at 15
+    MockWire::transaction_count = 0;
+    MockWire::read_request_count = 0;
+    MockWire::scheduleNacks(ADDR, 1); // first retry fails
+    for (g_now = 20; g_now < 1015; g_now += 5) m.scan();
+    TEST_ASSERT_EQUAL_UINT8(0, MockWire::transaction_count);
+    TEST_ASSERT_EQUAL_UINT8(0, MockWire::read_request_count);
+
+    g_now = 1015;
+    m.scan();
+    TEST_ASSERT_EQUAL_UINT8(1, MockWire::transaction_count); // IOCON NACKed
+    g_now = 2014;
+    m.scan();
+    TEST_ASSERT_EQUAL_UINT8(1, MockWire::transaction_count);
+    g_now = 2015;
+    m.scan();
+    TEST_ASSERT_EQUAL_UINT8(5, MockWire::transaction_count); // full reinit
+    TEST_ASSERT_FALSE(m.health().failed());
+}
+
+void test_recovery_reports_code_2_and_reinitializes()
+{
+    Mcp23017Module m = make(0x0001, 1);
+    m.begin();
+    failChip(m);
+    TEST_ASSERT_EQUAL_UINT8(1, m.takeRuntimeError());
+    MockWire::transaction_count = 0;
+    g_now = 1015;
+    m.scan();
+    TEST_ASSERT_EQUAL_UINT8(4, MockWire::transaction_count);
+    TEST_ASSERT_EQUAL_UINT8(0x0A, MockWire::transactions[0].data[0]);
+    TEST_ASSERT_EQUAL_UINT8(0x14, MockWire::transactions[1].data[0]);
+    TEST_ASSERT_EQUAL_UINT8(0x0C, MockWire::transactions[2].data[0]);
+    TEST_ASSERT_EQUAL_UINT8(0x00, MockWire::transactions[3].data[0]);
+    TEST_ASSERT_EQUAL_UINT8(2, m.takeRuntimeError());
+    TEST_ASSERT_EQUAL_UINT8(MODULE_ERROR_NONE, m.takeRuntimeError());
+    TEST_ASSERT_EQUAL_UINT8(MODULE_ERROR_NONE, m.activeError());
+}
+
+void test_change_during_outage_reported_after_recovery()
+{
+    Mcp23017Module m = make(0x0001, 2);
+    m.begin();
+    failChip(m);
+    // The button is pressed while the chip is gone; nothing is visible yet.
+    g_now = 500;
+    m.scan();
+    TEST_ASSERT_FALSE(m.getReading().has_value);
+    g_now = 1015;
+    m.scan(); // recovers
+    TEST_ASSERT_FALSE(m.getReading().has_value);
+    for (uint8_t i = 0; i < 2; i++) { queueSample(0xFE, 0xFF); tick(m); }
+    Reading r = m.getReading();
+    TEST_ASSERT_TRUE(r.has_value);
+    TEST_ASSERT_EQUAL_INT16(1, r.value);
+    TEST_ASSERT_EQUAL_UINT8(BASE, r.pin);
+}
+
+void test_absent_at_boot_then_connected_recovers()
+{
+    MockWire::scheduleNacks(ADDR, 1);
+    Mcp23017Module m = make(0x0001, 1);
+    TEST_ASSERT_FALSE(m.begin());
+    TEST_ASSERT_EQUAL_UINT8(1, m.activeError());
+    TEST_ASSERT_EQUAL_UINT8(MODULE_ERROR_NONE, m.takeRuntimeError()); // no runtime code 1
+
+    MockWire::transaction_count = 0;
+    for (g_now = 5; g_now < 1000; g_now += 5) {
+        queueSample(0xFE, 0xFF); // chip not there yet: never read
+        m.scan();
+        TEST_ASSERT_FALSE(m.getReading().has_value);
+    }
+    TEST_ASSERT_EQUAL_UINT8(0, MockWire::transaction_count);
+    MockWire::read_request_count = 0;
+
+    g_now = 1000;
+    m.scan();
+    TEST_ASSERT_EQUAL_UINT8(4, MockWire::transaction_count);
+    TEST_ASSERT_EQUAL_UINT8(2, m.takeRuntimeError());
+    TEST_ASSERT_EQUAL_UINT8(MODULE_ERROR_NONE, m.takeRuntimeError());
+    TEST_ASSERT_FALSE(m.getReading().has_value);
+}
+
+void test_olat_mismatch_discards_sample_and_reinitializes()
+{
+    Mcp23017Module m = make(0x0001, 1);
+    m.begin();
+    MockWire::transaction_count = 0;
+    queueOlatZero(); // pins read low: would be a press if it were used
+    tick(m);
+    TEST_ASSERT_FALSE(m.getReading().has_value);
+    TEST_ASSERT_EQUAL_UINT8(5, MockWire::transaction_count); // pointer write + 4 reinit
+    TEST_ASSERT_EQUAL_UINT8(0x0A, MockWire::transactions[1].data[0]);
+
+    queueSample(0xFE, 0xFF);
+    tick(m);
+    Reading r = m.getReading();
+    TEST_ASSERT_TRUE(r.has_value);
+    TEST_ASSERT_EQUAL_INT16(1, r.value);
+}
+
+void test_olat_mismatch_reports_code_1_then_2()
+{
+    Mcp23017Module m = make(0x0001, 1);
+    m.begin();
+    queueOlatZero();
+    tick(m);
+    TEST_ASSERT_EQUAL_UINT8(1, m.takeRuntimeError());
+    TEST_ASSERT_EQUAL_UINT8(2, m.takeRuntimeError());
+    TEST_ASSERT_EQUAL_UINT8(MODULE_ERROR_NONE, m.takeRuntimeError());
+    TEST_ASSERT_EQUAL_UINT8(MODULE_ERROR_NONE, m.activeError());
+}
+
+void test_olat_mismatch_with_failed_reinit_reports_code_1_once_then_2()
+{
+    Mcp23017Module m = make(0x0001, 1);
+    m.begin();
+    queueOlatZero();
+    MockWire::scheduleNacks(ADDR, 1, 2, 1); // pointer write passes, reinit IOCON NACKs
+    tick(m); // at 5
+    TEST_ASSERT_FALSE(m.getReading().has_value);
+    TEST_ASSERT_TRUE(m.health().failed());
+    TEST_ASSERT_EQUAL_UINT8(1, m.activeError());
+    TEST_ASSERT_EQUAL_UINT8(1, m.takeRuntimeError());
+    TEST_ASSERT_EQUAL_UINT8(MODULE_ERROR_NONE, m.takeRuntimeError());
+
+    g_now = 1004;
+    m.scan();
+    TEST_ASSERT_TRUE(m.health().failed());
+    g_now = 1005;
+    m.scan();
+    TEST_ASSERT_FALSE(m.health().failed());
+    TEST_ASSERT_EQUAL_UINT8(2, m.takeRuntimeError());
+    TEST_ASSERT_EQUAL_UINT8(MODULE_ERROR_NONE, m.takeRuntimeError());
+}
+
+void test_active_error_is_1_while_failed()
+{
+    Mcp23017Module m = make(0x0001, 1);
+    m.begin();
+    TEST_ASSERT_EQUAL_UINT8(MODULE_ERROR_NONE, m.activeError());
+    failChip(m);
+    TEST_ASSERT_EQUAL_UINT8(1, m.activeError());
+    g_now = 1015;
+    m.scan();
+    TEST_ASSERT_EQUAL_UINT8(MODULE_ERROR_NONE, m.activeError());
+}
+
+void test_failed_read_after_good_olat_write_changes_nothing()
+{
+    Mcp23017Module m = makeMatrix(0x0003, 0x0100, 1);
+    m.begin();
+    MockWire::transaction_count = 0;
+    queueShort(); // OLAT write for row 0 succeeds, then the read comes back short
+    tick2(m);
+    TEST_ASSERT_EQUAL_UINT8(1, m.health().failures());
+    TEST_ASSERT_FALSE(m.getReading().has_value);
+    TEST_ASSERT_EQUAL_UINT8(MODULE_ERROR_NONE, m.takeRuntimeError());
+
+    // Row 0 is retried (not skipped) and its press is seen normally.
+    queueNext(m, 0xFF, 0xFE);
+    tick2(m);
+    TEST_ASSERT_EQUAL_UINT8(0x14, MockWire::transactions[0].data[0]);
+    TEST_ASSERT_EQUAL_UINT8(0x14, MockWire::transactions[2].data[0]);
+    TEST_ASSERT_EQUAL_UINT8(0x02, MockWire::transactions[2].data[1] & 0x03);
+    Reading r = m.getReading();
+    TEST_ASSERT_TRUE(r.has_value);
+    TEST_ASSERT_EQUAL_UINT8(100, r.pin);
+}
+
 int main(int, char**)
 {
     UNITY_BEGIN();
@@ -552,5 +804,17 @@ int main(int, char**)
     RUN_TEST(test_health_success_resets_count);
     RUN_TEST(test_health_retry_every_1000ms_across_wrap);
     RUN_TEST(test_health_error_queue);
+    RUN_TEST(test_nack_during_poll_produces_no_event);
+    RUN_TEST(test_held_button_stays_held_through_outage);
+    RUN_TEST(test_three_failures_report_code_1_once);
+    RUN_TEST(test_failed_chip_stops_polling_and_retries_every_1000ms);
+    RUN_TEST(test_recovery_reports_code_2_and_reinitializes);
+    RUN_TEST(test_change_during_outage_reported_after_recovery);
+    RUN_TEST(test_absent_at_boot_then_connected_recovers);
+    RUN_TEST(test_olat_mismatch_discards_sample_and_reinitializes);
+    RUN_TEST(test_olat_mismatch_reports_code_1_then_2);
+    RUN_TEST(test_olat_mismatch_with_failed_reinit_reports_code_1_once_then_2);
+    RUN_TEST(test_active_error_is_1_while_failed);
+    RUN_TEST(test_failed_read_after_good_olat_write_changes_nothing);
     return UNITY_END();
 }

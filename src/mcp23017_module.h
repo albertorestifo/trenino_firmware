@@ -8,7 +8,7 @@
 namespace Modules {
 
 // MCP23017 I/O expander: direct buttons plus an optional button matrix
-// (row_mask/col_mask). Failure recovery arrives in a later step.
+// (row_mask/col_mask).
 //
 // GPA7/GPB7 (0x8080) are never inputs. Pull-ups are on for every input.
 // Row bits in OLAT idle high; one non-row bit carries a sentinel that is
@@ -22,7 +22,9 @@ public:
     Mcp23017Module(uint8_t address, uint8_t direct_base, uint8_t matrix_base,
         uint8_t debounce, uint16_t direct_mask, uint16_t row_mask, uint16_t col_mask);
 
-    // Copy only before begin(): the matrix is allocated there and owned here.
+    // A copy does not share the matrix; it allocates its own in begin().
+    Mcp23017Module(const Mcp23017Module& other);
+    Mcp23017Module& operator=(const Mcp23017Module&) = delete;
     ~Mcp23017Module() override;
 
     bool begin() override;
@@ -31,17 +33,27 @@ public:
     ModuleType getType() const override { return ModuleType::MCP23017; }
     uint8_t getPin() const override { return 0; }
     uint8_t getI2CAddress() const override { return address_; }
+    uint8_t takeRuntimeError() override;
+    uint8_t activeError() const override;
 
 #ifdef UNIT_TEST
     const I2CHealth& health() const { return health_; }
     uint16_t sentinelBit() const { return sentinel_; }
     bool reinitRegistersForTest() { return initRegisters(); }
+    uint16_t nextOlatForTest() const { return expectedOlat(); }
 #endif
 
 private:
     bool writeRegisters(uint8_t reg, uint16_t value);
     bool writeIocon();
     bool initRegisters();
+    bool ensureMatrix();
+    void markFailed(unsigned long now);
+    uint16_t expectedOlat() const;
+    void recover(unsigned long now);
+    void handleReset(unsigned long now);
+    void noteFailure(unsigned long now);
+    bool olatMatches(const uint8_t olat[2]);
     bool sample(uint16_t& gpio, uint8_t olat[2]);
     void debounceDirect(uint16_t pressed);
     void scanMatrixRow(unsigned long now);

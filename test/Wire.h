@@ -44,6 +44,7 @@ struct AddressNackBehavior {
     uint8_t address;
     uint8_t nack_count_remaining;
     uint8_t nack_status;
+    uint8_t skip_remaining; // transactions to let through before NACKing
 };
 
 constexpr uint8_t MAX_READ_QUEUES = 8;
@@ -103,14 +104,19 @@ static inline void queueRead(uint8_t address, const uint8_t* bytes, uint8_t leng
     for (uint8_t i = 0; i < q.length; i++) q.data[i] = bytes[i];
 }
 
-static inline void scheduleNacks(uint8_t address, uint8_t count, uint8_t status = 2) {
+// `skip` lets that many endTransmission() calls to `address` succeed first.
+static inline void scheduleNacks(uint8_t address, uint8_t count, uint8_t status = 2, uint8_t skip = 0) {
     if (nack_table_count >= MAX_ADDRESSES) return;
-    nack_table[nack_table_count++] = { address, count, status };
+    nack_table[nack_table_count++] = { address, count, status, skip };
 }
 
 static uint8_t consumeNackStatus(uint8_t address) {
     for (uint8_t i = 0; i < nack_table_count; i++) {
         if (nack_table[i].address == address && nack_table[i].nack_count_remaining > 0) {
+            if (nack_table[i].skip_remaining > 0) {
+                nack_table[i].skip_remaining--;
+                return 0;
+            }
             nack_table[i].nack_count_remaining--;
             return nack_table[i].nack_status;
         }

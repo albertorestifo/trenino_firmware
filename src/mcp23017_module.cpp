@@ -46,6 +46,31 @@ Mcp23017Module::Mcp23017Module(uint8_t address, uint8_t direct_base, uint8_t mat
     if (col_count_ > MatrixCore::MAX_COLS) col_count_ = MatrixCore::MAX_COLS;
 }
 
+// matrix_ is owned by the original; a copy allocates its own in begin().
+Mcp23017Module::Mcp23017Module(const Mcp23017Module& o)
+    : address_(o.address_)
+    , direct_base_(o.direct_base_)
+    , matrix_base_(o.matrix_base_)
+    , debounce_(o.debounce_)
+    , direct_mask_(o.direct_mask_)
+    , row_mask_(o.row_mask_)
+    , col_mask_(o.col_mask_)
+    , sentinel_(o.sentinel_)
+    , olat_expected_(o.olat_expected_)
+    , last_sample_ms_(o.last_sample_ms_)
+    , health_(o.health_)
+    , state_(o.state_)
+    , reported_(o.reported_)
+    , matrix_(nullptr)
+    , row_count_(o.row_count_)
+    , col_count_(o.col_count_)
+    , current_row_(o.current_row_)
+{
+    olat_read_[0] = o.olat_read_[0];
+    olat_read_[1] = o.olat_read_[1];
+    for (uint8_t i = 0; i < 16; i++) counts_[i] = o.counts_[i];
+}
+
 Mcp23017Module::~Mcp23017Module()
 {
     delete matrix_;
@@ -87,13 +112,74 @@ bool Mcp23017Module::begin()
     reported_ = 0;
     for (uint8_t i = 0; i < 16; i++) counts_[i] = 0;
     current_row_ = 0;
-    if (row_mask_ != 0) {
-        if (!matrix_) matrix_ = new MatrixCore(row_count_, col_count_, debounce_);
-        matrix_->reset();
-    }
-    last_sample_ms_ = millis();
+    unsigned long now = millis();
+    last_sample_ms_ = now;
 
-    return initRegisters();
+    // No runtime code 1 here: ModuleManager reports a failed begin() as code 0.
+    // The chip is failed at once so that it retries; recovery reports code 2.
+    if (!ensureMatrix() || !initRegisters()) {
+        markFailed(now);
+        return false;
+    }
+    return true;
+}
+
+bool Mcp23017Module::ensureMatrix()
+{
+    if (row_mask_ == 0) return true;
+    if (!matrix_) matrix_ = new MatrixCore(row_count_, col_count_, debounce_);
+    if (!matrix_) return false;
+    matrix_->reset();
+    return true;
+}
+
+void Mcp23017Module::markFailed(unsigned long now)
+{
+    for (uint8_t i = 0; i < I2CHealth::FAILURE_THRESHOLD; i++) health_.noteFailure(now);
+}
+
+uint16_t Mcp23017Module::expectedOlat() const
+{
+    if (!matrix_) return (uint16_t)(row_mask_ | sentinel_);
+    return (uint16_t)((row_mask_ & ~nthSetBit(row_mask_, current_row_)) | sentinel_);
+}
+
+// Retry while failed. Uses initRegisters(), never begin(): begin() would clear
+// input state and lose held buttons and their release events.
+void Mcp23017Module::recover(unsigned long now)
+{
+    if (ensureMatrix() && initRegisters()) {
+        health_.noteSuccess();
+        health_.push(2);
+        current_row_ = 0;
+        last_sample_ms_ = now;
+    } else {
+        health_.noteFailure(now); // restarts the retry timer
+    }
+}
+
+// The chip answered but OLAT is not what was written: it was reset. The sample
+// is discarded and the scan restarts at row 0.
+void Mcp23017Module::handleReset(unsigned long now)
+{
+    health_.push(1);
+    current_row_ = 0;
+    last_sample_ms_ = now;
+    if (initRegisters()) {
+        health_.push(2);
+    } else {
+        markFailed(now); // code 1 already queued; recovers through the retry
+    }
+}
+
+uint8_t Mcp23017Module::takeRuntimeError()
+{
+    return health_.take();
+}
+
+uint8_t Mcp23017Module::activeError() const
+{
+    return health_.failed() ? 1 : MODULE_ERROR_NONE;
 }
 
 // Register writes only: safe to repeat after an outage without disturbing
@@ -130,6 +216,11 @@ bool Mcp23017Module::sample(uint16_t& gpio, uint8_t olat[2])
 void Mcp23017Module::scan()
 {
     unsigned long now = millis();
+    if (health_.failed()) {
+        // No polling while failed; retry once per interval.
+        if (health_.retryDue(now)) recover(now);
+        return;
+    }
     unsigned long interval = matrix_ ? MATRIX_ROW_INTERVAL_MS : SAMPLE_INTERVAL_MS;
     if ((now - last_sample_ms_) < interval) return;
     last_sample_ms_ = now;
@@ -142,15 +233,16 @@ void Mcp23017Module::scan()
     uint16_t gpio;
     uint8_t olat[2];
     if (!sample(gpio, olat)) {
-        // A failed transaction changes no input state. Threshold handling
-        // and recovery are added with the failure-handling step.
-        health_.noteFailure(now);
+        // A failed transaction changes no input state.
+        noteFailure(now);
         return;
     }
     health_.noteSuccess();
-    // Place for the OLAT-vs-olat_expected_ check (reset detection).
-    olat_read_[0] = olat[0];
-    olat_read_[1] = olat[1];
+    olat_expected_ = expectedOlat();
+    if (!olatMatches(olat)) {
+        handleReset(now);
+        return;
+    }
 
     debounceDirect(~gpio); // pull-ups: pressed = low
 }
@@ -160,19 +252,19 @@ void Mcp23017Module::scan()
 // is retried on the next tick. Direct pins are debounced once per full scan.
 void Mcp23017Module::scanMatrixRow(unsigned long now)
 {
-    uint16_t row_bit = nthSetBit(row_mask_, current_row_);
-    olat_expected_ = (uint16_t)((row_mask_ & ~row_bit) | sentinel_);
+    olat_expected_ = expectedOlat();
 
     uint16_t gpio;
     uint8_t olat[2];
     if (!writeRegisters(REG_OLAT, olat_expected_) || !sample(gpio, olat)) {
-        health_.noteFailure(now);
+        noteFailure(now);
         return;
     }
     health_.noteSuccess();
-    // Place for the OLAT-vs-olat_expected_ check (reset detection).
-    olat_read_[0] = olat[0];
-    olat_read_[1] = olat[1];
+    if (!olatMatches(olat)) {
+        handleReset(now);
+        return;
+    }
 
     uint16_t pressed = ~gpio; // pull-ups: pressed = low
     for (uint8_t c = 0; c < col_count_; c++) {
@@ -184,6 +276,18 @@ void Mcp23017Module::scanMatrixRow(unsigned long now)
         current_row_ = 0;
         debounceDirect(pressed);
     }
+}
+
+void Mcp23017Module::noteFailure(unsigned long now)
+{
+    if (health_.noteFailure(now)) health_.push(1);
+}
+
+bool Mcp23017Module::olatMatches(const uint8_t olat[2])
+{
+    olat_read_[0] = olat[0];
+    olat_read_[1] = olat[1];
+    return olat[0] == (uint8_t)(olat_expected_ & 0xFF) && olat[1] == (uint8_t)(olat_expected_ >> 8);
 }
 
 void Mcp23017Module::debounceDirect(uint16_t pressed)
