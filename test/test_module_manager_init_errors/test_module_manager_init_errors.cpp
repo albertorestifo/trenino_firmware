@@ -79,17 +79,10 @@ MatrixSensor::MatrixSensor(uint8_t rows, uint8_t cols,
                             const uint8_t* row_pin_array, const uint8_t* col_pin_array)
     : num_rows(rows)
     , num_cols(cols)
-    , queue_head(0)
-    , queue_tail(0)
-    , debounce_threshold(DEFAULT_DEBOUNCE)
+    , core(rows, cols, DEFAULT_DEBOUNCE)
 {
     for (uint8_t i = 0; i < rows && i < MAX_ROWS; i++) row_pins[i] = row_pin_array[i];
     for (uint8_t i = 0; i < cols && i < MAX_COLS; i++) col_pins[i] = col_pin_array[i];
-    for (uint8_t i = 0; i < MAX_BUTTONS; i++) {
-        current_state[i] = false;
-        last_reported[i] = false;
-        debounce_count[i] = 0;
-    }
 }
 bool MatrixSensor::begin() { return true; }
 void MatrixSensor::scan() {}

@@ -28,6 +28,7 @@ void delayMicroseconds(unsigned int) {}
 #include "../../src/stepper_service.cpp"
 #include "../../src/analog_sensor.cpp"
 #include "../../src/button_sensor.cpp"
+#include "../../src/matrix_core.cpp"
 #include "../../src/matrix_sensor.cpp"
 #include "../../src/ht16k33_module.cpp"
 #include "../../src/sensor_manager.cpp"
