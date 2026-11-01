@@ -5,19 +5,6 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
-
-### Added
-- Canonical empty legacy Configure command for axis-only deployments, retaining
-  config_id across reboot without dummy modules and preserving legacy format5.
-- Configurable stepper axis extension (wire revision1, firmware3.1.0): two axes on
-  one Adafruit PCA9685/TB6612 shield, Switec six-state and conventional bipolar
-  full/half-step modes, bounded asynchronous home/backoff, limits, acceleration,
-  host lease and reference-aware status. Host retains application calibration.
-- Explicit persistent shield address registration for safe startup before0x70
-  displays; legacy EEPROM module format5 remains compatible. See
-  [stepper protocol](docs/STEPPER_PROTOCOL.md) for commissioning and limitations.
-
 ## [3.2.0] - 2026-11-01
 
 ### Added
@@ -35,6 +22,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Configure` rejects an MCP23017 with no enabled pins and an ADS1115 with
   `channel_mask` 0. Both payloads must have their exact length.
 - Firmware version is 3.2.0. `EEPROM_FORMAT_VERSION` stays 5.
+
+### Known limitations
+- ATmega328P boards (Uno, Nano) have room for one matrix chip, because of their 2 KB
+  of RAM. Boards with more RAM, such as the Pro Micro, take two. See
+  [architecture](docs/ARCHITECTURE.md#board-limits).
+
+## [3.1.0] - 2026-10-30
+
+### Added
+- Canonical empty legacy Configure command for axis-only deployments, retaining
+  config_id across reboot without dummy modules and preserving legacy format5.
+- Configurable stepper axis extension (wire revision1, firmware3.1.0): two axes on
+  one Adafruit PCA9685/TB6612 shield, Switec six-state and conventional bipolar
+  full/half-step modes, bounded asynchronous home/backoff, limits, acceleration,
+  host lease and reference-aware status. Host retains application calibration.
+- Explicit persistent shield address registration for safe startup before0x70
+  displays; legacy EEPROM module format5 remains compatible. See
+  [stepper protocol](docs/STEPPER_PROTOCOL.md) for commissioning and limitations.
 
 ## [3.0.0] - 2026-05-03
 

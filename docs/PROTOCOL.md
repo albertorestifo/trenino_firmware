@@ -309,8 +309,8 @@ Updates the brightness immediately and caches the value so re-initialization use
 | Code | Name | Meaning |
 |------|------|---------|
 | 0 | init_failed | The chip NACKed during `begin()` |
-| 1 | communication_lost | Repeated I2C failures (MCP23017, ADS1115, including repeated chip-reset detections) |
-| 2 | recovered | Communication with the chip is working again |
+| 1 | communication_lost | MCP23017, ADS1115. One chip-reset detection sends code 1, then code 2 immediately once the chip is set up again. Repeated failures, including repeated reset detections, send code 1 alone, and code 2 follows only when a retry succeeds |
+| 2 | recovered | Communication with the chip is working again. A retry only counts when the chip reads back what was written to it |
 | 3 | supply_reference_lost | ADS1115 only: the supply reference channel reads too low |
 
 Sent by the device in three situations:
