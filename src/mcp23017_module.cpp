@@ -28,6 +28,10 @@ Mcp23017Module::Mcp23017Module(uint8_t address, uint8_t direct_base, uint8_t mat
     , last_sample_ms_(0)
     , state_(0)
     , reported_(0)
+    , matrix_(nullptr)
+    , row_count_(0)
+    , col_count_(0)
+    , current_row_(0)
 {
     // Lowest bit that is not a row. For a direct-only chip this is bit 0.
     uint16_t bit = 1;
@@ -36,6 +40,26 @@ Mcp23017Module::Mcp23017Module(uint8_t address, uint8_t direct_base, uint8_t mat
     olat_expected_ = row_mask_ | sentinel_;
     olat_read_[0] = olat_read_[1] = 0;
     for (uint8_t i = 0; i < 16; i++) counts_[i] = 0;
+    for (uint16_t m = row_mask_; m; m &= m - 1) row_count_++;
+    for (uint16_t m = col_mask_ & ~(row_mask_ | OUTPUT_ONLY_MASK); m; m &= m - 1) col_count_++;
+    if (row_count_ > MatrixCore::MAX_ROWS) row_count_ = MatrixCore::MAX_ROWS;
+    if (col_count_ > MatrixCore::MAX_COLS) col_count_ = MatrixCore::MAX_COLS;
+}
+
+Mcp23017Module::~Mcp23017Module()
+{
+    delete matrix_;
+}
+
+// Position of the n-th (0-based) set bit of mask, as a one-bit mask; 0 if none.
+uint16_t Mcp23017Module::nthSetBit(uint16_t mask, uint8_t n)
+{
+    for (uint16_t bit = 1; bit; bit <<= 1) {
+        if (!(mask & bit)) continue;
+        if (n == 0) return bit;
+        n--;
+    }
+    return 0;
 }
 
 bool Mcp23017Module::writeRegisters(uint8_t reg, uint16_t value)
@@ -62,6 +86,11 @@ bool Mcp23017Module::begin()
     state_ = 0;
     reported_ = 0;
     for (uint8_t i = 0; i < 16; i++) counts_[i] = 0;
+    current_row_ = 0;
+    if (row_mask_ != 0) {
+        if (!matrix_) matrix_ = new MatrixCore(row_count_, col_count_, debounce_);
+        matrix_->reset();
+    }
     last_sample_ms_ = millis();
 
     return initRegisters();
@@ -74,7 +103,7 @@ bool Mcp23017Module::initRegisters()
     // Order matters: outputs get their idle level before they become outputs.
     uint16_t inputs = (uint16_t) ~(row_mask_ | OUTPUT_ONLY_MASK);
     if (!writeIocon()) return false;
-    if (!writeRegisters(REG_OLAT, olat_expected_)) return false;
+    if (!writeRegisters(REG_OLAT, (uint16_t)(row_mask_ | sentinel_))) return false; // rows idle high
     if (!writeRegisters(REG_GPPU, inputs)) return false;
     if (!writeRegisters(REG_IODIR, inputs)) return false;
     return true;
@@ -101,8 +130,14 @@ bool Mcp23017Module::sample(uint16_t& gpio, uint8_t olat[2])
 void Mcp23017Module::scan()
 {
     unsigned long now = millis();
-    if ((now - last_sample_ms_) < SAMPLE_INTERVAL_MS) return;
+    unsigned long interval = matrix_ ? MATRIX_ROW_INTERVAL_MS : SAMPLE_INTERVAL_MS;
+    if ((now - last_sample_ms_) < interval) return;
     last_sample_ms_ = now;
+
+    if (matrix_) {
+        scanMatrixRow(now);
+        return;
+    }
 
     uint16_t gpio;
     uint8_t olat[2];
@@ -118,6 +153,37 @@ void Mcp23017Module::scan()
     olat_read_[1] = olat[1];
 
     debounceDirect(~gpio); // pull-ups: pressed = low
+}
+
+// Selects the current row (OLAT write), reads the inputs, and feeds that row's
+// columns to the matrix. If either transaction fails the row is not fed and
+// is retried on the next tick. Direct pins are debounced once per full scan.
+void Mcp23017Module::scanMatrixRow(unsigned long now)
+{
+    uint16_t row_bit = nthSetBit(row_mask_, current_row_);
+    olat_expected_ = (uint16_t)((row_mask_ & ~row_bit) | sentinel_);
+
+    uint16_t gpio;
+    uint8_t olat[2];
+    if (!writeRegisters(REG_OLAT, olat_expected_) || !sample(gpio, olat)) {
+        health_.noteFailure(now);
+        return;
+    }
+    health_.noteSuccess();
+    // Place for the OLAT-vs-olat_expected_ check (reset detection).
+    olat_read_[0] = olat[0];
+    olat_read_[1] = olat[1];
+
+    uint16_t pressed = ~gpio; // pull-ups: pressed = low
+    for (uint8_t c = 0; c < col_count_; c++) {
+        uint16_t col_bit = nthSetBit(col_mask_ & ~(row_mask_ | OUTPUT_ONLY_MASK), c);
+        matrix_->sample(current_row_, c, (pressed & col_bit) != 0);
+    }
+
+    if (++current_row_ >= row_count_) {
+        current_row_ = 0;
+        debounceDirect(pressed);
+    }
 }
 
 void Mcp23017Module::debounceDirect(uint16_t pressed)
@@ -139,12 +205,16 @@ void Mcp23017Module::debounceDirect(uint16_t pressed)
 Reading Mcp23017Module::getReading()
 {
     uint16_t pending = state_ ^ reported_;
-    if (!pending) return Reading();
-    for (uint8_t bit = 0; bit < 16; bit++) {
+    for (uint8_t bit = 0; pending && bit < 16; bit++) {
         uint16_t m = (uint16_t)1 << bit;
         if (!(pending & m)) continue;
         reported_ ^= m;
         return Reading((state_ & m) ? 1 : 0, ModuleType::MCP23017, (uint8_t)(direct_base_ + bit));
+    }
+    uint8_t index;
+    bool pressed;
+    if (matrix_ && matrix_->pop(index, pressed)) {
+        return Reading(pressed ? 1 : 0, ModuleType::MCP23017, (uint8_t)(matrix_base_ + index));
     }
     return Reading();
 }
