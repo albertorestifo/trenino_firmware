@@ -22,8 +22,7 @@ public:
     Mcp23017Module(uint8_t address, uint8_t direct_base, uint8_t matrix_base,
         uint8_t debounce, uint16_t direct_mask, uint16_t row_mask, uint16_t col_mask);
 
-    // A copy does not share the matrix; it allocates its own in begin().
-    Mcp23017Module(const Mcp23017Module& other);
+    Mcp23017Module(const Mcp23017Module&) = delete;
     Mcp23017Module& operator=(const Mcp23017Module&) = delete;
     ~Mcp23017Module() override;
 

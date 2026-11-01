@@ -6,9 +6,14 @@
 #include "../../src/i2c_bus.cpp"
 #include "../../src/matrix_core.cpp"
 #include "../../src/mcp23017_module.cpp"
+#include <new>
+#include <type_traits>
 #include <unity.h>
 
 using namespace Modules;
+
+static_assert(!std::is_copy_constructible<Mcp23017Module>::value,
+    "a copy would not own the matrix");
 
 static unsigned long g_now = 0;
 unsigned long millis() { return g_now; }
@@ -69,7 +74,34 @@ void setUp()
     g_seen = 0;
 }
 
-void tearDown() {}
+// Modules cannot be copied, so make() and makeMatrix() build them in static
+// storage. A test holds at most two at once.
+static const uint8_t SLOTS = 2;
+alignas(Mcp23017Module) static unsigned char g_storage[SLOTS][sizeof(Mcp23017Module)];
+static Mcp23017Module* g_built[SLOTS] = { nullptr, nullptr };
+static uint8_t g_next_slot = 0;
+
+static void destroySlot(uint8_t slot)
+{
+    if (g_built[slot]) g_built[slot]->~Mcp23017Module();
+    g_built[slot] = nullptr;
+}
+
+static Mcp23017Module& build(uint8_t matrix_base, uint8_t debounce, uint16_t direct_mask,
+    uint16_t row_mask, uint16_t col_mask)
+{
+    uint8_t slot = g_next_slot;
+    g_next_slot = (uint8_t)((slot + 1) % SLOTS);
+    destroySlot(slot);
+    g_built[slot] = new (g_storage[slot])
+        Mcp23017Module(ADDR, BASE, matrix_base, debounce, direct_mask, row_mask, col_mask);
+    return *g_built[slot];
+}
+
+void tearDown()
+{
+    for (uint8_t i = 0; i < SLOTS; i++) destroySlot(i);
+}
 
 // One scripted sample: GPIOA, GPIOB, then the OLAT bytes a healthy chip returns.
 static void queueSample(uint8_t gpioA, uint8_t gpioB)
@@ -98,14 +130,14 @@ static void tick(Mcp23017Module& m)
     m.scan();
 }
 
-static Mcp23017Module make(uint16_t direct_mask = 0x0003, uint8_t debounce = 3, uint16_t row_mask = 0)
+static Mcp23017Module& make(uint16_t direct_mask = 0x0003, uint8_t debounce = 3, uint16_t row_mask = 0)
 {
-    return Mcp23017Module(ADDR, BASE, 0, debounce, direct_mask, row_mask, 0);
+    return build(0, debounce, direct_mask, row_mask, 0);
 }
 
 void test_begin_writes_expected_registers()
 {
-    Mcp23017Module m = make(0x0003);
+    Mcp23017Module& m = make(0x0003);
     TEST_ASSERT_TRUE(m.begin());
     TEST_ASSERT_EQUAL_UINT8(4, MockWire::transaction_count);
 
@@ -131,13 +163,13 @@ void test_begin_writes_expected_registers()
 void test_begin_nack_returns_false()
 {
     MockWire::scheduleNacks(ADDR, 1);
-    Mcp23017Module m = make();
+    Mcp23017Module& m = make();
     TEST_ASSERT_FALSE(m.begin());
 }
 
 void test_no_read_before_5ms()
 {
-    Mcp23017Module m = make();
+    Mcp23017Module& m = make();
     m.begin();
     g_now = 4;
     m.scan();
@@ -150,7 +182,7 @@ void test_no_read_before_5ms()
 
 void test_reads_four_bytes_from_gpioa()
 {
-    Mcp23017Module m = make();
+    Mcp23017Module& m = make();
     m.begin();
     resetTransactions();
     queueSample(0xFF, 0xFF);
@@ -164,7 +196,7 @@ void test_reads_four_bytes_from_gpioa()
 
 void test_press_reported_after_debounce_samples()
 {
-    Mcp23017Module m = make(0x0003, 3);
+    Mcp23017Module& m = make(0x0003, 3);
     m.begin();
     for (uint8_t i = 0; i < 2; i++) {
         queueSample(0xFE, 0xFF);
@@ -183,7 +215,7 @@ void test_press_reported_after_debounce_samples()
 
 void test_release_reported()
 {
-    Mcp23017Module m = make(0x0003, 2);
+    Mcp23017Module& m = make(0x0003, 2);
     m.begin();
     for (uint8_t i = 0; i < 2; i++) { queueSample(0xFD, 0xFF); tick(m); }
     TEST_ASSERT_TRUE(m.getReading().has_value);
@@ -196,7 +228,7 @@ void test_release_reported()
 
 void test_two_pins_change_two_readings()
 {
-    Mcp23017Module m = make(0x0103, 1);
+    Mcp23017Module& m = make(0x0103, 1);
     m.begin();
     queueSample(0xFE, 0xFE); // GPA0 and GPB0 low
     tick(m);
@@ -212,7 +244,7 @@ void test_two_pins_change_two_readings()
 void test_held_at_boot_reports_press()
 {
     g_now = 1000;
-    Mcp23017Module m = make(0x0001, 3);
+    Mcp23017Module& m = make(0x0001, 3);
     m.begin();
     for (uint8_t i = 0; i < 3; i++) { queueSample(0xFE, 0xFF); tick(m); }
     Reading r = m.getReading();
@@ -223,7 +255,7 @@ void test_held_at_boot_reports_press()
 
 void test_register_reinit_keeps_held_state()
 {
-    Mcp23017Module m = make(0x0001, 2);
+    Mcp23017Module& m = make(0x0001, 2);
     m.begin();
     for (uint8_t i = 0; i < 2; i++) { queueSample(0xFE, 0xFF); tick(m); }
     TEST_ASSERT_TRUE(m.getReading().has_value); // press reported
@@ -244,7 +276,7 @@ void test_register_reinit_keeps_held_state()
 
 void test_pins_outside_mask_ignored()
 {
-    Mcp23017Module m = make(0x0001, 1);
+    Mcp23017Module& m = make(0x0001, 1);
     m.begin();
     queueSample(0xFE & 0x7F, 0x00); // bit 0 low, everything else low including GPA7/GPB7
     tick(m);
@@ -254,7 +286,7 @@ void test_pins_outside_mask_ignored()
     TEST_ASSERT_FALSE(m.getReading().has_value);
 
     // GPA7 in direct_mask is stripped as well.
-    Mcp23017Module m2 = make(0x8080, 1);
+    Mcp23017Module& m2 = make(0x8080, 1);
     m2.begin();
     queueSample(0x00, 0x00);
     tick(m2);
@@ -263,7 +295,7 @@ void test_pins_outside_mask_ignored()
 
 void test_short_read_counts_as_failure()
 {
-    Mcp23017Module m = make(0x0001, 3);
+    Mcp23017Module& m = make(0x0001, 3);
     m.begin();
     for (uint8_t i = 0; i < 2; i++) { queueSample(0xFE, 0xFF); tick(m); }
     queueShort();
@@ -279,7 +311,7 @@ void test_short_read_counts_as_failure()
 
 void test_pointer_write_nack_counts_as_failure()
 {
-    Mcp23017Module m = make(0x0001, 1);
+    Mcp23017Module& m = make(0x0001, 1);
     m.begin();
     MockWire::scheduleNacks(ADDR, 1);
     queueSample(0xFE, 0xFF);
@@ -290,7 +322,7 @@ void test_pointer_write_nack_counts_as_failure()
 
 void test_sentinel_exists_for_direct_only_chip()
 {
-    Mcp23017Module m = make(0x0003, 3, 0);
+    Mcp23017Module& m = make(0x0003, 3, 0);
     TEST_ASSERT_EQUAL_UINT16(0x0001, m.sentinelBit());
     m.begin();
     TEST_ASSERT_EQUAL_UINT8(0x01, MockWire::transactions[1].data[1]);
@@ -299,7 +331,7 @@ void test_sentinel_exists_for_direct_only_chip()
     // (low) and the other rows stay high.
     MockWire::reset();
     I2CBus::resetForTest();
-    Mcp23017Module m2 = make(0x0000, 2, 0x0007);
+    Mcp23017Module& m2 = make(0x0000, 2, 0x0007);
     TEST_ASSERT_EQUAL_UINT16(0x0008, m2.sentinelBit());
     m2.begin();
     TEST_ASSERT_EQUAL_UINT8(0x0E, MockWire::transactions[1].data[1]); // row 0 selected, others high
@@ -308,7 +340,7 @@ void test_sentinel_exists_for_direct_only_chip()
 void test_timer_survives_millis_wrap()
 {
     g_now = ~0UL - 2;
-    Mcp23017Module m = make(0x0001, 1);
+    Mcp23017Module& m = make(0x0001, 1);
     m.begin();
     g_now += 4; // 4 ms later, counter has wrapped
     m.scan();
@@ -329,15 +361,15 @@ static void tick2(Mcp23017Module& m)
     m.scan();
 }
 
-static Mcp23017Module makeMatrix(uint16_t row_mask, uint16_t col_mask, uint8_t debounce = 1,
+static Mcp23017Module& makeMatrix(uint16_t row_mask, uint16_t col_mask, uint8_t debounce = 1,
     uint16_t direct_mask = 0, uint8_t matrix_base = 100)
 {
-    return Mcp23017Module(ADDR, BASE, matrix_base, debounce, direct_mask, row_mask, col_mask);
+    return build(matrix_base, debounce, direct_mask, row_mask, col_mask);
 }
 
 void test_matrix_scans_one_row_every_2ms()
 {
-    Mcp23017Module m = makeMatrix(0x0003, 0x0100);
+    Mcp23017Module& m = makeMatrix(0x0003, 0x0100);
     m.begin();
     resetTransactions();
     g_now = 1;
@@ -368,7 +400,7 @@ void test_matrix_scans_one_row_every_2ms()
 
 void test_matrix_row_low_others_high()
 {
-    Mcp23017Module m = makeMatrix(0x0007, 0x0100); // sentinel is bit 3
+    Mcp23017Module& m = makeMatrix(0x0007, 0x0100); // sentinel is bit 3
     m.begin();
     TEST_ASSERT_EQUAL_UINT8(0x0E, MockWire::transactions[1].data[1]); // begin leaves row 0 selected
     resetTransactions();
@@ -389,7 +421,7 @@ void test_matrix_cell_pin_number()
 {
     // Rows on bits 3 and 1 (set bits, in order: bit 1 = row 0, bit 3 = row 1);
     // columns on bits 9 and 12 (GPB1, GPB4).
-    Mcp23017Module m = makeMatrix(0x000A, 0x1200, 1, 0, 100);
+    Mcp23017Module& m = makeMatrix(0x000A, 0x1200, 1, 0, 100);
     m.begin();
     queueNext(m, 0xFF, 0xFF); // row 0: nothing
     tick2(m);
@@ -415,7 +447,7 @@ void test_matrix_cell_pin_number()
 void test_matrix_uses_rows_on_gpa7_gpb7_with_cols_on_both_ports()
 {
     // Rows GPA7 and GPB7; columns GPA1 and GPB1. Sentinel is bit 0.
-    Mcp23017Module m = makeMatrix(0x8080, 0x0202, 1, 0, 50);
+    Mcp23017Module& m = makeMatrix(0x8080, 0x0202, 1, 0, 50);
     m.begin();
     TEST_ASSERT_EQUAL_UINT8(0x7F, MockWire::transactions[3].data[1]); // IODIR: GPA7 output
     TEST_ASSERT_EQUAL_UINT8(0x7F, MockWire::transactions[3].data[2]); // IODIR: GPB7 output
@@ -452,7 +484,7 @@ static void scanCycle(Mcp23017Module& m, bool pressed_row1, uint8_t gpioA = 0xFF
 
 void test_matrix_debounce_counts_full_scans()
 {
-    Mcp23017Module m = makeMatrix(0x0003, 0x0100, 2);
+    Mcp23017Module& m = makeMatrix(0x0003, 0x0100, 2);
     m.begin();
     scanCycle(m, true);
     TEST_ASSERT_FALSE(m.getReading().has_value); // one scan is not enough
@@ -473,7 +505,7 @@ void test_matrix_debounce_counts_full_scans()
 void test_direct_pins_debounce_once_per_cycle_on_mixed_chip()
 {
     // Direct pin GPA4 held low throughout; debounce 2 counts scans, not samples.
-    Mcp23017Module m = makeMatrix(0x0003, 0x0100, 2, 0x0010);
+    Mcp23017Module& m = makeMatrix(0x0003, 0x0100, 2, 0x0010);
     m.begin();
     queueNext(m, 0xEF, 0xFF);
     tick2(m);
@@ -493,7 +525,7 @@ void test_direct_pins_debounce_once_per_cycle_on_mixed_chip()
 
 void test_direct_and_matrix_readings_both_drain()
 {
-    Mcp23017Module m = makeMatrix(0x0003, 0x0100, 1, 0x0010);
+    Mcp23017Module& m = makeMatrix(0x0003, 0x0100, 1, 0x0010);
     m.begin();
     scanCycle(m, true, 0xEF);
     Reading d = m.getReading();
@@ -507,7 +539,7 @@ void test_direct_and_matrix_readings_both_drain()
 
 void test_matrix_failed_row_is_retried_without_events()
 {
-    Mcp23017Module m = makeMatrix(0x0003, 0x0100, 1);
+    Mcp23017Module& m = makeMatrix(0x0003, 0x0100, 1);
     m.begin();
     resetTransactions();
     MockWire::scheduleNacks(ADDR, 1); // pointer write for the row 0 read fails
@@ -529,7 +561,7 @@ void test_matrix_failed_row_is_retried_without_events()
 
 void test_matrix_select_write_failure_retries_without_feeding_twice()
 {
-    Mcp23017Module m = makeMatrix(0x0003, 0x0100, 1);
+    Mcp23017Module& m = makeMatrix(0x0003, 0x0100, 1);
     m.begin();
     resetTransactions();
     queueNext(m, 0xFF, 0xFE); // row 0 pressed
@@ -563,7 +595,7 @@ void test_matrix_select_write_failure_retries_without_feeding_twice()
 
 void test_failing_select_retries_reach_the_threshold()
 {
-    Mcp23017Module m = makeMatrix(0x0003, 0x0100, 1);
+    Mcp23017Module& m = makeMatrix(0x0003, 0x0100, 1);
     m.begin();
     queueNext(m, 0xFF, 0xFF);
     // Select NACKs, then every init attempt gets as far as IOCON and fails.
@@ -578,7 +610,7 @@ void test_failing_select_retries_reach_the_threshold()
 
 void test_reset_during_failed_select_is_not_hidden()
 {
-    Mcp23017Module m = makeMatrix(0x0003, 0x0100, 1);
+    Mcp23017Module& m = makeMatrix(0x0003, 0x0100, 1);
     m.begin();
     queueNext(m, 0xFF, 0xFF);
     MockWire::scheduleNacks(ADDR, 1, 2, 1); // read passes, select NACKs: the chip is resetting
@@ -603,7 +635,7 @@ void test_reset_during_failed_select_is_not_hidden()
 
 void test_repeated_olat_mismatch_reaches_failed_state()
 {
-    Mcp23017Module m = make(0x0003);
+    Mcp23017Module& m = make(0x0003);
     m.begin();
     const uint8_t bad[4] = { 0xFF, 0xFF, 0x77, 0x77 }; // not what was written
     for (int i = 0; i < 2; i++) {
@@ -636,7 +668,7 @@ void test_repeated_olat_mismatch_reaches_failed_state()
 
 void test_matrix_reset_detected_with_no_failed_transaction()
 {
-    Mcp23017Module m = makeMatrix(0x0003, 0x0100, 1);
+    Mcp23017Module& m = makeMatrix(0x0003, 0x0100, 1);
     m.begin();
     queueNext(m, 0xFF, 0xFF);
     tick2(m);
@@ -675,7 +707,7 @@ static void matrixOutage(Mcp23017Module& m)
 
 void test_matrix_held_key_stays_held_through_outage()
 {
-    Mcp23017Module m = makeMatrix(0x0003, 0x0100, 1);
+    Mcp23017Module& m = makeMatrix(0x0003, 0x0100, 1);
     m.begin();
     scanCycle(m, true);
     TEST_ASSERT_TRUE(m.getReading().has_value); // press
@@ -694,7 +726,7 @@ void test_matrix_held_key_stays_held_through_outage()
 
 void test_matrix_key_released_during_outage_reports_release()
 {
-    Mcp23017Module m = makeMatrix(0x0003, 0x0100, 1);
+    Mcp23017Module& m = makeMatrix(0x0003, 0x0100, 1);
     m.begin();
     scanCycle(m, true);
     TEST_ASSERT_TRUE(m.getReading().has_value); // press
@@ -779,7 +811,7 @@ static void queueOlatZero()
 
 void test_nack_during_poll_produces_no_event()
 {
-    Mcp23017Module m = make(0x0001, 1);
+    Mcp23017Module& m = make(0x0001, 1);
     m.begin();
     MockWire::scheduleNacks(ADDR, 1);
     queueSample(0xFE, 0xFF);
@@ -790,7 +822,7 @@ void test_nack_during_poll_produces_no_event()
 
 void test_held_button_stays_held_through_outage()
 {
-    Mcp23017Module m = make(0x0001, 2);
+    Mcp23017Module& m = make(0x0001, 2);
     m.begin();
     for (uint8_t i = 0; i < 2; i++) { queueSample(0xFE, 0xFF); tick(m); }
     TEST_ASSERT_TRUE(m.getReading().has_value); // press reported
@@ -813,7 +845,7 @@ void test_held_button_stays_held_through_outage()
 
 void test_three_failures_report_code_1_once()
 {
-    Mcp23017Module m = make(0x0001, 1);
+    Mcp23017Module& m = make(0x0001, 1);
     m.begin();
     MockWire::scheduleNacks(ADDR, 2);
     tick(m);
@@ -834,7 +866,7 @@ void test_three_failures_report_code_1_once()
 
 void test_failed_chip_stops_polling_and_retries_every_1000ms()
 {
-    Mcp23017Module m = make(0x0001, 1);
+    Mcp23017Module& m = make(0x0001, 1);
     m.begin();
     failChip(m); // failed at 15
     resetTransactions();
@@ -858,7 +890,7 @@ void test_failed_chip_stops_polling_and_retries_every_1000ms()
 
 void test_recovery_reports_code_2_and_reinitializes()
 {
-    Mcp23017Module m = make(0x0001, 1);
+    Mcp23017Module& m = make(0x0001, 1);
     m.begin();
     failChip(m);
     TEST_ASSERT_EQUAL_UINT8(1, m.takeRuntimeError());
@@ -877,7 +909,7 @@ void test_recovery_reports_code_2_and_reinitializes()
 
 void test_change_during_outage_reported_after_recovery()
 {
-    Mcp23017Module m = make(0x0001, 2);
+    Mcp23017Module& m = make(0x0001, 2);
     m.begin();
     failChip(m);
     // The button is pressed while the chip is gone; nothing is visible yet.
@@ -897,7 +929,7 @@ void test_change_during_outage_reported_after_recovery()
 void test_absent_at_boot_then_connected_recovers()
 {
     MockWire::scheduleNacks(ADDR, 1);
-    Mcp23017Module m = make(0x0001, 1);
+    Mcp23017Module& m = make(0x0001, 1);
     TEST_ASSERT_FALSE(m.begin());
     TEST_ASSERT_EQUAL_UINT8(1, m.activeError());
     TEST_ASSERT_EQUAL_UINT8(MODULE_ERROR_NONE, m.takeRuntimeError()); // no runtime code 1
@@ -921,7 +953,7 @@ void test_absent_at_boot_then_connected_recovers()
 
 void test_olat_mismatch_discards_sample_and_reinitializes()
 {
-    Mcp23017Module m = make(0x0001, 1);
+    Mcp23017Module& m = make(0x0001, 1);
     m.begin();
     resetTransactions();
     queueOlatZero(); // pins read low: would be a press if it were used
@@ -939,7 +971,7 @@ void test_olat_mismatch_discards_sample_and_reinitializes()
 
 void test_olat_mismatch_reports_code_1_then_2()
 {
-    Mcp23017Module m = make(0x0001, 1);
+    Mcp23017Module& m = make(0x0001, 1);
     m.begin();
     queueOlatZero();
     tick(m);
@@ -951,7 +983,7 @@ void test_olat_mismatch_reports_code_1_then_2()
 
 void test_olat_mismatch_with_failed_reinit_reports_code_1_once_then_2()
 {
-    Mcp23017Module m = make(0x0001, 1);
+    Mcp23017Module& m = make(0x0001, 1);
     m.begin();
     queueOlatZero();
     MockWire::scheduleNacks(ADDR, 1, 2, 1); // pointer write passes, reinit IOCON NACKs
@@ -974,7 +1006,7 @@ void test_olat_mismatch_with_failed_reinit_reports_code_1_once_then_2()
 
 void test_active_error_is_1_while_failed()
 {
-    Mcp23017Module m = make(0x0001, 1);
+    Mcp23017Module& m = make(0x0001, 1);
     m.begin();
     TEST_ASSERT_EQUAL_UINT8(MODULE_ERROR_NONE, m.activeError());
     failChip(m);
@@ -986,7 +1018,7 @@ void test_active_error_is_1_while_failed()
 
 void test_failed_read_after_good_olat_write_changes_nothing()
 {
-    Mcp23017Module m = makeMatrix(0x0003, 0x0100, 1);
+    Mcp23017Module& m = makeMatrix(0x0003, 0x0100, 1);
     m.begin();
     resetTransactions();
     queueShort(); // the read of row 0 comes back short

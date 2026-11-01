@@ -45,30 +45,6 @@ Mcp23017Module::Mcp23017Module(uint8_t address, uint8_t direct_base, uint8_t mat
     if (col_count_ > MatrixCore::MAX_COLS) col_count_ = MatrixCore::MAX_COLS;
 }
 
-// matrix_ is owned by the original; a copy allocates its own in begin().
-Mcp23017Module::Mcp23017Module(const Mcp23017Module& o)
-    : address_(o.address_)
-    , direct_base_(o.direct_base_)
-    , matrix_base_(o.matrix_base_)
-    , debounce_(o.debounce_)
-    , direct_mask_(o.direct_mask_)
-    , row_mask_(o.row_mask_)
-    , col_mask_(o.col_mask_)
-    , sentinel_(o.sentinel_)
-    , olat_expected_(o.olat_expected_)
-    , last_sample_ms_(o.last_sample_ms_)
-    , health_(o.health_)
-    , state_(o.state_)
-    , reported_(o.reported_)
-    , matrix_(nullptr)
-    , row_count_(o.row_count_)
-    , col_count_(o.col_count_)
-    , current_row_(o.current_row_)
-    , row_selected_(o.row_selected_)
-{
-    for (uint8_t i = 0; i < 16; i++) counts_[i] = o.counts_[i];
-}
-
 Mcp23017Module::~Mcp23017Module()
 {
     delete matrix_;

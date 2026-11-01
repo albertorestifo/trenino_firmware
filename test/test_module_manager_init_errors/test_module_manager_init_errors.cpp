@@ -113,8 +113,6 @@ bool HT16K33Module::writeWithRetry(const uint8_t*, uint8_t) { return true; }
 // and vtables; no test here runs their real logic.
 Mcp23017Module::Mcp23017Module(uint8_t address, uint8_t, uint8_t, uint8_t, uint16_t, uint16_t, uint16_t)
     : address_(address), matrix_(nullptr) {}
-Mcp23017Module::Mcp23017Module(const Mcp23017Module& other)
-    : address_(other.address_), matrix_(nullptr) {}
 Mcp23017Module::~Mcp23017Module() {}
 bool Mcp23017Module::begin() { return true; }
 void Mcp23017Module::scan() {}
