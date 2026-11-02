@@ -5,11 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [3.2.0] - 2026-11-01
+## [3.2.0] - 2026-11-02
 
 ### Added
-- **MCP23017 input module** (`MODULE_TYPE_MCP23017 = 5`): up to 16 direct buttons
-  plus an optional 8x8 button matrix per chip, reported as `InputValue` on virtual pins.
+- **MCP23017 input module** (`MODULE_TYPE_MCP23017 = 5`): up to 14 direct buttons
+  (GPA7/GPB7 are output-only) plus an optional button matrix of up to 8x8 on the
+  remaining pins, reported as `InputValue` on virtual pins.
   Detects chip resets and recovers by rewriting its registers.
 - **ADS1115 input module** (`MODULE_TYPE_ADS1115 = 6`): up to 4 single-ended analog
   channels (0-1023), optionally scaled against a supply reference channel.
