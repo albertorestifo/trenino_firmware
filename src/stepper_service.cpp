@@ -46,8 +46,6 @@ bool moduleConflicts(const ConfigManager::ModuleConfig& c, uint8_t address) {
             if (busPin(c.matrix.pins[i])) return true;
         return false;
     case Protocol::MODULE_TYPE_HT16K33: return c.ht16k33.i2c_address == address;
-    case Protocol::MODULE_TYPE_MCP23017: return c.mcp23017.i2c_address == address;
-    case Protocol::MODULE_TYPE_ADS1115: return c.ads1115.i2c_address == address;
     default: return false;
     }
 }
@@ -74,7 +72,17 @@ bool conflicts(const Protocol::Configure& cfg) {
     uint8_t address = ConfigManager::getRegisteredShieldAddress();
     if (!address) return false;
     ConfigManager::ModuleConfig c;
-    c.assign(cfg);
+    c.module_type = cfg.module_type;
+    switch (cfg.module_type) {
+    case Protocol::MODULE_TYPE_ANALOG: c.analog.pin = cfg.analog.pin; break;
+    case Protocol::MODULE_TYPE_BUTTON: c.button.pin = cfg.button.pin; break;
+    case Protocol::MODULE_TYPE_MATRIX:
+        c.matrix.num_row_pins = cfg.matrix.num_row_pins; c.matrix.num_col_pins = cfg.matrix.num_col_pins;
+        for (uint8_t i = 0; i < Protocol::MAX_MATRIX_PINS; ++i) c.matrix.pins[i] = cfg.matrix.pins[i];
+        break;
+    case Protocol::MODULE_TYPE_HT16K33: c.ht16k33.i2c_address = cfg.ht16k33.i2c_address; break;
+    default: return false;
+    }
     return moduleConflicts(c, address);
 }
 bool reset() {

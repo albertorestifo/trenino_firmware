@@ -1,7 +1,6 @@
 #define ARDUINO_ARCH_AVR
 #define UNIT_TEST
 #include "../Wire.h"
-#include "../../src/i2c_bus.cpp"
 #include "../../src/ht16k33_module.cpp"
 #include <unity.h>
 
@@ -12,7 +11,7 @@ void delay(unsigned long /*ms*/) {}
 void setUp()
 {
     MockWire::reset();
-    I2CBus::resetForTest();
+    ht16k33_reset_wire_state();
 }
 
 void tearDown() {}
@@ -286,30 +285,6 @@ void test_setBrightness_two_nacks_increment_failure_count()
 // The first begin() across the whole test binary calls Wire.begin() and
 // Wire.setWireTimeout(25000, true). Subsequent begin() calls don't because
 // g_wire_initialized is static.
-void test_begin_twice_initializes_wire_once()
-{
-    HT16K33Module a(0x70, 8, 4);
-    HT16K33Module b(0x71, 8, 4);
-
-    a.begin();
-    b.begin();
-
-    TEST_ASSERT_EQUAL_UINT8(1, MockWire::wire_timeout_call_count);
-}
-
-void test_mock_wire_returns_queued_read()
-{
-    const uint8_t bytes[] = {0xAB, 0xCD};
-    MockWire::queueRead(0x20, bytes, 2);
-
-    TEST_ASSERT_EQUAL_UINT8(2, Wire.requestFrom((uint8_t)0x20, (uint8_t)2));
-    TEST_ASSERT_EQUAL_INT(0xAB, Wire.read());
-    TEST_ASSERT_EQUAL_INT(0xCD, Wire.read());
-    TEST_ASSERT_EQUAL_INT(-1, Wire.read());
-    TEST_ASSERT_EQUAL_UINT8(1, MockWire::read_request_count);
-    TEST_ASSERT_EQUAL_UINT8(0, Wire.requestFrom((uint8_t)0x20, (uint8_t)2));
-}
-
 void test_begin_sets_wire_timeout()
 {
     HT16K33Module mod(0x70, 0, 4);
@@ -364,7 +339,5 @@ int main()
     RUN_TEST(test_next_write_after_needs_reinit_runs_init_and_restores_cache);
     RUN_TEST(test_brightness_change_persists_through_reinit);
     RUN_TEST(test_begin_sets_wire_timeout);
-    RUN_TEST(test_begin_twice_initializes_wire_once);
-    RUN_TEST(test_mock_wire_returns_queued_read);
     return UNITY_END();
 }

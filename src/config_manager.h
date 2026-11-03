@@ -3,7 +3,6 @@
 #include "protocol.h"
 #include <Arduino.h>
 #include <stdint.h>
-#include <string.h>
 
 // Platform-specific EEPROM handling
 #if defined(ESP32_PLATFORM) || defined(ESP32) || defined(ESP8266)
@@ -75,12 +74,6 @@ struct ModuleConfig {
             uint8_t brightness;
             uint8_t num_digits;
         } ht16k33;
-
-        // MODULE_TYPE_MCP23017
-        Protocol::Mcp23017Config mcp23017;
-
-        // MODULE_TYPE_ADS1115
-        Protocol::Ads1115Config ads1115;
     };
 
     ModuleConfig()
@@ -89,21 +82,7 @@ struct ModuleConfig {
         analog.pin = 0;
         analog.sensitivity = 0;
     }
-
-    // Copies type and payload; the two unions hold the same records.
-    void assign(const Protocol::Configure& cfg)
-    {
-        module_type = cfg.module_type;
-        memcpy(&matrix, &cfg.matrix, sizeof(matrix));
-    }
 };
-
-// The I2C input records share the union with the matrix record, so a
-// ModuleConfig keeps its size (and EEPROM records stay below the registration).
-static_assert(sizeof(Protocol::Mcp23017Config) <= sizeof(ModuleConfig::matrix), "mcp23017 must fit the matrix member");
-static_assert(sizeof(Protocol::Ads1115Config) <= sizeof(ModuleConfig::matrix), "ads1115 must fit the matrix member");
-static_assert(sizeof(ModuleConfig::matrix) == sizeof(Protocol::Configure::matrix), "configure and stored records must match");
-static_assert(sizeof(ModuleConfig) == sizeof(uint8_t) + sizeof(ModuleConfig::matrix), "ModuleConfig must not grow");
 
 // Configuration state
 class ConfigState {
@@ -151,8 +130,35 @@ public:
             return false;
         }
 
-        modules[cfg.part_number].assign(cfg);
-        if (Protocol::modulePayloadSize(cfg.module_type, 0) == 0) {
+        // Store the input configuration based on type
+        modules[cfg.part_number].module_type = cfg.module_type;
+
+        switch (cfg.module_type) {
+        case Protocol::MODULE_TYPE_ANALOG:
+            modules[cfg.part_number].analog.pin = cfg.analog.pin;
+            modules[cfg.part_number].analog.sensitivity = cfg.analog.sensitivity;
+            break;
+
+        case Protocol::MODULE_TYPE_BUTTON:
+            modules[cfg.part_number].button.pin = cfg.button.pin;
+            modules[cfg.part_number].button.debounce = cfg.button.debounce;
+            break;
+
+        case Protocol::MODULE_TYPE_MATRIX:
+            modules[cfg.part_number].matrix.num_row_pins = cfg.matrix.num_row_pins;
+            modules[cfg.part_number].matrix.num_col_pins = cfg.matrix.num_col_pins;
+            for (uint8_t i = 0; i < cfg.matrix.num_row_pins + cfg.matrix.num_col_pins; i++) {
+                modules[cfg.part_number].matrix.pins[i] = cfg.matrix.pins[i];
+            }
+            break;
+
+        case Protocol::MODULE_TYPE_HT16K33:
+            modules[cfg.part_number].ht16k33.i2c_address = cfg.ht16k33.i2c_address;
+            modules[cfg.part_number].ht16k33.brightness = cfg.ht16k33.brightness;
+            modules[cfg.part_number].ht16k33.num_digits = cfg.ht16k33.num_digits;
+            break;
+
+        default:
             return false; // Unknown input type
         }
 

@@ -1,12 +1,10 @@
 #pragma once
 
-#include "ads1115_module.h"
 #include "analog_sensor.h"
 #include "button_sensor.h"
 #include "config_manager.h"
 #include "ht16k33_module.h"
 #include "matrix_sensor.h"
-#include "mcp23017_module.h"
 #include "module.h"
 #include <stdint.h>
 
@@ -23,11 +21,6 @@ struct InitError {
     uint8_t pin;         // populated for hardware-pin modules; 0 for I2C-only modules
     uint8_t error_code;  // see Protocol::ModuleError error codes (when added)
 };
-
-// Called by scan() after each module that used the I2C bus. A callback keeps this
-// code free of any stepper dependency.
-typedef void (*BusTurnCallback)();
-void setBusTurnCallback(BusTurnCallback callback);
 
 // Initialize sensor manager with configuration from ConfigManager
 void init();
@@ -56,20 +49,7 @@ Modules::IModule* getModuleByI2CAddress(uint8_t address);
 // and clears the internal list.
 uint8_t getInitErrors(InitError* out, uint8_t max_count);
 
-// Pops one pending runtime error (communication lost, recovered, supply
-// reference lost) from any module. Returns false when none is pending.
-// address is the module's I2C address.
-bool getNextRuntimeError(uint8_t& address, uint8_t& code);
-
-// Lists modules that are in an error state right now (not drained). Each entry
-// carries the chip's I2C address and the error code from activeError().
-// Returns the number of entries written, at most max_count.
-uint8_t getActiveErrors(InitError* out, uint8_t max_count);
-
 #ifdef UNIT_TEST
-// Test-only: add a module (takes ownership).
-void testAddModule(Modules::IModule* module);
-
 // Test-only: append a fake InitError. Used to verify drain semantics.
 void testInjectInitError(const InitError& err);
 #endif

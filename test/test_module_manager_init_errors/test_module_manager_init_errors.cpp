@@ -44,14 +44,7 @@ EEPROMClass EEPROM;
 #include "../../src/analog_sensor.h"
 #include "../../src/button_sensor.h"
 #include "../../src/matrix_sensor.h"
-#include "../../src/matrix_core.cpp"
 #include "../../src/ht16k33_module.h"
-#include "../../src/mcp23017_module.h"
-#include "../../src/ads1115_module.h"
-
-// Offsets handed to the stub I2C modules by applyConfiguration().
-static uint8_t g_offsets[8];
-static uint8_t g_offset_count = 0;
 
 namespace Modules {
 
@@ -86,14 +79,23 @@ MatrixSensor::MatrixSensor(uint8_t rows, uint8_t cols,
                             const uint8_t* row_pin_array, const uint8_t* col_pin_array)
     : num_rows(rows)
     , num_cols(cols)
-    , core(rows, cols, DEFAULT_DEBOUNCE)
+    , queue_head(0)
+    , queue_tail(0)
+    , debounce_threshold(DEFAULT_DEBOUNCE)
 {
     for (uint8_t i = 0; i < rows && i < MAX_ROWS; i++) row_pins[i] = row_pin_array[i];
     for (uint8_t i = 0; i < cols && i < MAX_COLS; i++) col_pins[i] = col_pin_array[i];
+    for (uint8_t i = 0; i < MAX_BUTTONS; i++) {
+        current_state[i] = false;
+        last_reported[i] = false;
+        debounce_count[i] = 0;
+    }
 }
 bool MatrixSensor::begin() { return true; }
 void MatrixSensor::scan() {}
 Reading MatrixSensor::getReading() { return Reading(); }
+void MatrixSensor::scanButton(uint8_t, uint8_t, bool) {}
+void MatrixSensor::enqueueEvent(uint8_t, bool) {}
 
 // HT16K33Module stubs — applyConfiguration() calls `new HT16K33Module(...)` so we
 // need a definition, but no test here exercises the real I2C logic.
@@ -113,31 +115,13 @@ bool HT16K33Module::setBrightness(uint8_t) { return true; }
 bool HT16K33Module::runInitSequence() { return true; }
 bool HT16K33Module::writeWithRetry(const uint8_t*, uint8_t) { return true; }
 
-// MCP23017 / ADS1115 stubs — applyConfiguration() references their constructors
-// and vtables; no test here runs their real logic.
-Mcp23017Module::Mcp23017Module(uint8_t address, uint8_t, uint8_t, uint8_t, uint16_t, uint16_t, uint16_t)
-    : address_(address), matrix_(nullptr) {}
-Mcp23017Module::~Mcp23017Module() {}
-bool Mcp23017Module::begin() { return true; }
-void Mcp23017Module::setFirstSampleOffset(uint8_t ms) { g_offsets[g_offset_count++] = ms; }
-void Mcp23017Module::scan() {}
-Reading Mcp23017Module::getReading() { return Reading(); }
-uint8_t Mcp23017Module::takeRuntimeError() { return MODULE_ERROR_NONE; }
-uint8_t Mcp23017Module::activeError() const { return MODULE_ERROR_NONE; }
-
-Ads1115Module::Ads1115Module(uint8_t address, uint8_t, uint8_t, uint8_t, uint8_t, const uint8_t*)
-    : address_(address) {}
-bool Ads1115Module::begin() { return true; }
-void Ads1115Module::setFirstSampleOffset(uint8_t ms) { g_offsets[g_offset_count++] = ms; }
-void Ads1115Module::scan() {}
-Reading Ads1115Module::getReading() { return Reading(); }
-uint8_t Ads1115Module::takeRuntimeError() { return MODULE_ERROR_NONE; }
-uint8_t Ads1115Module::activeError() const { return MODULE_ERROR_NONE; }
+// ht16k33_module.cpp uses a file-scope g_wire_initialized; provide the
+// UNIT_TEST reset helper so any future include doesn't fail to link.
+void ht16k33_reset_wire_state() {}
 
 } // namespace Modules
 
 // ---- Now inline-include the unit under test ----
-#include "../../src/i2c_bus.cpp"
 #include "../../src/sensor_manager.cpp"
 
 // ---- Tests ----
@@ -186,148 +170,10 @@ void test_drain_caps_at_max_count()
     TEST_ASSERT_EQUAL_UINT8(0x71, out[1].i2c_address);
 }
 
-// Fake I2C module: queued runtime errors plus a fixed active error.
-class FakeModule : public Modules::IModule {
-public:
-    FakeModule(uint8_t address, uint8_t active)
-        : address_(address), active_(active), pending_count_(0), next_(0) {}
-    void push(uint8_t code) { pending_[pending_count_++] = code; }
-    bool begin() override { return true; }
-    Modules::ModuleType getType() const override { return Modules::ModuleType::MCP23017; }
-    uint8_t getPin() const override { return 0; }
-    uint8_t getI2CAddress() const override { return address_; }
-    uint8_t takeRuntimeError() override
-    {
-        return next_ < pending_count_ ? pending_[next_++] : Modules::MODULE_ERROR_NONE;
-    }
-    uint8_t activeError() const override { return active_; }
-
-private:
-    uint8_t address_;
-    uint8_t active_;
-    uint8_t pending_[4];
-    uint8_t pending_count_;
-    uint8_t next_;
-};
-
-void test_runtime_errors_drain_with_address()
-{
-    ModuleManager::init();
-    FakeModule* a = new FakeModule(0x20, Modules::MODULE_ERROR_NONE);
-    FakeModule* b = new FakeModule(0x48, Modules::MODULE_ERROR_NONE);
-    a->push(1);
-    a->push(2);
-    b->push(3);
-    ModuleManager::testAddModule(a);
-    ModuleManager::testAddModule(b);
-
-    uint8_t address = 0, code = 0;
-    TEST_ASSERT_TRUE(ModuleManager::getNextRuntimeError(address, code));
-    TEST_ASSERT_EQUAL_UINT8(0x20, address);
-    TEST_ASSERT_EQUAL_UINT8(1, code);
-    TEST_ASSERT_TRUE(ModuleManager::getNextRuntimeError(address, code));
-    TEST_ASSERT_EQUAL_UINT8(0x20, address);
-    TEST_ASSERT_EQUAL_UINT8(2, code);
-    TEST_ASSERT_TRUE(ModuleManager::getNextRuntimeError(address, code));
-    TEST_ASSERT_EQUAL_UINT8(0x48, address);
-    TEST_ASSERT_EQUAL_UINT8(3, code);
-    TEST_ASSERT_FALSE(ModuleManager::getNextRuntimeError(address, code));
-    ModuleManager::init();
-}
-
-void test_active_errors_list_failed_modules()
-{
-    ModuleManager::init();
-    ModuleManager::testAddModule(new FakeModule(0x20, 1));
-    ModuleManager::testAddModule(new FakeModule(0x21, Modules::MODULE_ERROR_NONE));
-    ModuleManager::testAddModule(new FakeModule(0x48, 3));
-
-    ModuleManager::InitError out[ModuleManager::MAX_MODULES];
-    uint8_t n = ModuleManager::getActiveErrors(out, ModuleManager::MAX_MODULES);
-    TEST_ASSERT_EQUAL_UINT8(2, n);
-    TEST_ASSERT_EQUAL_UINT8(0x20, out[0].i2c_address);
-    TEST_ASSERT_EQUAL_UINT8(1, out[0].error_code);
-    TEST_ASSERT_EQUAL_UINT8(0x48, out[1].i2c_address);
-    TEST_ASSERT_EQUAL_UINT8(3, out[1].error_code);
-
-    // Not drained: identity requests can repeat the same errors.
-    TEST_ASSERT_EQUAL_UINT8(2, ModuleManager::getActiveErrors(out, ModuleManager::MAX_MODULES));
-    // Capped at max_count.
-    TEST_ASSERT_EQUAL_UINT8(1, ModuleManager::getActiveErrors(out, 1));
-    ModuleManager::init();
-}
-
-// Records the order of module scans and callbacks in g_log.
-static char g_log[16];
-static uint8_t g_log_len = 0;
-
-static void logEvent(char c)
-{
-    if (g_log_len + 1 < sizeof(g_log)) g_log[g_log_len++] = c;
-    g_log[g_log_len] = 0;
-}
-
-static void onBusTurn() { logEvent('*'); }
-
-class ScanningModule : public FakeModule {
-public:
-    ScanningModule(char name, bool uses_bus)
-        : FakeModule(0x20, Modules::MODULE_ERROR_NONE), name_(name), uses_bus_(uses_bus) {}
-    void scan() override
-    {
-        logEvent(name_);
-        const uint8_t byte = 0;
-        if (uses_bus_) I2CBus::write(0x20, &byte, 1);
-    }
-
-private:
-    char name_;
-    bool uses_bus_;
-};
-
-void test_bus_turn_callback_runs_after_each_module_that_used_the_bus()
-{
-    ModuleManager::init();
-    g_log_len = 0;
-    g_log[0] = 0;
-    ModuleManager::testAddModule(new ScanningModule('a', true));
-    ModuleManager::testAddModule(new ScanningModule('b', false));
-    ModuleManager::testAddModule(new ScanningModule('c', true));
-
-    ModuleManager::setBusTurnCallback(onBusTurn);
-    ModuleManager::scan();
-    TEST_ASSERT_EQUAL_STRING("a*bc*", g_log);
-
-    ModuleManager::setBusTurnCallback(nullptr);
-    ModuleManager::scan();
-    TEST_ASSERT_EQUAL_STRING("a*bc*abc", g_log);
-    ModuleManager::init();
-}
-
-void test_modules_get_their_index_as_first_sample_offset()
-{
-    ConfigManager::ModuleConfig configs[3];
-    memset(configs, 0, sizeof(configs));
-    configs[0].module_type = Protocol::MODULE_TYPE_MCP23017;
-    configs[1].module_type = Protocol::MODULE_TYPE_ADS1115;
-    configs[2].module_type = Protocol::MODULE_TYPE_MCP23017;
-    g_offset_count = 0;
-    TEST_ASSERT_TRUE(ModuleManager::applyConfiguration(configs, 3));
-    TEST_ASSERT_EQUAL_UINT8(3, g_offset_count);
-    TEST_ASSERT_EQUAL_UINT8(0, g_offsets[0]);
-    TEST_ASSERT_EQUAL_UINT8(1, g_offsets[1]);
-    TEST_ASSERT_EQUAL_UINT8(2, g_offsets[2]);
-    ModuleManager::init();
-}
-
 int main()
 {
     UNITY_BEGIN();
     RUN_TEST(test_drain_returns_injected_errors);
     RUN_TEST(test_drain_caps_at_max_count);
-    RUN_TEST(test_runtime_errors_drain_with_address);
-    RUN_TEST(test_active_errors_list_failed_modules);
-    RUN_TEST(test_bus_turn_callback_runs_after_each_module_that_used_the_bus);
-    RUN_TEST(test_modules_get_their_index_as_first_sample_offset);
     return UNITY_END();
 }

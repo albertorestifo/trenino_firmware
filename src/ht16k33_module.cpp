@@ -1,9 +1,16 @@
 #include "ht16k33_module.h"
 #include <Arduino.h>
 #include <Wire.h>
-#include "i2c_bus.h"
 
 namespace Modules {
+
+namespace {
+bool g_wire_initialized = false;
+}
+
+#ifdef UNIT_TEST
+void ht16k33_reset_wire_state() { g_wire_initialized = false; }
+#endif
 
 HT16K33Module::HT16K33Module(uint8_t i2c_address, uint8_t brightness, uint8_t num_digits)
     : i2c_address_(i2c_address)
@@ -20,18 +27,40 @@ HT16K33Module::HT16K33Module(uint8_t i2c_address, uint8_t brightness, uint8_t nu
 
 bool HT16K33Module::runInitSequence()
 {
-    const uint8_t commands[3] = { 0x21, 0x81, (uint8_t)(0xE0 | (cached_brightness_ & 0x0F)) };
-    for (uint8_t i = 0; i < sizeof(commands); i++) {
-        if (!I2CBus::write(i2c_address_, &commands[i], 1)) return false;
-    }
+    Wire.beginTransmission(i2c_address_);
+    Wire.write((uint8_t)0x21);
+    if (Wire.endTransmission() != 0) return false;
 
-    const uint8_t clear[17] = { 0 }; // register 0x00, then 16 bytes of display RAM
-    return I2CBus::write(i2c_address_, clear, sizeof(clear));
+    Wire.beginTransmission(i2c_address_);
+    Wire.write((uint8_t)0x81);
+    if (Wire.endTransmission() != 0) return false;
+
+    Wire.beginTransmission(i2c_address_);
+    Wire.write((uint8_t)(0xE0 | (cached_brightness_ & 0x0F)));
+    if (Wire.endTransmission() != 0) return false;
+
+    Wire.beginTransmission(i2c_address_);
+    Wire.write((uint8_t)0x00);
+    for (uint8_t i = 0; i < 16; i++) {
+        Wire.write((uint8_t)0x00);
+    }
+    if (Wire.endTransmission() != 0) return false;
+
+    return true;
 }
 
 bool HT16K33Module::begin()
 {
-    I2CBus::begin();
+    if (!g_wire_initialized) {
+        Wire.begin();
+#ifdef ARDUINO_ARCH_AVR
+        // Bound any single I2C transaction so a stuck bus (no pull-ups, shorted
+        // SDA, missing slave) does not hang the firmware. 25 ms is comfortably
+        // longer than any HT16K33 transaction at 100 kHz.
+        Wire.setWireTimeout(25000, true);
+#endif
+        g_wire_initialized = true;
+    }
 
     if (runInitSequence()) {
         failure_count_ = 0;
@@ -63,12 +92,19 @@ bool HT16K33Module::writeWithRetry(const uint8_t* data, uint8_t length)
         needs_reinit_ = false;
     }
 
-    for (uint8_t attempt = 0; attempt < 2; attempt++) {
-        if (attempt > 0) delay(1);
-        if (I2CBus::write(i2c_address_, data, length)) {
-            failure_count_ = 0;
-            return true;
-        }
+    Wire.beginTransmission(i2c_address_);
+    Wire.write(data, length);
+    if (Wire.endTransmission() == 0) {
+        failure_count_ = 0;
+        return true;
+    }
+
+    delay(1);
+    Wire.beginTransmission(i2c_address_);
+    Wire.write(data, length);
+    if (Wire.endTransmission() == 0) {
+        failure_count_ = 0;
+        return true;
     }
 
     failure_count_++;

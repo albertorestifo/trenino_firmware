@@ -53,8 +53,6 @@ See [docs/PROTOCOL.md](docs/PROTOCOL.md) for the serial communication protocol s
 - **config_manager.h/cpp** - Configuration and EEPROM persistence
 - **sensor_manager.h/cpp** - Sensor lifecycle management
 - **analog_sensor.h/cpp** - Analog input implementation
-- **mcp23017_module.h/cpp** - MCP23017 I2C direct buttons and button matrix
-- **ads1115_module.h/cpp** - ADS1115 I2C analog inputs with optional supply reference
 
 ## Testing
 

@@ -18,28 +18,21 @@ int analogRead(uint8_t) { return 0; }
 int digitalRead(uint8_t) { return 0; }
 void delay(unsigned long) {}
 void delayMicroseconds(unsigned int) {}
-#ifndef UNIT_TEST
-#define UNIT_TEST
-#endif
-#include "../../src/i2c_bus.cpp"
 #include "../../src/config_manager.cpp"
 #include "../../src/output_manager.cpp"
 #include "../../src/stepper_driver.cpp"
 #include "../../src/stepper_service.cpp"
 #include "../../src/analog_sensor.cpp"
 #include "../../src/button_sensor.cpp"
-#include "../../src/matrix_core.cpp"
 #include "../../src/matrix_sensor.cpp"
 #include "../../src/ht16k33_module.cpp"
-#include "../../src/mcp23017_module.cpp"
-#include "../../src/ads1115_module.cpp"
 #include "../../src/sensor_manager.cpp"
 #include "../../src/message_handler.cpp"
 #include <unity.h>
 std::vector<std::vector<uint8_t>> packets;
 void capture(const uint8_t* b, size_t n) { packets.emplace_back(b, b+n); }
 void setUp() {
-    StepperService::reset(); MockWire::reset(); I2CBus::resetForTest(); memset(mock_eeprom_storage, 0, sizeof(mock_eeprom_storage));
+    StepperService::reset(); MockWire::reset(); memset(mock_eeprom_storage, 0, sizeof(mock_eeprom_storage));
     ConfigManager::init(); OutputManager::init(); packets.clear(); now_us = 0; StepperService::init(capture);
 }
 void tearDown() {}

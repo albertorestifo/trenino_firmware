@@ -1,13 +1,9 @@
 #define ARDUINO_ARCH_AVR
-#ifndef UNIT_TEST
-#define UNIT_TEST
-#endif
 #include "../Wire.h"
-#include "../../src/i2c_bus.cpp"
 #include "../../src/stepper_driver.cpp"
 #include <unity.h>
 using namespace Stepper;
-void setUp() { MockWire::reset(); I2CBus::resetForTest(); }
+void setUp() { MockWire::reset(); }
 void tearDown() {}
 void test_init_disables_allcall_and_shares_device() {
     ShieldDriver d;

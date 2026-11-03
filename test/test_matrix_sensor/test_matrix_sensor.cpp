@@ -57,7 +57,6 @@ void delayMicroseconds(unsigned int us)
 
 // Now include the sensor code
 #include "../../src/module.h"
-#include "../../src/matrix_core.cpp"
 #include "../../src/matrix_sensor.cpp"
 #include <unity.h>
 

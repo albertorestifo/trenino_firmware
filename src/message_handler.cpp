@@ -14,13 +14,6 @@ static PacketSerial_<COBS>* g_packet_serial = nullptr;
 // Heartbeat manager
 static Heartbeat::HeartbeatManager* g_heartbeat_manager = nullptr;
 
-// Sends encoded bytes and notifies the heartbeat manager
-static void sendBytes(const uint8_t* bytes, size_t size)
-{
-    if (g_packet_serial) g_packet_serial->send(bytes, size);
-    if (g_heartbeat_manager) g_heartbeat_manager->notifyMessageSent(millis());
-}
-
 // Template implementation - sends any protocol message and notifies heartbeat
 template <typename T>
 void sendMessage(const T& message)
@@ -33,7 +26,12 @@ void sendMessage(const T& message)
     size_t encoded_size = message.encode(buffer, sizeof(buffer));
 
     if (encoded_size > 0) {
-        sendBytes(buffer, encoded_size);
+        g_packet_serial->send(buffer, encoded_size);
+
+        // Notify heartbeat manager if initialized
+        if (g_heartbeat_manager) {
+            g_heartbeat_manager->notifyMessageSent(millis());
+        }
     }
 }
 
@@ -43,8 +41,10 @@ void init(PacketSerial_<COBS>* serial)
 
     // Initialize heartbeat manager with 2 second interval and callback
     g_heartbeat_manager = new Heartbeat::HeartbeatManager(HEARTBEAT_INTERVAL_MS, sendHeartbeat);
-    StepperService::init(sendBytes);
-    ModuleManager::setBusTurnCallback(StepperService::update);
+    StepperService::init([](const uint8_t* bytes, size_t size) {
+        if (g_packet_serial) g_packet_serial->send(bytes, size);
+        if (g_heartbeat_manager) g_heartbeat_manager->notifyMessageSent(millis());
+    });
 }
 
 void onPacketReceived(const uint8_t* buffer, size_t size)
@@ -73,16 +73,6 @@ void onPacketReceived(const uint8_t* buffer, size_t size)
     // (wire-level messages kept for backwards compatibility with older hosts)
 }
 
-// Reports queued module init errors to the host; returns how many were sent.
-static uint8_t sendInitErrors(ModuleManager::InitError* errors)
-{
-    uint8_t error_count = ModuleManager::getInitErrors(errors, ModuleManager::MAX_MODULES);
-    for (uint8_t i = 0; i < error_count; i++) {
-        sendModuleError(errors[i].i2c_address, errors[i].error_code);
-    }
-    return error_count;
-}
-
 void update()
 {
     StepperService::update();
@@ -103,13 +93,6 @@ void update()
         sendInputValue(reading);
         StepperService::update();
     }
-
-    // Report runtime errors raised by I2C modules (lost, recovered, ...)
-    uint8_t error_address;
-    uint8_t error_code;
-    while (ModuleManager::getNextRuntimeError(error_address, error_code)) {
-        sendModuleError(error_address, error_code);
-    }
 }
 
 void handleIdentityRequest(uint32_t request_id)
@@ -125,18 +108,9 @@ void handleIdentityRequest(uint32_t request_id)
     // The same flush happens after every host-driven Configure (in
     // handleConfigure), which is the other place applyConfiguration runs.
     ModuleManager::InitError errors[ModuleManager::MAX_MODULES];
-    uint8_t error_count = sendInitErrors(errors);
-
-    // Repeat errors modules are in right now (communication lost, supply
-    // reference lost), skipping any address already reported above.
-    ModuleManager::InitError active[ModuleManager::MAX_MODULES];
-    uint8_t active_count = ModuleManager::getActiveErrors(active, ModuleManager::MAX_MODULES);
-    for (uint8_t i = 0; i < active_count; i++) {
-        bool already_sent = false;
-        for (uint8_t j = 0; j < error_count; j++) {
-            if (errors[j].i2c_address == active[i].i2c_address) already_sent = true;
-        }
-        if (!already_sent) sendModuleError(active[i].i2c_address, active[i].error_code);
+    uint8_t error_count = ModuleManager::getInitErrors(errors, ModuleManager::MAX_MODULES);
+    for (uint8_t i = 0; i < error_count; i++) {
+        sendModuleError(errors[i].i2c_address, errors[i].error_code);
     }
 }
 
@@ -164,7 +138,10 @@ void handleConfigure(const Protocol::Configure& cfg)
 
         // Drain any per-module init errors and report them to the host
         ModuleManager::InitError errors[ModuleManager::MAX_MODULES];
-        sendInitErrors(errors);
+        uint8_t error_count = ModuleManager::getInitErrors(errors, ModuleManager::MAX_MODULES);
+        for (uint8_t i = 0; i < error_count; i++) {
+            sendModuleError(errors[i].i2c_address, errors[i].error_code);
+        }
     } else if (error) {
         sendConfigurationError(cfg.config_id);
     }

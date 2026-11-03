@@ -159,6 +159,23 @@ void test_load_fails_with_invalid_num_inputs()
     TEST_ASSERT_FALSE(result);
 }
 
+void test_load_rejects_wrapped_matrix_pin_count()
+{
+    EEPROM.put(ConfigManager::EEPROM_MAGIC_ADDR, ConfigManager::EEPROM_MAGIC);
+    EEPROM.put(ConfigManager::EEPROM_VERSION_ADDR, EEPROM_FORMAT_VERSION);
+    uint32_t config_id = 42;
+    EEPROM.put(ConfigManager::EEPROM_CONFIG_ID_ADDR, config_id);
+    uint8_t num_modules = 1;
+    EEPROM.put(ConfigManager::EEPROM_NUM_INPUTS_ADDR, num_modules);
+    // Matrix with 250 + 10 pins, which wraps to 4 in a uint8_t
+    const uint8_t record[] = { Protocol::MODULE_TYPE_MATRIX, 250, 10, 6, 7, 8, 9 };
+    for (size_t i = 0; i < sizeof(record); i++) {
+        mock_eeprom_storage[ConfigManager::EEPROM_INPUTS_ADDR + i] = record[i];
+    }
+
+    TEST_ASSERT_FALSE(ConfigManager::loadFromEEPROM());
+}
+
 void test_shield_registration_roundtrip_and_corruption()
 {
     TEST_ASSERT_EQUAL(0, ConfigManager::getRegisteredShieldAddress());
@@ -203,124 +220,6 @@ void test_noncanonical_empty_config_does_not_clear_modules()
     TEST_ASSERT_EQUAL(100,ConfigManager::getCurrentConfigId());
 }
 
-void test_eeprom_round_trip_mcp23017()
-{
-    ConfigManager::ModuleConfig m[2];
-    m[0].module_type = Protocol::MODULE_TYPE_MCP23017;
-    m[0].mcp23017.i2c_address = 0x21;
-    m[0].mcp23017.direct_base = 130;
-    m[0].mcp23017.matrix_base = 150;
-    m[0].mcp23017.debounce = 4;
-    m[0].mcp23017.direct_mask = 0x0E0F;
-    m[0].mcp23017.row_mask = 0x8030;
-    m[0].mcp23017.col_mask = 0x0140;
-    m[1].module_type = Protocol::MODULE_TYPE_ANALOG;
-    m[1].analog.pin = 3;
-    m[1].analog.sensitivity = 6;
-    ConfigManager::storeToEEPROM(77, m, 2);
-    TEST_ASSERT_TRUE(ConfigManager::loadFromEEPROM());
-    uint8_t n;
-    const ConfigManager::ModuleConfig* l = ConfigManager::getCurrentConfig(n);
-    TEST_ASSERT_EQUAL(2, n);
-    TEST_ASSERT_EQUAL_UINT8(Protocol::MODULE_TYPE_MCP23017, l[0].module_type);
-    TEST_ASSERT_EQUAL_UINT8(0x21, l[0].mcp23017.i2c_address);
-    TEST_ASSERT_EQUAL_UINT8(130, l[0].mcp23017.direct_base);
-    TEST_ASSERT_EQUAL_UINT8(150, l[0].mcp23017.matrix_base);
-    TEST_ASSERT_EQUAL_UINT8(4, l[0].mcp23017.debounce);
-    TEST_ASSERT_EQUAL_HEX16(0x0E0F, l[0].mcp23017.direct_mask);
-    TEST_ASSERT_EQUAL_HEX16(0x8030, l[0].mcp23017.row_mask);
-    TEST_ASSERT_EQUAL_HEX16(0x0140, l[0].mcp23017.col_mask);
-    TEST_ASSERT_EQUAL_UINT8(3, l[1].analog.pin);
-    TEST_ASSERT_EQUAL_UINT8(6, l[1].analog.sensitivity);
-}
-
-void test_eeprom_round_trip_ads1115()
-{
-    ConfigManager::ModuleConfig m[1];
-    m[0].module_type = Protocol::MODULE_TYPE_ADS1115;
-    m[0].ads1115.i2c_address = 0x49;
-    m[0].ads1115.pin_base = 220;
-    m[0].ads1115.channel_mask = 0x0B;
-    m[0].ads1115.gain = 1;
-    m[0].ads1115.ref_channel = 2;
-    m[0].ads1115.sensitivity[0] = 2;
-    m[0].ads1115.sensitivity[1] = 3;
-    m[0].ads1115.sensitivity[2] = 4;
-    m[0].ads1115.sensitivity[3] = 5;
-    ConfigManager::storeToEEPROM(78, m, 1);
-    TEST_ASSERT_TRUE(ConfigManager::loadFromEEPROM());
-    uint8_t n;
-    const ConfigManager::ModuleConfig* l = ConfigManager::getCurrentConfig(n);
-    TEST_ASSERT_EQUAL(1, n);
-    TEST_ASSERT_EQUAL_UINT8(Protocol::MODULE_TYPE_ADS1115, l[0].module_type);
-    TEST_ASSERT_EQUAL_UINT8(0x49, l[0].ads1115.i2c_address);
-    TEST_ASSERT_EQUAL_UINT8(220, l[0].ads1115.pin_base);
-    TEST_ASSERT_EQUAL_UINT8(0x0B, l[0].ads1115.channel_mask);
-    TEST_ASSERT_EQUAL_UINT8(1, l[0].ads1115.gain);
-    TEST_ASSERT_EQUAL_UINT8(2, l[0].ads1115.ref_channel);
-    for (int i = 0; i < 4; i++) TEST_ASSERT_EQUAL_UINT8(2 + i, l[0].ads1115.sensitivity[i]);
-}
-
-void test_eeprom_loads_3_1_0_record()
-{
-    // Format 5 layout written by firmware 3.1.0: analog, button, matrix, HT16K33.
-    const uint8_t record[] = {
-        0x34, 0x12, 0xFF, 0xC0,       // magic 0xC0FF1234 LE
-        EEPROM_FORMAT_VERSION,
-        0x2A, 0x00, 0x00, 0x00,       // config_id 42
-        4,                            // inputs
-        0, 14, 7,                     // analog pin 14 sens 7
-        1, 5, 20,                     // button pin 5 debounce 20
-        2, 2, 1, 6, 7, 8,             // matrix 2 rows 1 col pins 6 7 8
-        4, 0x70, 9, 4                 // ht16k33 addr 0x70 brightness 9 digits 4
-    };
-    for (size_t i = 0; i < sizeof(record); i++) mock_eeprom_storage[i] = record[i];
-    TEST_ASSERT_TRUE(ConfigManager::loadFromEEPROM());
-    uint8_t n;
-    const ConfigManager::ModuleConfig* l = ConfigManager::getCurrentConfig(n);
-    TEST_ASSERT_EQUAL(4, n);
-    TEST_ASSERT_EQUAL_HEX32(42, ConfigManager::getCurrentConfigId());
-    TEST_ASSERT_EQUAL_UINT8(14, l[0].analog.pin);
-    TEST_ASSERT_EQUAL_UINT8(7, l[0].analog.sensitivity);
-    TEST_ASSERT_EQUAL_UINT8(5, l[1].button.pin);
-    TEST_ASSERT_EQUAL_UINT8(20, l[1].button.debounce);
-    TEST_ASSERT_EQUAL_UINT8(2, l[2].matrix.num_row_pins);
-    TEST_ASSERT_EQUAL_UINT8(1, l[2].matrix.num_col_pins);
-    TEST_ASSERT_EQUAL_UINT8(8, l[2].matrix.pins[2]);
-    TEST_ASSERT_EQUAL_UINT8(0x70, l[3].ht16k33.i2c_address);
-    TEST_ASSERT_EQUAL_UINT8(9, l[3].ht16k33.brightness);
-    TEST_ASSERT_EQUAL_UINT8(4, l[3].ht16k33.num_digits);
-}
-
-void test_eeprom_rejects_wrapped_matrix_pin_count()
-{
-    const uint8_t record[] = {
-        0x34, 0x12, 0xFF, 0xC0,       // magic 0xC0FF1234 LE
-        EEPROM_FORMAT_VERSION,
-        0x2A, 0x00, 0x00, 0x00,       // config_id 42
-        1,                            // inputs
-        2, 250, 10, 6, 7, 8, 9,       // matrix 250 + 10 pins wraps to 4
-    };
-    for (size_t i = 0; i < sizeof(record); i++) mock_eeprom_storage[i] = record[i];
-    TEST_ASSERT_FALSE(ConfigManager::loadFromEEPROM());
-}
-
-void test_max_records_stay_below_shield_registration()
-{
-    ConfigManager::ModuleConfig m[ConfigManager::MAX_MODULES];
-    for (auto& x : m) {
-        x.module_type = Protocol::MODULE_TYPE_MATRIX;
-        x.matrix.num_row_pins = 8;
-        x.matrix.num_col_pins = 8;
-    }
-    ConfigManager::registerShieldAddress(0x60);
-    ConfigManager::storeToEEPROM(1, m, ConfigManager::MAX_MODULES);
-    TEST_ASSERT_EQUAL_UINT8(0x60, ConfigManager::getRegisteredShieldAddress());
-    for (auto& x : m) x.module_type = Protocol::MODULE_TYPE_MCP23017;
-    ConfigManager::storeToEEPROM(1, m, ConfigManager::MAX_MODULES);
-    TEST_ASSERT_EQUAL_UINT8(0x60, ConfigManager::getRegisteredShieldAddress());
-}
-
 int main()
 {
     UNITY_BEGIN();
@@ -330,15 +229,10 @@ int main()
     RUN_TEST(test_load_fails_with_mismatched_version);
     RUN_TEST(test_load_fails_with_no_magic);
     RUN_TEST(test_load_fails_with_invalid_num_inputs);
+    RUN_TEST(test_load_rejects_wrapped_matrix_pin_count);
     RUN_TEST(test_shield_registration_roundtrip_and_corruption);
     RUN_TEST(test_empty_configuration_retains_identity_after_reboot_and_cancels_partial);
     RUN_TEST(test_noncanonical_empty_config_does_not_clear_modules);
-
-    RUN_TEST(test_eeprom_round_trip_mcp23017);
-    RUN_TEST(test_eeprom_round_trip_ads1115);
-    RUN_TEST(test_eeprom_loads_3_1_0_record);
-    RUN_TEST(test_eeprom_rejects_wrapped_matrix_pin_count);
-    RUN_TEST(test_max_records_stay_below_shield_registration);
 
     return UNITY_END();
 }

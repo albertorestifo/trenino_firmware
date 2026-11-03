@@ -10,9 +10,6 @@
 //   // ... run code under test ...
 //   MockWire::transactions[i].address;       // inspect what was sent
 //   MockWire::transactions[i].data[j];
-//   MockWire::queueRead(0x20, bytes, 2);     // next requestFrom(0x20, n) returns these bytes
-//   MockWire::read_request_count;            // number of requestFrom calls
-//   MockWire::last_request_quantity;         // byte count of the latest requestFrom
 //
 // IMPORTANT — single-TU constraint:
 // All mock state (transactions, nack_table, Wire instance) is declared `static`,
@@ -44,16 +41,6 @@ struct AddressNackBehavior {
     uint8_t address;
     uint8_t nack_count_remaining;
     uint8_t nack_status;
-    uint8_t skip_remaining; // transactions to let through before NACKing
-};
-
-constexpr uint8_t MAX_READ_QUEUES = 8;
-constexpr uint8_t MAX_READ_BYTES = 32;
-
-struct ReadQueue {
-    uint8_t address;
-    uint8_t data[MAX_READ_BYTES];
-    uint8_t length;
 };
 
 static Transaction transactions[MAX_TRANSACTIONS];
@@ -64,16 +51,6 @@ static bool wire_begin_called = false;
 static unsigned long wire_timeout_us = 0;
 static bool wire_timeout_reset_on_timeout = false;
 static uint8_t wire_timeout_call_count = 0;
-
-static ReadQueue read_queues[MAX_READ_QUEUES];
-static uint8_t read_queue_count = 0;
-static uint8_t read_request_count = 0;
-static uint8_t last_request_quantity = 0;
-static uint8_t rx_buffer[MAX_READ_BYTES];
-static uint8_t rx_length = 0;
-static uint8_t rx_pos = 0;
-// Optional: lets a test rewrite the bytes of a read at the moment it is served.
-static void (*read_fixup)(uint8_t address, uint8_t* bytes, uint8_t length) = nullptr;
 
 static uint8_t current_address = 0;
 static uint8_t current_buffer[MAX_BYTES_PER_TRANSACTION];
@@ -89,36 +66,16 @@ static inline void reset() {
     wire_timeout_call_count = 0;
     transaction_active = false;
     current_length = 0;
-    read_queue_count = 0;
-    read_request_count = 0;
-    last_request_quantity = 0;
-    rx_length = 0;
-    rx_pos = 0;
 }
 
-// Scripts the bytes returned by the next requestFrom() to `address`. Queued
-// reads for one address are served in the order they were queued.
-static inline void queueRead(uint8_t address, const uint8_t* bytes, uint8_t length) {
-    if (read_queue_count >= MAX_READ_QUEUES) return;
-    ReadQueue& q = read_queues[read_queue_count++];
-    q.address = address;
-    q.length = length > MAX_READ_BYTES ? MAX_READ_BYTES : length;
-    for (uint8_t i = 0; i < q.length; i++) q.data[i] = bytes[i];
-}
-
-// `skip` lets that many endTransmission() calls to `address` succeed first.
-static inline void scheduleNacks(uint8_t address, uint8_t count, uint8_t status = 2, uint8_t skip = 0) {
+static inline void scheduleNacks(uint8_t address, uint8_t count, uint8_t status = 2) {
     if (nack_table_count >= MAX_ADDRESSES) return;
-    nack_table[nack_table_count++] = { address, count, status, skip };
+    nack_table[nack_table_count++] = { address, count, status };
 }
 
 static uint8_t consumeNackStatus(uint8_t address) {
     for (uint8_t i = 0; i < nack_table_count; i++) {
         if (nack_table[i].address == address && nack_table[i].nack_count_remaining > 0) {
-            if (nack_table[i].skip_remaining > 0) {
-                nack_table[i].skip_remaining--;
-                return 0;
-            }
             nack_table[i].nack_count_remaining--;
             return nack_table[i].nack_status;
         }
@@ -187,32 +144,9 @@ public:
         return status;
     }
 
-    uint8_t requestFrom(uint8_t address, uint8_t quantity) {
-        MockWire::read_request_count++;
-        MockWire::last_request_quantity = quantity;
-        MockWire::rx_length = 0;
-        MockWire::rx_pos = 0;
-        for (uint8_t i = 0; i < MockWire::read_queue_count; i++) {
-            if (MockWire::read_queues[i].address != address) continue;
-            MockWire::ReadQueue& q = MockWire::read_queues[i];
-            uint8_t n = q.length < quantity ? q.length : quantity;
-            for (uint8_t j = 0; j < n; j++) MockWire::rx_buffer[j] = q.data[j];
-            MockWire::rx_length = n;
-            if (MockWire::read_fixup) MockWire::read_fixup(address, MockWire::rx_buffer, n);
-            // Consume this entry.
-            for (uint8_t k = i; k + 1 < MockWire::read_queue_count; k++) {
-                MockWire::read_queues[k] = MockWire::read_queues[k + 1];
-            }
-            MockWire::read_queue_count--;
-            break;
-        }
-        return MockWire::rx_length;
-    }
-    int available() { return MockWire::rx_length - MockWire::rx_pos; }
-    int read() {
-        if (MockWire::rx_pos >= MockWire::rx_length) return -1;
-        return MockWire::rx_buffer[MockWire::rx_pos++];
-    }
+    uint8_t requestFrom(uint8_t /*address*/, uint8_t /*quantity*/) { return 0; }
+    int available() { return 0; }
+    int read() { return -1; }
 };
 
 static TwoWire Wire;

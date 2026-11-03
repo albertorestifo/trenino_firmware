@@ -5,9 +5,6 @@
 
 namespace Protocol {
 
-// Records are copied as raw bytes between structs, the wire and EEPROM.
-static_assert(__BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__, "wire and EEPROM formats are little endian");
-
 // Message Type constants
 constexpr uint8_t MESSAGE_TYPE_IDENTITY_REQUEST = 0;
 constexpr uint8_t MESSAGE_TYPE_IDENTITY_RESPONSE = 1;
@@ -31,14 +28,9 @@ constexpr uint8_t MODULE_TYPE_BUTTON = 1;
 constexpr uint8_t MODULE_TYPE_MATRIX = 2;
 // Note: 3 is reserved (formerly BLDC)
 constexpr uint8_t MODULE_TYPE_HT16K33 = 4;
-constexpr uint8_t MODULE_TYPE_MCP23017 = 5;
-constexpr uint8_t MODULE_TYPE_ADS1115 = 6;
 // Configure-only sentinel for an explicit empty legacy module deployment.
 // Canonical header: total_parts=0, part_number=0, no payload.
 constexpr uint8_t MODULE_TYPE_EMPTY = 0xff;
-
-// ADS1115 ref_channel value meaning "no supply reference channel"
-constexpr uint8_t ADS_NO_REFERENCE = 0xFF;
 
 // Maximum number of pins for matrix configuration (row_pins + col_pins)
 constexpr uint8_t MAX_MATRIX_PINS = 16;
@@ -75,36 +67,6 @@ struct IdentityResponse {
     bool decode(const uint8_t* buffer, size_t length);
 };
 
-// MODULE_TYPE_MCP23017 payload (10 bytes on the wire). Masks: bit 0-7 = GPA0-7,
-// bit 8-15 = GPB0-7. Packed so that it never grows a union that holds it.
-struct __attribute__((packed)) Mcp23017Config {
-    uint8_t i2c_address;
-    uint8_t direct_base;
-    uint8_t matrix_base;
-    uint8_t debounce;
-    uint16_t direct_mask;
-    uint16_t row_mask;
-    uint16_t col_mask;
-};
-
-// MODULE_TYPE_ADS1115 payload (9 bytes on the wire)
-struct __attribute__((packed)) Ads1115Config {
-    uint8_t i2c_address;
-    uint8_t pin_base;
-    uint8_t channel_mask;
-    uint8_t gain;
-    uint8_t ref_channel;
-    uint8_t sensitivity[4];
-};
-
-// Validation applied by Configure::decode; false means ConfigurationError.
-bool validMcp23017(const Mcp23017Config& config);
-bool validAds1115(const Ads1115Config& config);
-
-// Payload bytes of a module record, on the wire and in EEPROM; 0 if module_type
-// is unknown. matrix_pins (row + col pins) only matters for a matrix.
-uint8_t modulePayloadSize(uint8_t module_type, uint8_t matrix_pins);
-
 // Configure message - sent by host to configure device inputs
 // Uses a discriminated union based on module_type
 struct Configure {
@@ -140,12 +102,6 @@ struct Configure {
             uint8_t brightness;
             uint8_t num_digits;
         } ht16k33;
-
-        // MODULE_TYPE_MCP23017
-        Mcp23017Config mcp23017;
-
-        // MODULE_TYPE_ADS1115
-        Ads1115Config ads1115;
     };
 
     Configure()

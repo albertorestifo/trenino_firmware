@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.2.1] - 2026-11-03
+
+### Removed
+- **MCP23017 and ADS1115 input modules** (module types 5 and 6), together with
+  `ModuleError` codes 1-3 and the errors repeated in the reply to
+  `IdentityRequest`. Use more boards instead of I2C expansion chips. `Configure`
+  rejects module types 5 and 6, and a stored configuration containing them is
+  discarded on boot, so the board starts unconfigured until the app sends its
+  configuration again.
+
+### Changed
+- Firmware version is 3.2.1. Nothing used the removed module types, so this is a
+  patch release even though it changes the protocol. `EEPROM_FORMAT_VERSION`
+  stays 5.
+
 ## [3.2.0] - 2026-11-02
 
 ### Added
@@ -23,6 +38,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Configure` rejects an MCP23017 with no enabled pins and an ADS1115 with
   `channel_mask` 0. Both payloads must have their exact length.
 - Firmware version is 3.2.0. `EEPROM_FORMAT_VERSION` stays 5.
+
+### Fixed
+- A matrix whose row and column counts add up past 255 (for example 250 + 10)
+  wrapped in a `uint8_t` and passed the pin limit in `Configure` and EEPROM load.
 
 ### Known limitations
 - ATmega328P boards (Uno, Nano) have room for one matrix chip, because of their 2 KB
