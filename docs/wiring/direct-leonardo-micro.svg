@@ -1,0 +1,43 @@
+<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 780 400' width='780' height='400' role='img' aria-label='Arduino Leonardo / Micro direct X27 wiring'>
+<title>Arduino Leonardo / Micro direct X27 wiring</title>
+<rect width='780' height='400' fill='#ffffff'/>
+<text x='30' y='38' font-family='-apple-system,Segoe UI,Helvetica,Arial,sans-serif' font-size='18' fill='#1f2328' text-anchor='start' font-weight='bold'>Arduino Leonardo / Micro: X27 in direct mode (driver = 1)</text>
+<text x='30' y='60' font-family='-apple-system,Segoe UI,Helvetica,Arial,sans-serif' font-size='12' fill='#59636e' text-anchor='start' font-weight='normal'>Digital header D4-D7. D2/D3 stay free for I2C displays.</text>
+<rect x='30' y='90' width='250' height='210' rx='10' fill='#e7f0e9' stroke='#2f6f3e' stroke-width='1.5'/>
+<text x='46' y='116' font-family='-apple-system,Segoe UI,Helvetica,Arial,sans-serif' font-size='15' fill='#2f6f3e' text-anchor='start' font-weight='bold'>Arduino Leonardo / Micro</text>
+<text x='46' y='134' font-family='-apple-system,Segoe UI,Helvetica,Arial,sans-serif' font-size='11' fill='#59636e' text-anchor='start' font-weight='normal'>5 V logic</text>
+<text x='266' y='164' font-family='-apple-system,Segoe UI,Helvetica,Arial,sans-serif' font-size='13' fill='#1f2328' text-anchor='end' font-weight='bold'>D4</text>
+<text x='46' y='164' font-family='-apple-system,Segoe UI,Helvetica,Arial,sans-serif' font-size='12' fill='#59636e' text-anchor='start' font-weight='normal'>pins[0] = 4</text>
+<polyline points='280,160 400,160 400,140 552,140' fill='none' stroke='#c2410c' stroke-width='3' stroke-linejoin='round' stroke-linecap='round'/>
+<circle cx='280' cy='160' r='4' fill='#c2410c'/>
+<text x='266' y='198' font-family='-apple-system,Segoe UI,Helvetica,Arial,sans-serif' font-size='13' fill='#1f2328' text-anchor='end' font-weight='bold'>D5</text>
+<text x='46' y='198' font-family='-apple-system,Segoe UI,Helvetica,Arial,sans-serif' font-size='12' fill='#59636e' text-anchor='start' font-weight='normal'>pins[1] = 5</text>
+<polyline points='280,194 414,194 414,172 552,172' fill='none' stroke='#d97706' stroke-width='3' stroke-linejoin='round' stroke-linecap='round'/>
+<circle cx='280' cy='194' r='4' fill='#d97706'/>
+<text x='266' y='232' font-family='-apple-system,Segoe UI,Helvetica,Arial,sans-serif' font-size='13' fill='#1f2328' text-anchor='end' font-weight='bold'>D6</text>
+<text x='46' y='232' font-family='-apple-system,Segoe UI,Helvetica,Arial,sans-serif' font-size='12' fill='#59636e' text-anchor='start' font-weight='normal'>pins[2] = 6</text>
+<polyline points='280,228 428,228 428,204 552,204' fill='none' stroke='#0f766e' stroke-width='3' stroke-linejoin='round' stroke-linecap='round'/>
+<circle cx='280' cy='228' r='4' fill='#0f766e'/>
+<text x='266' y='266' font-family='-apple-system,Segoe UI,Helvetica,Arial,sans-serif' font-size='13' fill='#1f2328' text-anchor='end' font-weight='bold'>D7</text>
+<text x='46' y='266' font-family='-apple-system,Segoe UI,Helvetica,Arial,sans-serif' font-size='12' fill='#59636e' text-anchor='start' font-weight='normal'>pins[3] = 7</text>
+<polyline points='280,262 442,262 442,236 552,236' fill='none' stroke='#1d4ed8' stroke-width='3' stroke-linejoin='round' stroke-linecap='round'/>
+<circle cx='280' cy='262' r='4' fill='#1d4ed8'/>
+<rect x='560' y='100' width='170' height='190' rx='14' fill='#f6f2e8' stroke='#8a6d1f' stroke-width='1.5'/>
+<circle cx='660' cy='182' r='38' fill='#fff' stroke='#8a6d1f' stroke-width='1.5'/>
+<circle cx='660' cy='182' r='5' fill='#8a6d1f'/>
+<text x='660' y='250' font-family='-apple-system,Segoe UI,Helvetica,Arial,sans-serif' font-size='14' fill='#1f2328' text-anchor='middle' font-weight='bold'>X27.168</text>
+<text x='660' y='270' font-family='-apple-system,Segoe UI,Helvetica,Arial,sans-serif' font-size='11' fill='#59636e' text-anchor='middle' font-weight='normal'>rear view, pins down</text>
+<rect x='552' y='135' width='16' height='10' rx='2' fill='#b0b7c0'/>
+<text x='576' y='144' font-family='-apple-system,Segoe UI,Helvetica,Arial,sans-serif' font-size='12' fill='#c2410c' text-anchor='start' font-weight='bold'>1</text>
+<rect x='552' y='167' width='16' height='10' rx='2' fill='#b0b7c0'/>
+<text x='576' y='176' font-family='-apple-system,Segoe UI,Helvetica,Arial,sans-serif' font-size='12' fill='#d97706' text-anchor='start' font-weight='bold'>2</text>
+<rect x='552' y='199' width='16' height='10' rx='2' fill='#b0b7c0'/>
+<text x='576' y='208' font-family='-apple-system,Segoe UI,Helvetica,Arial,sans-serif' font-size='12' fill='#0f766e' text-anchor='start' font-weight='bold'>3</text>
+<rect x='552' y='231' width='16' height='10' rx='2' fill='#b0b7c0'/>
+<text x='576' y='240' font-family='-apple-system,Segoe UI,Helvetica,Arial,sans-serif' font-size='12' fill='#1d4ed8' text-anchor='start' font-weight='bold'>4</text>
+<text x='594' y='160' font-family='-apple-system,Segoe UI,Helvetica,Arial,sans-serif' font-size='10' fill='#59636e' text-anchor='start' font-weight='normal'>coil A</text>
+<text x='594' y='224' font-family='-apple-system,Segoe UI,Helvetica,Arial,sans-serif' font-size='10' fill='#59636e' text-anchor='start' font-weight='normal'>coil B</text>
+<text x='30' y='330' font-family='-apple-system,Segoe UI,Helvetica,Arial,sans-serif' font-size='12' fill='#59636e' text-anchor='start' font-weight='normal'>No 5 V or GND wire: the four pins drive both coils in both directions.</text>
+<text x='30' y='348' font-family='-apple-system,Segoe UI,Helvetica,Arial,sans-serif' font-size='12' fill='#59636e' text-anchor='start' font-weight='normal'>Second gauge: D8, D9, D10, D11.</text>
+<text x='30' y='366' font-family='-apple-system,Segoe UI,Helvetica,Arial,sans-serif' font-size='12' fill='#9a3412' text-anchor='start' font-weight='normal'> About 20 mA per pin. Up to two direct gauges per board; add BAT54S clamps for long runs.</text>
+</svg>

@@ -265,6 +265,120 @@ void test_empty_configure_rejects_noncanonical_header_and_lengths()
     cfg.total_parts = 0; cfg.part_number = 1; TEST_ASSERT_EQUAL(0,cfg.encode(b,sizeof(b)));
 }
 
+// ---------- Gauge (module type 7, messages 18 and 19) ----------
+
+static GaugeConfig validVid()
+{
+    GaugeConfig g;
+    g.driver = GAUGE_DRIVER_VID6606;
+    g.pins[0] = 8; g.pins[1] = 7; g.pins[2] = 6; g.pins[3] = GAUGE_NO_PIN;
+    g.travel = 3780; g.max_speed = 5000; g.acceleration = 50000; g.flags = 0;
+    return g;
+}
+
+static GaugeConfig validDirect()
+{
+    GaugeConfig g;
+    g.driver = GAUGE_DRIVER_DIRECT;
+    g.pins[0] = 2; g.pins[1] = 3; g.pins[2] = 4; g.pins[3] = 5;
+    g.travel = 945; g.max_speed = 1800; g.acceleration = 1500; g.flags = GAUGE_FLAG_REVERSE;
+    return g;
+}
+
+void test_configure_gauge_wire_layout()
+{
+    Configure cfg;
+    cfg.config_id = 0x01020304; cfg.total_parts = 1; cfg.part_number = 0;
+    cfg.module_type = MODULE_TYPE_GAUGE; cfg.gauge = validVid();
+    uint8_t b[32];
+    TEST_ASSERT_EQUAL(20, cfg.encode(b, sizeof(b)));
+    const uint8_t expected[] = { 2, 4, 3, 2, 1, 1, 0, 7,
+        0, 8, 7, 6, 0xff, 0xC4, 0x0E, 0x88, 0x13, 0x50, 0xC3, 0 };
+    TEST_ASSERT_EQUAL_UINT8_ARRAY(expected, b, 20);
+}
+
+void test_configure_gauge_roundtrip_and_exact_length()
+{
+    Configure cfg;
+    cfg.config_id = 9; cfg.total_parts = 2; cfg.part_number = 1;
+    cfg.module_type = MODULE_TYPE_GAUGE; cfg.gauge = validDirect();
+    uint8_t b[32];
+    size_t n = cfg.encode(b, sizeof(b));
+    Configure out;
+    TEST_ASSERT_TRUE(out.decode(b, n));
+    TEST_ASSERT_EQUAL_UINT8(GAUGE_DRIVER_DIRECT, out.gauge.driver);
+    TEST_ASSERT_EQUAL_UINT8_ARRAY(cfg.gauge.pins, out.gauge.pins, 4);
+    TEST_ASSERT_EQUAL_UINT16(945, out.gauge.travel);
+    TEST_ASSERT_EQUAL_UINT16(1800, out.gauge.max_speed);
+    TEST_ASSERT_EQUAL_UINT16(1500, out.gauge.acceleration);
+    TEST_ASSERT_EQUAL_UINT8(GAUGE_FLAG_REVERSE, out.gauge.flags);
+    TEST_ASSERT_FALSE(out.decode(b, n - 1));
+    TEST_ASSERT_FALSE(out.decode(b, n + 1));
+}
+
+void test_gauge_config_validation()
+{
+    TEST_ASSERT_TRUE(isValidGaugeConfig(validVid()));
+    TEST_ASSERT_TRUE(isValidGaugeConfig(validDirect()));
+
+    GaugeConfig g = validVid(); g.pins[2] = GAUGE_NO_PIN; TEST_ASSERT_TRUE(isValidGaugeConfig(g)); // no RESET pin
+    g = validVid(); g.driver = 2; TEST_ASSERT_FALSE(isValidGaugeConfig(g));
+    g = validVid(); g.flags = 2; TEST_ASSERT_FALSE(isValidGaugeConfig(g));
+    g = validVid(); g.travel = 0; TEST_ASSERT_FALSE(isValidGaugeConfig(g));
+    g = validVid(); g.travel = GAUGE_MAX_TRAVEL + 1; TEST_ASSERT_FALSE(isValidGaugeConfig(g));
+    g = validVid(); g.max_speed = 0; TEST_ASSERT_FALSE(isValidGaugeConfig(g));
+    g = validVid(); g.max_speed = GAUGE_MAX_SPEED_VID6606 + 1; TEST_ASSERT_FALSE(isValidGaugeConfig(g));
+    g = validVid(); g.acceleration = 0; TEST_ASSERT_FALSE(isValidGaugeConfig(g));
+    g = validVid(); g.acceleration = GAUGE_MAX_ACCELERATION + 1; TEST_ASSERT_FALSE(isValidGaugeConfig(g));
+    g = validVid(); g.pins[0] = GAUGE_NO_PIN; TEST_ASSERT_FALSE(isValidGaugeConfig(g));
+    g = validVid(); g.pins[1] = GAUGE_NO_PIN; TEST_ASSERT_FALSE(isValidGaugeConfig(g));
+    g = validVid(); g.pins[3] = 9; TEST_ASSERT_FALSE(isValidGaugeConfig(g));
+    g = validVid(); g.pins[1] = 8; TEST_ASSERT_FALSE(isValidGaugeConfig(g)); // STEP == DIR
+    g = validVid(); g.pins[2] = 7; TEST_ASSERT_FALSE(isValidGaugeConfig(g)); // RESET == DIR
+
+    g = validDirect(); g.max_speed = GAUGE_MAX_SPEED_DIRECT + 1; TEST_ASSERT_FALSE(isValidGaugeConfig(g));
+    g = validDirect(); g.pins[3] = GAUGE_NO_PIN; TEST_ASSERT_FALSE(isValidGaugeConfig(g));
+    g = validDirect(); g.pins[3] = 2; TEST_ASSERT_FALSE(isValidGaugeConfig(g)); // duplicate
+}
+
+void test_set_gauge_position_roundtrip()
+{
+    SetGaugePosition msg; msg.pin = 21; msg.position = 0x1234;
+    uint8_t b[8];
+    TEST_ASSERT_EQUAL(4, msg.encode(b, sizeof(b)));
+    const uint8_t expected[] = { MESSAGE_TYPE_SET_GAUGE_POSITION, 21, 0x34, 0x12 };
+    TEST_ASSERT_EQUAL_UINT8_ARRAY(expected, b, 4);
+    Message m;
+    TEST_ASSERT_TRUE(m.decode(b, 4));
+    TEST_ASSERT_TRUE(m.isSetGaugePosition());
+    TEST_ASSERT_EQUAL_UINT8(21, m.set_gauge_position.pin);
+    TEST_ASSERT_EQUAL_UINT16(0x1234, m.set_gauge_position.position);
+    TEST_ASSERT_FALSE(m.decode(b, 3));
+    TEST_ASSERT_FALSE(m.decode(b, 5));
+}
+
+void test_zero_gauge_roundtrip()
+{
+    ZeroGauge msg; msg.pin = 8;
+    uint8_t b[4];
+    TEST_ASSERT_EQUAL(2, msg.encode(b, sizeof(b)));
+    Message m;
+    TEST_ASSERT_TRUE(m.decode(b, 2));
+    TEST_ASSERT_TRUE(m.isZeroGauge());
+    TEST_ASSERT_EQUAL_UINT8(8, m.zero_gauge.pin);
+    TEST_ASSERT_FALSE(m.decode(b, 3));
+}
+
+void test_removed_stepper_message_types_are_ignored()
+{
+    // Former stepper command (16) and status (17) packets now decode as unknown.
+    uint8_t command[] = { 16, 1, 6, 0, 1, 0 };
+    uint8_t status[23] = { 17, 1 };
+    Message m;
+    TEST_ASSERT_FALSE(m.decode(command, sizeof(command)));
+    TEST_ASSERT_FALSE(m.decode(status, sizeof(status)));
+}
+
 int main()
 {
     UNITY_BEGIN();
@@ -289,6 +403,13 @@ int main()
     RUN_TEST(test_module_error_roundtrip);
     RUN_TEST(test_empty_configure_canonical_wire);
     RUN_TEST(test_empty_configure_rejects_noncanonical_header_and_lengths);
+
+    RUN_TEST(test_configure_gauge_wire_layout);
+    RUN_TEST(test_configure_gauge_roundtrip_and_exact_length);
+    RUN_TEST(test_gauge_config_validation);
+    RUN_TEST(test_set_gauge_position_roundtrip);
+    RUN_TEST(test_zero_gauge_roundtrip);
+    RUN_TEST(test_removed_stepper_message_types_are_ignored);
 
     return UNITY_END();
 }

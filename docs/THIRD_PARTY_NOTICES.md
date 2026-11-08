@@ -1,6 +1,6 @@
 # Third-party notices
 
-The Switec six-state contact pattern in `src/stepper_driver.cpp` is derived from
+The Switec six-state contact pattern in `src/gauge_module.cpp` is derived from
 SwitecX25 by Guy Carpenter, Clearwater Software (2012).
 
 Software License Agreement (BSD License)

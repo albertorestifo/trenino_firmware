@@ -19,11 +19,8 @@
 
 namespace ConfigManager {
 
-// Independent versioned driver-registration record at bytes500..504. Legacy
-// variable-length module records occupy at most162 bytes. Axis motion config
-// stays volatile; registration only allows safe shield shutdown before displays.
-uint8_t getRegisteredShieldAddress();
-void registerShieldAddress(uint8_t address);
+// EEPROM bytes 500..504 are reserved: they held the stepper shield address
+// registration in firmware 3.1.0-3.2.1. Never read, write or reuse them.
 
 // Maximum number of inputs that can be configured
 constexpr uint8_t MAX_MODULES = 8;
@@ -74,6 +71,9 @@ struct ModuleConfig {
             uint8_t brightness;
             uint8_t num_digits;
         } ht16k33;
+
+        // MODULE_TYPE_GAUGE
+        Protocol::GaugeConfig gauge;
     };
 
     ModuleConfig()
@@ -83,6 +83,71 @@ struct ModuleConfig {
         analog.sensitivity = 0;
     }
 };
+
+// True if this board can run the gauge driver. Direct GPIO drive wants about
+// 20 mA per coil at 5 V: Due pins are rated 3 mA, and ESP32's 3.3 V gives a
+// 260 ohm coil only about 13 mA, too little torque.
+inline bool isGaugeDriverSupported(uint8_t driver)
+{
+#if defined(ARDUINO_SAM_DUE) || defined(ESP32)
+    return driver == Protocol::GAUGE_DRIVER_VID6606;
+#else
+    return driver == Protocol::GAUGE_DRIVER_VID6606 || driver == Protocol::GAUGE_DRIVER_DIRECT;
+#endif
+}
+
+// Full check for one stored or received gauge record.
+inline bool isUsableGauge(const Protocol::GaugeConfig& gauge)
+{
+    return Protocol::isValidGaugeConfig(gauge) && isGaugeDriverSupported(gauge.driver);
+}
+
+// Number of gauge modules in a module list.
+inline uint8_t countGauges(const ModuleConfig* modules, uint8_t count)
+{
+    uint8_t gauges = 0;
+    for (uint8_t i = 0; i < count; i++) {
+        if (modules[i].module_type == Protocol::MODULE_TYPE_GAUGE) gauges++;
+    }
+    return gauges;
+}
+
+// Pins a gauge drives on its own (RESET_N is shared by design, so excluded).
+inline uint8_t gaugeOwnPins(const Protocol::GaugeConfig& g, uint8_t out[4])
+{
+    if (g.driver == Protocol::GAUGE_DRIVER_VID6606) {
+        out[0] = g.pins[0];
+        out[1] = g.pins[1];
+        return 2;
+    }
+    for (uint8_t i = 0; i < 4; i++) out[i] = g.pins[i];
+    return 4;
+}
+
+// True if two gauges share a STEP, DIR or coil pin, or one gauge's RESET_N is
+// another's STEP/DIR/coil. Gauges are addressed by pins[0], so a shared pin
+// would also make one of them unreachable.
+inline bool gaugePinsConflict(const ModuleConfig* modules, uint8_t count)
+{
+    for (uint8_t i = 0; i < count; i++) {
+        if (modules[i].module_type != Protocol::MODULE_TYPE_GAUGE) continue;
+        uint8_t a[4];
+        uint8_t na = gaugeOwnPins(modules[i].gauge, a);
+        for (uint8_t j = 0; j < count; j++) {
+            if (j == i || modules[j].module_type != Protocol::MODULE_TYPE_GAUGE) continue;
+            const Protocol::GaugeConfig& other = modules[j].gauge;
+            uint8_t b[4];
+            uint8_t nb = gaugeOwnPins(other, b);
+            for (uint8_t x = 0; x < na; x++) {
+                if (other.driver == Protocol::GAUGE_DRIVER_VID6606 && a[x] == other.pins[2]) return true;
+                for (uint8_t y = 0; y < nb; y++) {
+                    if (j > i && a[x] == b[y]) return true;
+                }
+            }
+        }
+    }
+    return false;
+}
 
 // Configuration state
 class ConfigState {
@@ -156,6 +221,13 @@ public:
             modules[cfg.part_number].ht16k33.i2c_address = cfg.ht16k33.i2c_address;
             modules[cfg.part_number].ht16k33.brightness = cfg.ht16k33.brightness;
             modules[cfg.part_number].ht16k33.num_digits = cfg.ht16k33.num_digits;
+            break;
+
+        case Protocol::MODULE_TYPE_GAUGE:
+            if (!isUsableGauge(cfg.gauge)) {
+                return false;
+            }
+            modules[cfg.part_number].gauge = cfg.gauge;
             break;
 
         default:

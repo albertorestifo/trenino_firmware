@@ -1,0 +1,62 @@
+<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 820 470' width='820' height='470' role='img' aria-label='Due and ESP32 VID6606 X27 wiring'>
+<title>Due and ESP32 VID6606 X27 wiring</title>
+<rect width='820' height='470' fill='#ffffff'/>
+<text x='30' y='38' font-family='-apple-system,Segoe UI,Helvetica,Arial,sans-serif' font-size='18' fill='#1f2328' text-anchor='start' font-weight='bold'>Arduino Due and ESP32: direct mode is refused, use a VID6606</text>
+<text x='30' y='60' font-family='-apple-system,Segoe UI,Helvetica,Arial,sans-serif' font-size='12' fill='#59636e' text-anchor='start' font-weight='normal'>Due pins are rated 3 mA; ESP32 at 3.3 V gives a 260 ohm coil only about 13 mA. An X27 coil wants about 20 mA at 5 V.</text>
+<rect x='30' y='90' width='220' height='220' rx='10' fill='#e7f0e9' stroke='#2f6f3e' stroke-width='1.5'/>
+<text x='46' y='116' font-family='-apple-system,Segoe UI,Helvetica,Arial,sans-serif' font-size='15' fill='#2f6f3e' text-anchor='start' font-weight='bold'>Due  /  ESP32</text>
+<text x='46' y='134' font-family='-apple-system,Segoe UI,Helvetica,Arial,sans-serif' font-size='11' fill='#59636e' text-anchor='start' font-weight='normal'>3.3 V logic</text>
+<rect x='340' y='100' width='170' height='210' rx='6' fill='#eef1f5' stroke='#4b5563' stroke-width='1.5'/>
+<text x='425' y='126' font-family='-apple-system,Segoe UI,Helvetica,Arial,sans-serif' font-size='15' fill='#1f2328' text-anchor='middle' font-weight='bold'>VID6606</text>
+<text x='425' y='144' font-family='-apple-system,Segoe UI,Helvetica,Arial,sans-serif' font-size='11' fill='#59636e' text-anchor='middle' font-weight='normal'>channel A shown</text>
+<text x='234' y='164' font-family='-apple-system,Segoe UI,Helvetica,Arial,sans-serif' font-size='12' fill='#1f2328' text-anchor='end' font-weight='bold'>D22  /  GPIO25</text>
+<text x='46' y='164' font-family='-apple-system,Segoe UI,Helvetica,Arial,sans-serif' font-size='11' fill='#59636e' text-anchor='start' font-weight='normal'>pins[0]</text>
+<polyline points='250,160 340,160' fill='none' stroke='#c2410c' stroke-width='2.5' stroke-linejoin='round' stroke-linecap='round'/>
+<text x='348' y='164' font-family='-apple-system,Segoe UI,Helvetica,Arial,sans-serif' font-size='11' fill='#1f2328' text-anchor='start' font-weight='normal'>f(scx)A  28</text>
+<text x='295' y='154' font-family='-apple-system,Segoe UI,Helvetica,Arial,sans-serif' font-size='10' fill='#59636e' text-anchor='middle' font-weight='normal'>STEP</text>
+<text x='234' y='194' font-family='-apple-system,Segoe UI,Helvetica,Arial,sans-serif' font-size='12' fill='#1f2328' text-anchor='end' font-weight='bold'>D23  /  GPIO26</text>
+<text x='46' y='194' font-family='-apple-system,Segoe UI,Helvetica,Arial,sans-serif' font-size='11' fill='#59636e' text-anchor='start' font-weight='normal'>pins[1]</text>
+<polyline points='250,190 340,190' fill='none' stroke='#0f766e' stroke-width='2.5' stroke-linejoin='round' stroke-linecap='round'/>
+<text x='348' y='194' font-family='-apple-system,Segoe UI,Helvetica,Arial,sans-serif' font-size='11' fill='#1f2328' text-anchor='start' font-weight='normal'>CW/CCW A  27</text>
+<text x='295' y='184' font-family='-apple-system,Segoe UI,Helvetica,Arial,sans-serif' font-size='10' fill='#59636e' text-anchor='middle' font-weight='normal'>DIR</text>
+<text x='234' y='224' font-family='-apple-system,Segoe UI,Helvetica,Arial,sans-serif' font-size='12' fill='#1f2328' text-anchor='end' font-weight='bold'>D24  /  GPIO27</text>
+<text x='46' y='224' font-family='-apple-system,Segoe UI,Helvetica,Arial,sans-serif' font-size='11' fill='#59636e' text-anchor='start' font-weight='normal'>pins[2]</text>
+<polyline points='250,220 340,220' fill='none' stroke='#1d4ed8' stroke-width='2.5' stroke-linejoin='round' stroke-linecap='round'/>
+<text x='348' y='224' font-family='-apple-system,Segoe UI,Helvetica,Arial,sans-serif' font-size='11' fill='#1f2328' text-anchor='start' font-weight='normal'>RESET  26</text>
+<text x='295' y='214' font-family='-apple-system,Segoe UI,Helvetica,Arial,sans-serif' font-size='10' fill='#59636e' text-anchor='middle' font-weight='normal'>RESET_N</text>
+<text x='234' y='254' font-family='-apple-system,Segoe UI,Helvetica,Arial,sans-serif' font-size='12' fill='#1f2328' text-anchor='end' font-weight='bold'>GND</text>
+<polyline points='250,250 340,250' fill='none' stroke='#1f2328' stroke-width='2.5' stroke-linejoin='round' stroke-linecap='round'/>
+<text x='348' y='254' font-family='-apple-system,Segoe UI,Helvetica,Arial,sans-serif' font-size='11' fill='#1f2328' text-anchor='start' font-weight='normal'>VSS  12</text>
+<text x='295' y='244' font-family='-apple-system,Segoe UI,Helvetica,Arial,sans-serif' font-size='10' fill='#59636e' text-anchor='middle' font-weight='normal'>GND</text>
+<text x='234' y='284' font-family='-apple-system,Segoe UI,Helvetica,Arial,sans-serif' font-size='12' fill='#1f2328' text-anchor='end' font-weight='bold'>5V  /  VIN</text>
+<polyline points='250,280 340,280' fill='none' stroke='#b91c1c' stroke-width='2.5' stroke-linejoin='round' stroke-linecap='round'/>
+<text x='348' y='284' font-family='-apple-system,Segoe UI,Helvetica,Arial,sans-serif' font-size='11' fill='#1f2328' text-anchor='start' font-weight='normal'>VDD  1, 15</text>
+<text x='295' y='274' font-family='-apple-system,Segoe UI,Helvetica,Arial,sans-serif' font-size='10' fill='#59636e' text-anchor='middle' font-weight='normal'>5 V</text>
+<text x='502' y='154' font-family='-apple-system,Segoe UI,Helvetica,Arial,sans-serif' font-size='11' fill='#1f2328' text-anchor='end' font-weight='normal'>OUT1A</text>
+<polyline points='510,150 612,150' fill='none' stroke='#c2410c' stroke-width='2.5' stroke-linejoin='round' stroke-linecap='round'/>
+<text x='502' y='186' font-family='-apple-system,Segoe UI,Helvetica,Arial,sans-serif' font-size='11' fill='#1f2328' text-anchor='end' font-weight='normal'>OUT2A</text>
+<polyline points='510,182 612,182' fill='none' stroke='#d97706' stroke-width='2.5' stroke-linejoin='round' stroke-linecap='round'/>
+<text x='502' y='218' font-family='-apple-system,Segoe UI,Helvetica,Arial,sans-serif' font-size='11' fill='#1f2328' text-anchor='end' font-weight='normal'>OUT3A</text>
+<polyline points='510,214 612,214' fill='none' stroke='#0f766e' stroke-width='2.5' stroke-linejoin='round' stroke-linecap='round'/>
+<text x='502' y='250' font-family='-apple-system,Segoe UI,Helvetica,Arial,sans-serif' font-size='11' fill='#1f2328' text-anchor='end' font-weight='normal'>OUT4A</text>
+<polyline points='510,246 612,246' fill='none' stroke='#1d4ed8' stroke-width='2.5' stroke-linejoin='round' stroke-linecap='round'/>
+<rect x='620' y='110' width='170' height='190' rx='14' fill='#f6f2e8' stroke='#8a6d1f' stroke-width='1.5'/>
+<circle cx='720' cy='192' r='38' fill='#fff' stroke='#8a6d1f' stroke-width='1.5'/>
+<circle cx='720' cy='192' r='5' fill='#8a6d1f'/>
+<text x='720' y='260' font-family='-apple-system,Segoe UI,Helvetica,Arial,sans-serif' font-size='14' fill='#1f2328' text-anchor='middle' font-weight='bold'>X27.168</text>
+<text x='720' y='280' font-family='-apple-system,Segoe UI,Helvetica,Arial,sans-serif' font-size='11' fill='#59636e' text-anchor='middle' font-weight='normal'>rear view, pins down</text>
+<rect x='612' y='145' width='16' height='10' rx='2' fill='#b0b7c0'/>
+<text x='636' y='154' font-family='-apple-system,Segoe UI,Helvetica,Arial,sans-serif' font-size='12' fill='#c2410c' text-anchor='start' font-weight='bold'>1</text>
+<rect x='612' y='177' width='16' height='10' rx='2' fill='#b0b7c0'/>
+<text x='636' y='186' font-family='-apple-system,Segoe UI,Helvetica,Arial,sans-serif' font-size='12' fill='#d97706' text-anchor='start' font-weight='bold'>2</text>
+<rect x='612' y='209' width='16' height='10' rx='2' fill='#b0b7c0'/>
+<text x='636' y='218' font-family='-apple-system,Segoe UI,Helvetica,Arial,sans-serif' font-size='12' fill='#0f766e' text-anchor='start' font-weight='bold'>3</text>
+<rect x='612' y='241' width='16' height='10' rx='2' fill='#b0b7c0'/>
+<text x='636' y='250' font-family='-apple-system,Segoe UI,Helvetica,Arial,sans-serif' font-size='12' fill='#1d4ed8' text-anchor='start' font-weight='bold'>4</text>
+<text x='654' y='170' font-family='-apple-system,Segoe UI,Helvetica,Arial,sans-serif' font-size='10' fill='#59636e' text-anchor='start' font-weight='normal'>coil A</text>
+<text x='654' y='234' font-family='-apple-system,Segoe UI,Helvetica,Arial,sans-serif' font-size='10' fill='#59636e' text-anchor='start' font-weight='normal'>coil B</text>
+<text x='30' y='350' font-family='-apple-system,Segoe UI,Helvetica,Arial,sans-serif' font-size='12' fill='#59636e' text-anchor='start' font-weight='normal'>VDD must be 4.5-5.5 V. Add 100 nF at each VDD pin and about 5 uF per motor (see the train-lever BOM).</text>
+<text x='30' y='370' font-family='-apple-system,Segoe UI,Helvetica,Arial,sans-serif' font-size='12' fill='#59636e' text-anchor='start' font-weight='normal'>Hold RESET_N low at power-up with 10 k to GND; the firmware raises it when the gauge starts.</text>
+<text x='30' y='390' font-family='-apple-system,Segoe UI,Helvetica,Arial,sans-serif' font-size='12' fill='#59636e' text-anchor='start' font-weight='normal'>Inputs need VIH &gt;= 3.15 V. 3.3 V outputs meet that only just: for long wires add a 74HCT125 at 5 V.</text>
+<text x='30' y='410' font-family='-apple-system,Segoe UI,Helvetica,Arial,sans-serif' font-size='12' fill='#59636e' text-anchor='start' font-weight='normal'>Wire channels B-D the same way; four motors share one chip and one RESET_N pin.</text>
+</svg>

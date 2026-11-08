@@ -21,6 +21,9 @@ constexpr uint8_t MESSAGE_TYPE_DEACTIVATE_BLDC_PROFILE = 12;
 constexpr uint8_t MESSAGE_TYPE_WRITE_SEGMENTS = 13;
 constexpr uint8_t MESSAGE_TYPE_SET_MODULE_BRIGHTNESS = 14;
 constexpr uint8_t MESSAGE_TYPE_MODULE_ERROR = 15;
+// Message types 16 and 17 are reserved (formerly stepper axis command/status, 3.1.0-3.2.1)
+constexpr uint8_t MESSAGE_TYPE_SET_GAUGE_POSITION = 18;
+constexpr uint8_t MESSAGE_TYPE_ZERO_GAUGE = 19;
 
 // Module Type constants for Configure message
 constexpr uint8_t MODULE_TYPE_ANALOG = 0;
@@ -28,12 +31,41 @@ constexpr uint8_t MODULE_TYPE_BUTTON = 1;
 constexpr uint8_t MODULE_TYPE_MATRIX = 2;
 // Note: 3 is reserved (formerly BLDC)
 constexpr uint8_t MODULE_TYPE_HT16K33 = 4;
+// Note: 5 and 6 are reserved (formerly MCP23017 and ADS1115)
+constexpr uint8_t MODULE_TYPE_GAUGE = 7;
 // Configure-only sentinel for an explicit empty legacy module deployment.
 // Canonical header: total_parts=0, part_number=0, no payload.
 constexpr uint8_t MODULE_TYPE_EMPTY = 0xff;
 
 // Maximum number of pins for matrix configuration (row_pins + col_pins)
 constexpr uint8_t MAX_MATRIX_PINS = 16;
+
+// X27.168 gauge stepper (MODULE_TYPE_GAUGE)
+constexpr uint8_t GAUGE_DRIVER_VID6606 = 0; // STEP/DIR per motor, 1/12 degree per pulse
+constexpr uint8_t GAUGE_DRIVER_DIRECT = 1; // four MCU pins, Switec six-state, 1/3 degree per step
+constexpr uint8_t GAUGE_NO_PIN = 0xff;
+constexpr uint8_t GAUGE_FLAG_REVERSE = 0x01;
+constexpr uint8_t GAUGE_PAYLOAD_SIZE = 12;
+constexpr uint8_t MAX_GAUGES = 4;
+constexpr uint16_t GAUGE_MAX_TRAVEL = 4000;
+constexpr uint16_t GAUGE_MAX_SPEED_VID6606 = 5000; // one pulse every second 10 kHz tick
+constexpr uint16_t GAUGE_MAX_SPEED_DIRECT = 1800; // 600 degrees/s
+constexpr uint16_t GAUGE_MAX_ACCELERATION = 60000;
+
+// VID6606 pins: STEP, DIR, RESET_N (GAUGE_NO_PIN if wired elsewhere), GAUGE_NO_PIN.
+// Direct pins: X27 contacts 1, 2, 3, 4.
+struct GaugeConfig {
+    uint8_t driver;
+    uint8_t pins[4];
+    uint16_t travel; // steps from the end stop to full scale
+    uint16_t max_speed; // steps/s
+    uint16_t acceleration; // steps/s^2
+    uint8_t flags;
+};
+
+// Range and pin checks shared by Configure handling and EEPROM load.
+// Does not check board support for the direct driver (ConfigManager does).
+bool isValidGaugeConfig(const GaugeConfig& gauge);
 
 // Maximum payload size
 constexpr size_t MAX_PAYLOAD_SIZE = 64;
@@ -102,6 +134,9 @@ struct Configure {
             uint8_t brightness;
             uint8_t num_digits;
         } ht16k33;
+
+        // MODULE_TYPE_GAUGE
+        GaugeConfig gauge;
     };
 
     Configure()
@@ -244,6 +279,24 @@ struct ModuleError {
     bool decode(const uint8_t* buffer, size_t length);
 };
 
+// SetGaugePosition - host moves a gauge, identified by its first pin, to a
+// position in steps from zero. Clamped to the gauge's travel. No reply.
+struct SetGaugePosition {
+    uint8_t pin;
+    uint16_t position;
+
+    size_t encode(uint8_t* buffer, size_t buffer_size) const;
+    bool decode(const uint8_t* buffer, size_t length);
+};
+
+// ZeroGauge - host asks a gauge to sweep into its end stop again. No reply.
+struct ZeroGauge {
+    uint8_t pin;
+
+    size_t encode(uint8_t* buffer, size_t buffer_size) const;
+    bool decode(const uint8_t* buffer, size_t length);
+};
+
 // Generic message union for decoding
 struct Message {
     uint8_t message_type;
@@ -263,6 +316,8 @@ struct Message {
         WriteSegments write_segments;
         SetModuleBrightness set_module_brightness;
         ModuleError module_error;
+        SetGaugePosition set_gauge_position;
+        ZeroGauge zero_gauge;
     };
 
     Message()
@@ -316,6 +371,10 @@ struct Message {
 
     // Check if this is a ModuleError message
     bool isModuleError() const { return message_type == MESSAGE_TYPE_MODULE_ERROR; }
+
+    bool isSetGaugePosition() const { return message_type == MESSAGE_TYPE_SET_GAUGE_POSITION; }
+
+    bool isZeroGauge() const { return message_type == MESSAGE_TYPE_ZERO_GAUGE; }
 };
 
 } // namespace Protocol

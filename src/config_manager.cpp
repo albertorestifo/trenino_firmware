@@ -1,5 +1,6 @@
 #include "config_manager.h"
 #include "device_info.h"
+#include "gauge_scheduler.h"
 
 // Platform-specific EEPROM instance for Arduino Due
 #ifdef EEPROM_USE_DUE_FLASH
@@ -42,31 +43,24 @@ void eeprom_commit()
 #endif
 }
 
+void eeprom_put16(int address, uint16_t value)
+{
+    eeprom_put(address, (uint8_t)(value & 0xFF));
+    eeprom_put(address + 1, (uint8_t)(value >> 8));
+}
+
+uint16_t eeprom_get16(int address)
+{
+    uint8_t lo = 0;
+    uint8_t hi = 0;
+    eeprom_get(address, lo);
+    eeprom_get(address + 1, hi);
+    return (uint16_t)lo | ((uint16_t)hi << 8);
+}
+
 } // anonymous namespace
 
 namespace ConfigManager {
-
-uint8_t getRegisteredShieldAddress()
-{
-    uint8_t data[5];
-    eeprom_get(500, data);
-    if (data[0] != 0x53 || data[1] != 0x54 || data[2] != 1 ||
-        data[3] < 0x60 || data[3] > 0x77 || data[4] != uint8_t(~data[3])) return 0;
-    return data[3];
-}
-
-void registerShieldAddress(uint8_t address)
-{
-    if (getRegisteredShieldAddress() == address) return;
-    // Commit marker last; interrupted writes cannot authorize an unrelated address.
-    const uint8_t invalid = 0;
-    eeprom_put(500, invalid);
-    const uint8_t tail[4] = {0x54, 1, address, uint8_t(~address)};
-    eeprom_put(501, tail);
-    const uint8_t marker = 0x53;
-    eeprom_put(500, marker);
-    eeprom_commit();
-}
 
 // Global state
 ConfigState g_config_state;
@@ -140,6 +134,14 @@ bool handleConfigure(const Protocol::Configure& cfg, bool& complete, bool& error
 
     // Check if configuration is complete
     if (g_config_state.isComplete()) {
+        // Parts arrive in any order and may repeat, so count gauges only now.
+        if (countGauges(g_config_state.getModules(), g_config_state.getNumModules()) > Protocol::MAX_GAUGES
+            || gaugePinsConflict(g_config_state.getModules(), g_config_state.getNumModules())) {
+            error = true;
+            g_config_state.reset();
+            return true;
+        }
+
         // Store to EEPROM
         storeToEEPROM(
             g_config_state.getConfigId(),
@@ -174,6 +176,10 @@ bool checkTimeout()
 
 void storeToEEPROM(uint32_t config_id, const ModuleConfig* modules, uint8_t num_modules)
 {
+#if defined(EEPROM_NEEDS_COMMIT) || defined(EEPROM_USE_DUE_FLASH)
+    // Flash writes (ESP32 commit, Due IAP) must not race the gauge tick.
+    GaugeScheduler::suspend();
+#endif
     int addr = 0;
 
     // Write magic number
@@ -231,11 +237,31 @@ void storeToEEPROM(uint32_t config_id, const ModuleConfig* modules, uint8_t num_
             eeprom_put(addr, modules[i].ht16k33.num_digits);
             addr += sizeof(uint8_t);
             break;
+
+        case Protocol::MODULE_TYPE_GAUGE: {
+            // Field by field: the struct has padding on some compilers.
+            const Protocol::GaugeConfig& g = modules[i].gauge;
+            eeprom_put(addr++, g.driver);
+            for (uint8_t p = 0; p < 4; p++) {
+                eeprom_put(addr++, g.pins[p]);
+            }
+            eeprom_put16(addr, g.travel);
+            addr += 2;
+            eeprom_put16(addr, g.max_speed);
+            addr += 2;
+            eeprom_put16(addr, g.acceleration);
+            addr += 2;
+            eeprom_put(addr++, g.flags);
+            break;
+        }
         }
     }
 
     // Commit changes for platforms that require it
     eeprom_commit();
+#if defined(EEPROM_NEEDS_COMMIT) || defined(EEPROM_USE_DUE_FLASH)
+    GaugeScheduler::resume();
+#endif
 }
 
 bool loadFromEEPROM()
@@ -316,9 +342,33 @@ bool loadFromEEPROM()
             addr += sizeof(uint8_t);
             break;
 
+        case Protocol::MODULE_TYPE_GAUGE: {
+            Protocol::GaugeConfig& g = g_current_modules[i].gauge;
+            eeprom_get(addr++, g.driver);
+            for (uint8_t p = 0; p < 4; p++) {
+                eeprom_get(addr++, g.pins[p]);
+            }
+            g.travel = eeprom_get16(addr);
+            addr += 2;
+            g.max_speed = eeprom_get16(addr);
+            addr += 2;
+            g.acceleration = eeprom_get16(addr);
+            addr += 2;
+            eeprom_get(addr++, g.flags);
+            if (!isUsableGauge(g)) {
+                return false; // Corrupt or unsupported gauge record
+            }
+            break;
+        }
+
         default:
             return false; // Unknown input type
         }
+    }
+
+    if (countGauges(g_current_modules, g_current_num_modules) > Protocol::MAX_GAUGES
+        || gaugePinsConflict(g_current_modules, g_current_num_modules)) {
+        return false;
     }
 
     return true;

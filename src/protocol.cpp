@@ -3,6 +3,51 @@
 
 namespace Protocol {
 
+namespace {
+void put16(uint8_t* buffer, size_t& offset, uint16_t value)
+{
+    buffer[offset++] = value & 0xFF;
+    buffer[offset++] = (value >> 8) & 0xFF;
+}
+
+uint16_t get16(const uint8_t* buffer, size_t& offset)
+{
+    uint16_t value = (uint16_t)buffer[offset] | ((uint16_t)buffer[offset + 1] << 8);
+    offset += 2;
+    return value;
+}
+} // namespace
+
+bool isValidGaugeConfig(const GaugeConfig& gauge)
+{
+    if (gauge.flags & ~GAUGE_FLAG_REVERSE) return false;
+    if (gauge.travel == 0 || gauge.travel > GAUGE_MAX_TRAVEL) return false;
+    if (gauge.acceleration == 0 || gauge.acceleration > GAUGE_MAX_ACCELERATION) return false;
+
+    uint8_t used = 0; // pins that must be distinct
+    if (gauge.driver == GAUGE_DRIVER_VID6606) {
+        if (gauge.max_speed == 0 || gauge.max_speed > GAUGE_MAX_SPEED_VID6606) return false;
+        if (gauge.pins[0] == GAUGE_NO_PIN || gauge.pins[1] == GAUGE_NO_PIN) return false;
+        if (gauge.pins[3] != GAUGE_NO_PIN) return false;
+        used = gauge.pins[2] == GAUGE_NO_PIN ? 2 : 3;
+    } else if (gauge.driver == GAUGE_DRIVER_DIRECT) {
+        if (gauge.max_speed == 0 || gauge.max_speed > GAUGE_MAX_SPEED_DIRECT) return false;
+        for (uint8_t i = 0; i < 4; i++) {
+            if (gauge.pins[i] == GAUGE_NO_PIN) return false;
+        }
+        used = 4;
+    } else {
+        return false;
+    }
+
+    for (uint8_t i = 0; i < used; i++) {
+        for (uint8_t j = i + 1; j < used; j++) {
+            if (gauge.pins[i] == gauge.pins[j]) return false;
+        }
+    }
+    return true;
+}
+
 // IdentityRequest implementation
 
 size_t IdentityRequest::encode(uint8_t* buffer, size_t buffer_size) const
@@ -147,6 +192,9 @@ size_t Configure::encode(uint8_t* buffer, size_t buffer_size) const
     case MODULE_TYPE_HT16K33:
         payload_size = 3; // i2c_address + brightness + num_digits
         break;
+    case MODULE_TYPE_GAUGE:
+        payload_size = GAUGE_PAYLOAD_SIZE;
+        break;
     default:
         return 0; // Unknown input type
     }
@@ -200,6 +248,17 @@ size_t Configure::encode(uint8_t* buffer, size_t buffer_size) const
         buffer[offset++] = ht16k33.i2c_address;
         buffer[offset++] = ht16k33.brightness;
         buffer[offset++] = ht16k33.num_digits;
+        break;
+
+    case MODULE_TYPE_GAUGE:
+        buffer[offset++] = gauge.driver;
+        for (uint8_t i = 0; i < 4; i++) {
+            buffer[offset++] = gauge.pins[i];
+        }
+        put16(buffer, offset, gauge.travel);
+        put16(buffer, offset, gauge.max_speed);
+        put16(buffer, offset, gauge.acceleration);
+        buffer[offset++] = gauge.flags;
         break;
     }
 
@@ -283,6 +342,21 @@ bool Configure::decode(const uint8_t* buffer, size_t length)
         ht16k33.i2c_address = buffer[offset++];
         ht16k33.brightness = buffer[offset++];
         ht16k33.num_digits = buffer[offset++];
+        break;
+
+    case MODULE_TYPE_GAUGE:
+        // Exact length, unlike the older payloads above.
+        if (length != HEADER_SIZE + GAUGE_PAYLOAD_SIZE) {
+            return false;
+        }
+        gauge.driver = buffer[offset++];
+        for (uint8_t i = 0; i < 4; i++) {
+            gauge.pins[i] = buffer[offset++];
+        }
+        gauge.travel = get16(buffer, offset);
+        gauge.max_speed = get16(buffer, offset);
+        gauge.acceleration = get16(buffer, offset);
+        gauge.flags = buffer[offset++];
         break;
 
     default:
@@ -746,6 +820,44 @@ bool ModuleError::decode(const uint8_t* buffer, size_t length)
     return true;
 }
 
+// SetGaugePosition implementation
+
+size_t SetGaugePosition::encode(uint8_t* buffer, size_t buffer_size) const
+{
+    if (buffer_size < 4) return 0;
+    size_t offset = 0;
+    buffer[offset++] = MESSAGE_TYPE_SET_GAUGE_POSITION;
+    buffer[offset++] = pin;
+    put16(buffer, offset, position);
+    return offset;
+}
+
+bool SetGaugePosition::decode(const uint8_t* buffer, size_t length)
+{
+    if (length != 4 || buffer[0] != MESSAGE_TYPE_SET_GAUGE_POSITION) return false;
+    size_t offset = 1;
+    pin = buffer[offset++];
+    position = get16(buffer, offset);
+    return true;
+}
+
+// ZeroGauge implementation
+
+size_t ZeroGauge::encode(uint8_t* buffer, size_t buffer_size) const
+{
+    if (buffer_size < 2) return 0;
+    buffer[0] = MESSAGE_TYPE_ZERO_GAUGE;
+    buffer[1] = pin;
+    return 2;
+}
+
+bool ZeroGauge::decode(const uint8_t* buffer, size_t length)
+{
+    if (length != 2 || buffer[0] != MESSAGE_TYPE_ZERO_GAUGE) return false;
+    pin = buffer[1];
+    return true;
+}
+
 // Message implementation (for generic decoding)
 
 bool Message::decode(const uint8_t* buffer, size_t length)
@@ -798,6 +910,12 @@ bool Message::decode(const uint8_t* buffer, size_t length)
 
     case MESSAGE_TYPE_MODULE_ERROR:
         return module_error.decode(buffer, length);
+
+    case MESSAGE_TYPE_SET_GAUGE_POSITION:
+        return set_gauge_position.decode(buffer, length);
+
+    case MESSAGE_TYPE_ZERO_GAUGE:
+        return zero_gauge.decode(buffer, length);
 
     default:
         return false; // Unknown message type

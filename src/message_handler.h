@@ -26,6 +26,8 @@ void handleConfigure(const Protocol::Configure& cfg);
 void handleSetOutput(const Protocol::SetOutput& cmd);
 void handleWriteSegments(const Protocol::WriteSegments& cmd);
 void handleSetModuleBrightness(const Protocol::SetModuleBrightness& cmd);
+void handleSetGaugePosition(const Protocol::SetGaugePosition& cmd);
+void handleZeroGauge(const Protocol::ZeroGauge& cmd);
 
 // Internal helper - sends a message and notifies heartbeat manager
 // Template function to handle any protocol message type

@@ -1,4 +1,5 @@
 #include "sensor_manager.h"
+#include "gauge_module.h"
 
 namespace ModuleManager {
 
@@ -73,6 +74,10 @@ bool applyConfiguration(const ConfigManager::ModuleConfig* modules, uint8_t modu
                 config.ht16k33.i2c_address,
                 config.ht16k33.brightness,
                 config.ht16k33.num_digits);
+            break;
+
+        case Protocol::MODULE_TYPE_GAUGE:
+            module = new Modules::GaugeModule(config.gauge);
             break;
 
         default:

@@ -1,10 +1,11 @@
 #include "message_handler.h"
 #include "config_manager.h"
+#include "gauge_module.h"
+#include "gauge_scheduler.h"
 #include "heartbeat.h"
 #include "ht16k33_module.h"
 #include "output_manager.h"
 #include "sensor_manager.h"
-#include "stepper_service.h"
 
 namespace MessageHandler {
 
@@ -41,15 +42,10 @@ void init(PacketSerial_<COBS>* serial)
 
     // Initialize heartbeat manager with 2 second interval and callback
     g_heartbeat_manager = new Heartbeat::HeartbeatManager(HEARTBEAT_INTERVAL_MS, sendHeartbeat);
-    StepperService::init([](const uint8_t* bytes, size_t size) {
-        if (g_packet_serial) g_packet_serial->send(bytes, size);
-        if (g_heartbeat_manager) g_heartbeat_manager->notifyMessageSent(millis());
-    });
 }
 
 void onPacketReceived(const uint8_t* buffer, size_t size)
 {
-    if (StepperService::onPacket(buffer, size)) return;
     // Decode the protocol message
     Protocol::Message msg;
     if (!msg.decode(buffer, size)) {
@@ -68,6 +64,10 @@ void onPacketReceived(const uint8_t* buffer, size_t size)
         handleWriteSegments(msg.write_segments);
     } else if (msg.isSetModuleBrightness()) {
         handleSetModuleBrightness(msg.set_module_brightness);
+    } else if (msg.isSetGaugePosition()) {
+        handleSetGaugePosition(msg.set_gauge_position);
+    } else if (msg.isZeroGauge()) {
+        handleZeroGauge(msg.zero_gauge);
     }
     // isLoadBLDCProfile() and isDeactivateBLDCProfile() are silently ignored
     // (wire-level messages kept for backwards compatibility with older hosts)
@@ -75,7 +75,6 @@ void onPacketReceived(const uint8_t* buffer, size_t size)
 
 void update()
 {
-    StepperService::update();
     // Update heartbeat manager (automatically sends heartbeat if needed)
     g_heartbeat_manager->update(millis());
 
@@ -91,7 +90,6 @@ void update()
     Modules::Reading reading;
     while (ModuleManager::getNextReading(reading)) {
         sendInputValue(reading);
-        StepperService::update();
     }
 }
 
@@ -99,7 +97,6 @@ void handleIdentityRequest(uint32_t request_id)
 {
     uint32_t config_id = ConfigManager::getCurrentConfigId();
     sendIdentityResponse(request_id, config_id);
-    if (StepperService::bootFaultAddress()) sendModuleError(StepperService::bootFaultAddress(), 0);
 
     // Drain any pending module-init errors and report them to the host.
     // This catches errors from the boot-time applyConfiguration() in setup()
@@ -116,23 +113,16 @@ void handleIdentityRequest(uint32_t request_id)
 
 void handleConfigure(const Protocol::Configure& cfg)
 {
-    if (StepperService::conflicts(cfg)) {
-        ConfigManager::g_config_state.reset();
-        sendConfigurationError(cfg.config_id); return;
-    }
     bool complete = false;
     bool error = false;
 
     ConfigManager::handleConfigure(cfg, complete, error);
 
     if (complete) {
-        if (!StepperService::reset()) sendModuleError(ConfigManager::getRegisteredShieldAddress(), 0);
         // Apply configuration to sensors
         uint8_t num_modules = 0;
         const ConfigManager::ModuleConfig* modules = ConfigManager::getCurrentConfig(num_modules);
-        // Removing every legacy module requires no I2C initialization and must
-        // still work when a registered shield prevented boot-time module init.
-        if (num_modules == 0 || StepperService::canApplyModules()) ModuleManager::applyConfiguration(modules, num_modules);
+        ModuleManager::applyConfiguration(modules, num_modules);
 
         sendConfigurationStored(cfg.config_id);
 
@@ -149,7 +139,8 @@ void handleConfigure(const Protocol::Configure& cfg)
 
 void handleSetOutput(const Protocol::SetOutput& cmd)
 {
-    if (StepperService::reservesPin(cmd.pin)) return;
+    // A gauge's pins belong to the timer interrupt.
+    if (GaugeScheduler::ownsPin(cmd.pin)) return;
     OutputManager::setOutput(cmd.pin, cmd.value);
 }
 
@@ -171,6 +162,25 @@ void handleSetModuleBrightness(const Protocol::SetModuleBrightness& cmd)
 
     Modules::HT16K33Module* ht = static_cast<Modules::HT16K33Module*>(module);
     ht->setBrightness(cmd.brightness);
+}
+
+static Modules::GaugeModule* findGauge(uint8_t pin)
+{
+    Modules::IModule* module = ModuleManager::getModuleByPin(pin);
+    if (module == nullptr || module->getType() != Modules::ModuleType::Gauge) return nullptr;
+    return static_cast<Modules::GaugeModule*>(module);
+}
+
+void handleSetGaugePosition(const Protocol::SetGaugePosition& cmd)
+{
+    Modules::GaugeModule* gauge = findGauge(cmd.pin);
+    if (gauge != nullptr) gauge->setTarget(cmd.position);
+}
+
+void handleZeroGauge(const Protocol::ZeroGauge& cmd)
+{
+    Modules::GaugeModule* gauge = findGauge(cmd.pin);
+    if (gauge != nullptr) gauge->zero();
 }
 
 void sendIdentityResponse(uint32_t request_id, uint32_t config_id)

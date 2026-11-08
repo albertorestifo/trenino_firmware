@@ -1,0 +1,60 @@
+<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 900 560' width='900' height='560' role='img' aria-label='train-lever gauge board firmware pin map'>
+<title>train-lever gauge board firmware pin map</title>
+<rect width='900' height='560' fill='#ffffff'/>
+<text x='30' y='38' font-family='-apple-system,Segoe UI,Helvetica,Arial,sans-serif' font-size='18' fill='#1f2328' text-anchor='start' font-weight='bold'>train-lever gauge board (rev 3): firmware pin map</text>
+<text x='30' y='60' font-family='-apple-system,Segoe UI,Helvetica,Arial,sans-serif' font-size='12' fill='#59636e' text-anchor='start' font-weight='normal'>Pro Micro on the board drives the VID6606 channels A-D; header J5 can take one direct X27 for prototyping.</text>
+<rect x='30' y='90' width='230' height='330' rx='10' fill='#e7f0e9' stroke='#2f6f3e' stroke-width='1.5'/>
+<text x='46' y='116' font-family='-apple-system,Segoe UI,Helvetica,Arial,sans-serif' font-size='15' fill='#2f6f3e' text-anchor='start' font-weight='bold'>Pro Micro (socketed)</text>
+<rect x='360' y='90' width='170' height='330' rx='6' fill='#eef1f5' stroke='#4b5563' stroke-width='1.5'/>
+<text x='445' y='116' font-family='-apple-system,Segoe UI,Helvetica,Arial,sans-serif' font-size='15' fill='#1f2328' text-anchor='middle' font-weight='bold'>U1  VID6606</text>
+<text x='244' y='154' font-family='-apple-system,Segoe UI,Helvetica,Arial,sans-serif' font-size='12' fill='#1f2328' text-anchor='end' font-weight='bold'>D8 STEP A</text>
+<polyline points='260,150 360,150' fill='none' stroke='#c2410c' stroke-width='2.5' stroke-linejoin='round' stroke-linecap='round'/>
+<text x='244' y='172' font-family='-apple-system,Segoe UI,Helvetica,Arial,sans-serif' font-size='12' fill='#1f2328' text-anchor='end' font-weight='bold'>D7 DIR A</text>
+<polyline points='260,168 360,168' fill='none' stroke='#0f766e' stroke-width='2.5' stroke-linejoin='round' stroke-linecap='round'/>
+<text x='46' y='163' font-family='-apple-system,Segoe UI,Helvetica,Arial,sans-serif' font-size='11' fill='#59636e' text-anchor='start' font-weight='normal'>A: [8, 7, 6, 0xff]</text>
+<polyline points='530,159 620,159' fill='none' stroke='#59636e' stroke-width='6' stroke-linejoin='round' stroke-linecap='round'/>
+<rect x='620' y='142' width='70' height='34' rx='4' fill='#fff' stroke='#1f2328' stroke-width='1.5'/>
+<text x='655' y='164' font-family='-apple-system,Segoe UI,Helvetica,Arial,sans-serif' font-size='12' fill='#1f2328' text-anchor='middle' font-weight='bold'>J1  A</text>
+<polyline points='690,159 730,159' fill='none' stroke='#59636e' stroke-width='6' stroke-linejoin='round' stroke-linecap='round'/>
+<text x='738' y='163' font-family='-apple-system,Segoe UI,Helvetica,Arial,sans-serif' font-size='12' fill='#1f2328' text-anchor='start' font-weight='normal'>X27 pins 1-4</text>
+<text x='244' y='210' font-family='-apple-system,Segoe UI,Helvetica,Arial,sans-serif' font-size='12' fill='#1f2328' text-anchor='end' font-weight='bold'>D14 STEP B</text>
+<polyline points='260,206 360,206' fill='none' stroke='#c2410c' stroke-width='2.5' stroke-linejoin='round' stroke-linecap='round'/>
+<text x='244' y='228' font-family='-apple-system,Segoe UI,Helvetica,Arial,sans-serif' font-size='12' fill='#1f2328' text-anchor='end' font-weight='bold'>D16 DIR B</text>
+<polyline points='260,224 360,224' fill='none' stroke='#0f766e' stroke-width='2.5' stroke-linejoin='round' stroke-linecap='round'/>
+<text x='46' y='219' font-family='-apple-system,Segoe UI,Helvetica,Arial,sans-serif' font-size='11' fill='#59636e' text-anchor='start' font-weight='normal'>B: [14, 16, 6, 0xff]</text>
+<polyline points='530,215 620,215' fill='none' stroke='#59636e' stroke-width='6' stroke-linejoin='round' stroke-linecap='round'/>
+<rect x='620' y='198' width='70' height='34' rx='4' fill='#fff' stroke='#1f2328' stroke-width='1.5'/>
+<text x='655' y='220' font-family='-apple-system,Segoe UI,Helvetica,Arial,sans-serif' font-size='12' fill='#1f2328' text-anchor='middle' font-weight='bold'>J2  B</text>
+<polyline points='690,215 730,215' fill='none' stroke='#59636e' stroke-width='6' stroke-linejoin='round' stroke-linecap='round'/>
+<text x='738' y='219' font-family='-apple-system,Segoe UI,Helvetica,Arial,sans-serif' font-size='12' fill='#1f2328' text-anchor='start' font-weight='normal'>X27 pins 1-4</text>
+<text x='244' y='266' font-family='-apple-system,Segoe UI,Helvetica,Arial,sans-serif' font-size='12' fill='#1f2328' text-anchor='end' font-weight='bold'>A3 STEP C</text>
+<polyline points='260,262 360,262' fill='none' stroke='#c2410c' stroke-width='2.5' stroke-linejoin='round' stroke-linecap='round'/>
+<text x='244' y='284' font-family='-apple-system,Segoe UI,Helvetica,Arial,sans-serif' font-size='12' fill='#1f2328' text-anchor='end' font-weight='bold'>A2 DIR C</text>
+<polyline points='260,280 360,280' fill='none' stroke='#0f766e' stroke-width='2.5' stroke-linejoin='round' stroke-linecap='round'/>
+<text x='46' y='275' font-family='-apple-system,Segoe UI,Helvetica,Arial,sans-serif' font-size='11' fill='#59636e' text-anchor='start' font-weight='normal'>C: [21, 20, 6, 0xff]</text>
+<polyline points='530,271 620,271' fill='none' stroke='#59636e' stroke-width='6' stroke-linejoin='round' stroke-linecap='round'/>
+<rect x='620' y='254' width='70' height='34' rx='4' fill='#fff' stroke='#1f2328' stroke-width='1.5'/>
+<text x='655' y='276' font-family='-apple-system,Segoe UI,Helvetica,Arial,sans-serif' font-size='12' fill='#1f2328' text-anchor='middle' font-weight='bold'>J3  C</text>
+<polyline points='690,271 730,271' fill='none' stroke='#59636e' stroke-width='6' stroke-linejoin='round' stroke-linecap='round'/>
+<text x='738' y='275' font-family='-apple-system,Segoe UI,Helvetica,Arial,sans-serif' font-size='12' fill='#1f2328' text-anchor='start' font-weight='normal'>X27 pins 1-4</text>
+<text x='244' y='322' font-family='-apple-system,Segoe UI,Helvetica,Arial,sans-serif' font-size='12' fill='#1f2328' text-anchor='end' font-weight='bold'>D5 STEP D</text>
+<polyline points='260,318 360,318' fill='none' stroke='#c2410c' stroke-width='2.5' stroke-linejoin='round' stroke-linecap='round'/>
+<text x='244' y='340' font-family='-apple-system,Segoe UI,Helvetica,Arial,sans-serif' font-size='12' fill='#1f2328' text-anchor='end' font-weight='bold'>D4 DIR D</text>
+<polyline points='260,336 360,336' fill='none' stroke='#0f766e' stroke-width='2.5' stroke-linejoin='round' stroke-linecap='round'/>
+<text x='46' y='331' font-family='-apple-system,Segoe UI,Helvetica,Arial,sans-serif' font-size='11' fill='#59636e' text-anchor='start' font-weight='normal'>D: [5, 4, 6, 0xff]</text>
+<polyline points='530,327 620,327' fill='none' stroke='#59636e' stroke-width='6' stroke-linejoin='round' stroke-linecap='round'/>
+<rect x='620' y='310' width='70' height='34' rx='4' fill='#fff' stroke='#1f2328' stroke-width='1.5'/>
+<text x='655' y='332' font-family='-apple-system,Segoe UI,Helvetica,Arial,sans-serif' font-size='12' fill='#1f2328' text-anchor='middle' font-weight='bold'>J4  D</text>
+<polyline points='690,327 730,327' fill='none' stroke='#59636e' stroke-width='6' stroke-linejoin='round' stroke-linecap='round'/>
+<text x='738' y='331' font-family='-apple-system,Segoe UI,Helvetica,Arial,sans-serif' font-size='12' fill='#1f2328' text-anchor='start' font-weight='normal'>X27 pins 1-4</text>
+<text x='244' y='378' font-family='-apple-system,Segoe UI,Helvetica,Arial,sans-serif' font-size='12' fill='#1f2328' text-anchor='end' font-weight='bold'>D6 RESET_N</text>
+<polyline points='260,374 360,374' fill='none' stroke='#1d4ed8' stroke-width='2.5' stroke-linejoin='round' stroke-linecap='round'/>
+<text x='370' y='378' font-family='-apple-system,Segoe UI,Helvetica,Arial,sans-serif' font-size='11' fill='#59636e' text-anchor='start' font-weight='normal'>R1 10 k to GND</text>
+<rect x='30' y='450' width='230' height='70' rx='6' fill='#fff' stroke='#2f6f3e' stroke-width='1.5'/>
+<text x='46' y='472' font-family='-apple-system,Segoe UI,Helvetica,Arial,sans-serif' font-size='13' fill='#2f6f3e' text-anchor='start' font-weight='bold'>J5 spare header</text>
+<text x='46' y='492' font-family='-apple-system,Segoe UI,Helvetica,Arial,sans-serif' font-size='12' fill='#1f2328' text-anchor='start' font-weight='normal'>pin 3 A0, 4 A1, 5 D10, 6 D15</text>
+<text x='46' y='510' font-family='-apple-system,Segoe UI,Helvetica,Arial,sans-serif' font-size='11' fill='#59636e' text-anchor='start' font-weight='normal'>direct: [18, 19, 10, 15]</text>
+<polyline points='260,485 620,485' fill='none' stroke='#d97706' stroke-width='2.5' stroke-linejoin='round' stroke-linecap='round'/>
+<text x='440' y='478' font-family='-apple-system,Segoe UI,Helvetica,Arial,sans-serif' font-size='11' fill='#59636e' text-anchor='middle' font-weight='normal'>2x2 plug, X27 pins 1-4</text>
+<text x='630' y='489' font-family='-apple-system,Segoe UI,Helvetica,Arial,sans-serif' font-size='12' fill='#1f2328' text-anchor='start' font-weight='normal'>direct X27 (takes a gauge slot)</text>
+</svg>

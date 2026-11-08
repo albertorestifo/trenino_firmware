@@ -1,30 +1,29 @@
 # Protocol Specification
 
-Firmware3.1.0 adds optional message types16/17 for configurable stepper axes.
-See [the stepper extension contract](STEPPER_PROTOCOL.md) for exact sizes,
-capabilities, referencing, watchdog, retry and commissioning requirements.
+Message types 16 and 17 are reserved. Firmware 3.1.0 to 3.2.1 used them for an
+experimental stepper axis extension, removed in 3.3.0. Firmware 3.3.0 and later
+ignores them like any unknown message, and the numbers are never reused. Hosts
+must not assume that extension from the version number. Gauge steppers are now a
+normal module type; see [X27 gauges](#x27-gauge-module-type-7).
 
-Firmware3.1.0 also supports an explicit empty legacy module deployment. Its
-entire decoded packet is exactly8 bytes:
+Firmware 3.1.0 also added an explicit empty module deployment. Its entire
+decoded packet is exactly 8 bytes:
 `02 <config_id:u32 little endian> 00 00 ff`.
-The fields are Configure(type2), config_id, total_parts0, part_number0 and the
-Configure-only empty discriminator0xff. There is no payload and no dummy module.
-Any other total_parts/part_number paired with0xff, a different discriminator
-paired with total_parts0, truncation or trailing bytes is invalid.
+The fields are Configure (type 2), config_id, total_parts 0, part_number 0 and the
+Configure-only empty discriminator 0xff. There is no payload and no dummy module.
+Any other total_parts/part_number paired with 0xff, a different discriminator
+paired with total_parts 0, truncation or trailing bytes is invalid.
 
 An accepted empty deployment cancels pending multipart configuration, removes
-all legacy module instances, persists the supplied config_id with zero modules,
-and sends ConfigurationStored(type3) with that ID. Identity retains that ID
-after reboot. As with every completed legacy deployment, all volatile stepper
-axes are reset and release is attempted; any release failure is separately
-reported as ModuleError. Shield address registration remains intact.
+all module instances, persists the supplied config_id with zero modules,
+and sends ConfigurationStored (type 3) with that ID. Identity retains that ID
+after reboot.
 
 This configures the **module list**, not every physical output: independent
 SetOutput pins retain their last state, and removing a display does not blank
 its hardware. Hosts must send explicit output/display commands before removal
 if that behaviour is required. Old firmware does not support the empty command;
-gate it on version >=3.1.0. Replaying any legacy deployment also resets axes, so
-finish deployment/retries before configuring and referencing stepper axes.
+gate it on version >= 3.1.0.
 
 Binary protocol over serial using COBS framing (PacketSerial library).
 
@@ -62,6 +61,10 @@ All messages start with a 1-byte message type.
 | WriteSegments | 13 | Host → Device | Write segments to I2C display module |
 | SetModuleBrightness | 14 | Host → Device | Set brightness on I2C display module |
 | ModuleError | 15 | Device → Host | Per-module error (e.g. I2C init failure) |
+| (reserved) | 16 | — | Reserved (formerly stepper axis command, 3.1.0–3.2.1) |
+| (reserved) | 17 | — | Reserved (formerly stepper axis status, 3.1.0–3.2.1) |
+| SetGaugePosition | 18 | Host → Device | Move an X27 gauge (3.3.0) |
+| ZeroGauge | 19 | Host → Device | Re-zero an X27 gauge (3.3.0) |
 
 ## Message Definitions
 
@@ -99,7 +102,7 @@ The message uses a discriminated union based on `module_type`.
 | config_id | Unique configuration identifier |
 | total_parts | Total number of modules to configure |
 | part_number | This module's index (0-based) |
-| module_type | 0 = Analog, 1 = Button, 2 = Matrix, 3 = reserved, 4 = HT16K33 |
+| module_type | 0 = Analog, 1 = Button, 2 = Matrix, 3 = reserved, 4 = HT16K33, 5–6 = reserved, 7 = Gauge |
 
 **Analog Payload (module_type = 0)**
 
@@ -149,6 +152,8 @@ Matrix buttons are reported using virtual pins: `pin = 128 + (row * num_cols + c
 | i2c_address | I2C bus address of the HT16K33 chip (e.g. 0x70) |
 | brightness | Initial display brightness (0–15) |
 | num_digits | Number of 14-segment digits driven (determines how many display RAM bytes are valid) |
+
+**Gauge Payload (module_type = 7)**: see [X27 gauge module](#x27-gauge-module-type-7).
 
 ### ConfigurationStored (3)
 
@@ -255,6 +260,59 @@ Updates the brightness immediately and caches the value so re-initialization use
 
 Sent by the device after `applyConfiguration` completes if one or more I2C modules failed to initialize. The module is registered but inactive; the host may retry by sending a new `Configure` message.
 
+### SetGaugePosition (18)
+
+```
+[type: u8 = 18] [pin: u8] [position: u16 LE]
+```
+
+| Field | Description |
+|-------|-------------|
+| pin | The gauge's first configured pin (`pins[0]`) |
+| position | Steps from the end stop. Values above the gauge's `travel` are clamped to it. |
+
+Fire-and-forget, like `SetOutput`: no reply. The latest position wins. A pin that is not a gauge is ignored. The packet must be exactly 4 bytes.
+
+### ZeroGauge (19)
+
+```
+[type: u8 = 19] [pin: u8]
+```
+
+Sweeps the gauge into its end stop again, calls that position 0, then moves back to the latest position. No reply. The packet must be exactly 2 bytes.
+
+## X27 gauge module (type 7)
+
+Firmware 3.3.0 drives X27.168 gauge steppers (and pin-compatible clones) as a normal module: configured with `Configure`, stored in EEPROM, driven with `SetGaugePosition`. Hosts gate it on version >= 3.3.0. Wiring for every board is in [GAUGE_WIRING.md](GAUGE_WIRING.md).
+
+**Payload: exactly 12 bytes** (stricter than the older payloads, which accept trailing bytes):
+
+```
+[driver: u8] [pins: u8[4]] [travel: u16 LE] [max_speed: u16 LE] [acceleration: u16 LE] [flags: u8]
+```
+
+| Field | Accepted values |
+|-------|-----------------|
+| driver | 0 = VID6606 (or AX1201728SG, STI6606Z) channel, STEP/DIR; 1 = direct from four MCU pins |
+| pins | VID6606: `STEP, DIR, RESET_N, 0xff`; RESET_N may be `0xff` if the board releases reset itself. Direct: X27 contacts `1, 2, 3, 4`. Used pins must differ. |
+| travel | Steps from the end stop to full scale, 1–4000. A 315° X27 is 3780 VID6606 microsteps or 945 direct steps. |
+| max_speed | Steps/s: 1–5000 for VID6606 (about 417°/s), 1–1800 for direct (600°/s) |
+| acceleration | Steps/s², 1–60000. Starting points: 50000 for VID6606, 1500 for direct; tune on the real gauge. |
+| flags | bit 0 reverses the direction; other bits must be 0 |
+
+`ConfigurationError` is sent for an invalid gauge payload, for more than **4 gauges** in one configuration, for two gauges sharing a STEP, DIR or coil pin (a shared RESET_N is fine), and for `driver = 1` on Arduino Due or ESP32 (Due pins are rated 3 mA; ESP32's 3.3 V gives an X27 coil too little current). A pin the board doesn't have, or one that can't drive an output, fails when the gauge starts and is reported as `ModuleError` with `i2c_address` 0.
+
+**Behaviour**
+
+- When the gauge starts (boot, or every completed `Configure`), it sweeps into its end stop at 200°/s with no ramp (2400 steps/s VID6606, 600 steps/s direct, or `max_speed` if lower). The sweep covers the full 315° (3780 or 945 steps, or `travel` if larger), so it works from any starting position. Positions sent meanwhile are applied afterwards.
+- **Every completed `Configure` re-zeros every gauge**, because all modules are recreated.
+- Moves ramp up and down with `acceleration`. A new position behind the needle, or closer than the braking distance, brakes, overshoots if it has to, and comes back.
+- The position is open-loop: there is no feedback, so send `ZeroGauge` if a needle was knocked or stalled.
+- VID6606 gauges that share a RESET_N pin (the four channels of one chip) pulse it once: the first gauge to start holds it low for 2 ms, then high.
+- `SetOutput` to a pin a gauge uses is ignored.
+- Steps come from a 10 kHz timer interrupt (Timer1 on AVR, TC1 channel 0 on Due, hardware timer 0 on ESP32), running only while a gauge is configured. On AVR this disables Timer1 PWM on its pins (Uno/Nano 9, 10; Leonardo/Micro/Pro Micro 9, 10; Mega 11, 12, 13); the firmware does not use PWM.
+- At startup the firmware turns JTAG off on ATmega32U4 and ATmega2560, so their JTAG pins (A0–A3 on the 32U4, A4–A7 on the 2560) work as GPIO.
+
 ## Configuration Sequence
 
 ```
@@ -275,8 +333,8 @@ After a successful `ConfigurationStored`, the device may send one `ModuleError (
 
 Modules are addressed in two ways depending on their type:
 
-- **Hardware-pin modules** (Analog, Button, Matrix): identified by the `pin` field in `Configure` and `InputValue`. Matrix buttons use virtual pin numbers (`128 + row * num_cols + col`).
-- **I2C-addressed modules** (HT16K33, and future modules such as MCP23017 or ADS1115): identified by the `i2c_address` field in `Configure`, `WriteSegments`, `SetModuleBrightness`, and `ModuleError`.
+- **Hardware-pin modules** (Analog, Button, Matrix, Gauge): identified by the `pin` field in `Configure` and `InputValue`, or `pins[0]` for a gauge. Matrix buttons use virtual pin numbers (`128 + row * num_cols + col`).
+- **I2C-addressed modules** (HT16K33): identified by the `i2c_address` field in `Configure`, `WriteSegments`, `SetModuleBrightness`, and `ModuleError`.
 
 **Only one I2C bus is supported.** All I2C modules share the same bus. Each must have a distinct I2C address.
 

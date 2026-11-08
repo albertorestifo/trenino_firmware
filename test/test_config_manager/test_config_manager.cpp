@@ -176,22 +176,6 @@ void test_load_rejects_wrapped_matrix_pin_count()
     TEST_ASSERT_FALSE(ConfigManager::loadFromEEPROM());
 }
 
-void test_shield_registration_roundtrip_and_corruption()
-{
-    TEST_ASSERT_EQUAL(0, ConfigManager::getRegisteredShieldAddress());
-    ConfigManager::registerShieldAddress(0x61);
-    TEST_ASSERT_EQUAL(0x61, ConfigManager::getRegisteredShieldAddress());
-    TEST_ASSERT_EQUAL(0x53, mock_eeprom_storage[500]);
-    TEST_ASSERT_EQUAL(1, mock_eeprom_storage[502]);
-    mock_eeprom_storage[504] ^= 1;
-    TEST_ASSERT_EQUAL(0, ConfigManager::getRegisteredShieldAddress());
-    ConfigManager::registerShieldAddress(0x60);
-    ConfigManager::storeToEEPROM(12345, nullptr, 0);
-    TEST_ASSERT_EQUAL(0x60, ConfigManager::getRegisteredShieldAddress());
-    ConfigManager::registerShieldAddress(0);
-    TEST_ASSERT_EQUAL(0, ConfigManager::getRegisteredShieldAddress());
-}
-
 void test_empty_configuration_retains_identity_after_reboot_and_cancels_partial()
 {
     ConfigManager::ModuleConfig mod; mod.module_type = Protocol::MODULE_TYPE_ANALOG; mod.analog.pin = 1;
@@ -220,6 +204,170 @@ void test_noncanonical_empty_config_does_not_clear_modules()
     TEST_ASSERT_EQUAL(100,ConfigManager::getCurrentConfigId());
 }
 
+static ConfigManager::ModuleConfig gaugeModule(uint8_t step)
+{
+    ConfigManager::ModuleConfig m;
+    m.module_type = Protocol::MODULE_TYPE_GAUGE;
+    m.gauge.driver = Protocol::GAUGE_DRIVER_VID6606;
+    m.gauge.pins[0] = step;
+    m.gauge.pins[1] = step + 1;
+    m.gauge.pins[2] = 6;
+    m.gauge.pins[3] = Protocol::GAUGE_NO_PIN;
+    m.gauge.travel = 3780;
+    m.gauge.max_speed = 4000;
+    m.gauge.acceleration = 0xABCD;
+    m.gauge.flags = Protocol::GAUGE_FLAG_REVERSE;
+    return m;
+}
+
+static Protocol::Configure gaugePart(uint32_t id, uint8_t total, uint8_t part, uint8_t step)
+{
+    Protocol::Configure cfg;
+    cfg.config_id = id;
+    cfg.total_parts = total;
+    cfg.part_number = part;
+    cfg.module_type = Protocol::MODULE_TYPE_GAUGE;
+    cfg.gauge = gaugeModule(step).gauge;
+    return cfg;
+}
+
+void test_gauge_record_eeprom_roundtrip_is_field_by_field()
+{
+    ConfigManager::ModuleConfig modules[2];
+    modules[0] = gaugeModule(8);
+    modules[1].module_type = Protocol::MODULE_TYPE_BUTTON;
+    modules[1].button.pin = 9;
+    modules[1].button.debounce = 3;
+    ConfigManager::storeToEEPROM(77, modules, 2);
+
+    // 1 type byte + 12 payload bytes, little endian, then the next record.
+    const uint8_t expected[] = { Protocol::MODULE_TYPE_GAUGE, 0, 8, 9, 6, 0xff,
+        0xC4, 0x0E, 0xA0, 0x0F, 0xCD, 0xAB, 1, Protocol::MODULE_TYPE_BUTTON, 9, 3 };
+    TEST_ASSERT_EQUAL_UINT8_ARRAY(expected, &mock_eeprom_storage[ConfigManager::EEPROM_INPUTS_ADDR], sizeof(expected));
+
+    TEST_ASSERT_TRUE(ConfigManager::loadFromEEPROM());
+    uint8_t count = 0;
+    const ConfigManager::ModuleConfig* loaded = ConfigManager::getCurrentConfig(count);
+    TEST_ASSERT_EQUAL(2, count);
+    TEST_ASSERT_EQUAL_UINT8(Protocol::MODULE_TYPE_GAUGE, loaded[0].module_type);
+    TEST_ASSERT_EQUAL_UINT8_ARRAY(modules[0].gauge.pins, loaded[0].gauge.pins, 4);
+    TEST_ASSERT_EQUAL_UINT16(3780, loaded[0].gauge.travel);
+    TEST_ASSERT_EQUAL_UINT16(4000, loaded[0].gauge.max_speed);
+    TEST_ASSERT_EQUAL_UINT16(0xABCD, loaded[0].gauge.acceleration);
+    TEST_ASSERT_EQUAL_UINT8(Protocol::GAUGE_FLAG_REVERSE, loaded[0].gauge.flags);
+    TEST_ASSERT_EQUAL_UINT8(9, loaded[1].button.pin);
+}
+
+void test_load_rejects_corrupt_gauge_record()
+{
+    ConfigManager::ModuleConfig m = gaugeModule(8);
+    ConfigManager::storeToEEPROM(77, &m, 1);
+    mock_eeprom_storage[ConfigManager::EEPROM_INPUTS_ADDR + 1] = 9; // driver 9
+    TEST_ASSERT_FALSE(ConfigManager::loadFromEEPROM());
+
+    ConfigManager::storeToEEPROM(77, &m, 1);
+    mock_eeprom_storage[ConfigManager::EEPROM_INPUTS_ADDR + 6] = 0; // travel 0
+    mock_eeprom_storage[ConfigManager::EEPROM_INPUTS_ADDR + 7] = 0;
+    TEST_ASSERT_FALSE(ConfigManager::loadFromEEPROM());
+}
+
+void test_load_rejects_more_than_max_gauges()
+{
+    ConfigManager::ModuleConfig m[5];
+    for (uint8_t i = 0; i < 5; i++) m[i] = gaugeModule(20 + 2 * i);
+    ConfigManager::storeToEEPROM(77, m, 5);
+    TEST_ASSERT_FALSE(ConfigManager::loadFromEEPROM());
+    ConfigManager::storeToEEPROM(77, m, 4);
+    TEST_ASSERT_TRUE(ConfigManager::loadFromEEPROM());
+}
+
+void test_configure_rejects_invalid_gauge_part()
+{
+    ConfigManager::g_config_state.reset();
+    Protocol::Configure cfg = gaugePart(300, 1, 0, 8);
+    cfg.gauge.max_speed = Protocol::GAUGE_MAX_SPEED_VID6606 + 1;
+    bool complete = false;
+    bool error = false;
+    ConfigManager::handleConfigure(cfg, complete, error);
+    TEST_ASSERT_TRUE(error);
+    TEST_ASSERT_FALSE(complete);
+}
+
+void test_configure_rejects_fifth_gauge_at_completion_in_any_order()
+{
+    ConfigManager::g_config_state.reset();
+    const uint8_t order[] = { 4, 0, 2, 2, 1, 3 }; // out of order, one repeat
+    bool complete = false;
+    bool error = false;
+    for (uint8_t i = 0; i < sizeof(order); i++) {
+        complete = error = false;
+        ConfigManager::handleConfigure(gaugePart(400, 5, order[i], 20 + 2 * order[i]), complete, error);
+        if (i < sizeof(order) - 1) TEST_ASSERT_FALSE(error);
+    }
+    TEST_ASSERT_TRUE(error);
+    TEST_ASSERT_FALSE(complete);
+    TEST_ASSERT_FALSE(ConfigManager::g_config_state.isActive());
+
+    // Four gauges plus another module is fine.
+    ConfigManager::g_config_state.reset();
+    for (uint8_t p = 0; p < 4; p++) {
+        complete = error = false;
+        ConfigManager::handleConfigure(gaugePart(401, 5, p, 20 + 2 * p), complete, error);
+    }
+    Protocol::Configure button;
+    button.config_id = 401; button.total_parts = 5; button.part_number = 4;
+    button.module_type = Protocol::MODULE_TYPE_BUTTON; button.button.pin = 2; button.button.debounce = 1;
+    complete = error = false;
+    ConfigManager::handleConfigure(button, complete, error);
+    TEST_ASSERT_FALSE(error);
+    TEST_ASSERT_TRUE(complete);
+}
+
+void test_configure_rejects_gauges_sharing_pins()
+{
+    bool complete = false;
+    bool error = false;
+    // Same STEP pin on two gauges.
+    ConfigManager::g_config_state.reset();
+    ConfigManager::handleConfigure(gaugePart(500, 2, 0, 8), complete, error);
+    ConfigManager::handleConfigure(gaugePart(500, 2, 1, 8), complete, error);
+    TEST_ASSERT_TRUE(error);
+    TEST_ASSERT_FALSE(complete);
+
+    // One gauge's DIR is another's STEP.
+    ConfigManager::g_config_state.reset();
+    complete = error = false;
+    ConfigManager::handleConfigure(gaugePart(501, 2, 0, 8), complete, error);
+    ConfigManager::handleConfigure(gaugePart(501, 2, 1, 9), complete, error);
+    TEST_ASSERT_TRUE(error);
+
+    // A shared RESET_N pin (6 in gaugePart) is fine.
+    ConfigManager::g_config_state.reset();
+    complete = error = false;
+    ConfigManager::handleConfigure(gaugePart(502, 2, 0, 8), complete, error);
+    ConfigManager::handleConfigure(gaugePart(502, 2, 1, 20), complete, error);
+    TEST_ASSERT_FALSE(error);
+    TEST_ASSERT_TRUE(complete);
+
+    // A RESET_N pin that is another gauge's STEP is not.
+    ConfigManager::g_config_state.reset();
+    complete = error = false;
+    ConfigManager::handleConfigure(gaugePart(503, 2, 0, 8), complete, error);
+    ConfigManager::handleConfigure(gaugePart(503, 2, 1, 6), complete, error);
+    TEST_ASSERT_TRUE(error);
+}
+
+void test_shield_registration_bytes_are_left_alone()
+{
+    // EEPROM 500..504 held the 3.1.0 shield registration; they are reserved.
+    const uint8_t old_record[] = { 0x53, 0x54, 1, 0x60, 0x9F };
+    for (uint8_t i = 0; i < 5; i++) mock_eeprom_storage[500 + i] = old_record[i];
+    ConfigManager::ModuleConfig m = gaugeModule(8);
+    ConfigManager::storeToEEPROM(1, &m, 1);
+    TEST_ASSERT_TRUE(ConfigManager::loadFromEEPROM());
+    TEST_ASSERT_EQUAL_UINT8_ARRAY(old_record, &mock_eeprom_storage[500], 5);
+}
+
 int main()
 {
     UNITY_BEGIN();
@@ -230,9 +378,15 @@ int main()
     RUN_TEST(test_load_fails_with_no_magic);
     RUN_TEST(test_load_fails_with_invalid_num_inputs);
     RUN_TEST(test_load_rejects_wrapped_matrix_pin_count);
-    RUN_TEST(test_shield_registration_roundtrip_and_corruption);
     RUN_TEST(test_empty_configuration_retains_identity_after_reboot_and_cancels_partial);
     RUN_TEST(test_noncanonical_empty_config_does_not_clear_modules);
+    RUN_TEST(test_gauge_record_eeprom_roundtrip_is_field_by_field);
+    RUN_TEST(test_load_rejects_corrupt_gauge_record);
+    RUN_TEST(test_load_rejects_more_than_max_gauges);
+    RUN_TEST(test_configure_rejects_invalid_gauge_part);
+    RUN_TEST(test_configure_rejects_fifth_gauge_at_completion_in_any_order);
+    RUN_TEST(test_configure_rejects_gauges_sharing_pins);
+    RUN_TEST(test_shield_registration_bytes_are_left_alone);
 
     return UNITY_END();
 }
