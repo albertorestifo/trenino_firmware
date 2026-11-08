@@ -19,8 +19,8 @@
 #define GAUGE_HAL_ESP32
 #include <Arduino.h>
 #include <esp_arduino_version.h>
-#if ESP_ARDUINO_VERSION_MAJOR != 2
-#error "Gauge timer code targets the ESP32 Arduino core 2.x timer API"
+#if ESP_ARDUINO_VERSION_MAJOR != 2 && ESP_ARDUINO_VERSION_MAJOR != 3
+#error "Gauge timer code supports the ESP32 Arduino core 2.x and 3.x timer APIs"
 #endif
 #include <soc/gpio_struct.h>
 #elif defined(ARDUINO)

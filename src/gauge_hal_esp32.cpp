@@ -34,6 +34,31 @@ FastPin makeOutput(uint8_t pin, bool high)
     return p;
 }
 
+// The timer counts at 1 MHz and fires every 1000000 / TICK_HZ counts.
+// Core 2.x (espressif32 6.x) and core 3.x (espressif32 8.x) have different
+// timer APIs.
+#if ESP_ARDUINO_VERSION_MAJOR >= 3
+
+void startTimer()
+{
+    if (g_timer == nullptr) {
+        g_timer = timerBegin(1000000UL); // starts counting
+        timerAttachInterrupt(g_timer, &onTimer);
+        timerAlarm(g_timer, 1000000UL / Gauge::TICK_HZ, true, 0);
+    }
+    timerWrite(g_timer, 0);
+    timerStart(g_timer);
+}
+
+void stopTimer()
+{
+    if (g_timer != nullptr) {
+        timerStop(g_timer);
+    }
+}
+
+#else
+
 void startTimer()
 {
     if (g_timer == nullptr) {
@@ -52,6 +77,8 @@ void stopTimer()
         timerAlarmDisable(g_timer);
     }
 }
+
+#endif
 
 void delayMs(uint16_t ms)
 {

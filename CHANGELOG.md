@@ -45,12 +45,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Every completed `Configure` re-zeros every gauge.
 - A gauge uses Timer1 on AVR, TC1 channel 0 on Due and hardware timer 0 on ESP32.
   On AVR that removes PWM from the Timer1 pins while a gauge is configured.
+  The ESP32 timer code supports Arduino core 2.x (`espressif32` 6.x) and 3.x
+  (`espressif32` 8.x).
 
 ### Known limitations
 - Not yet run on hardware. The four-gauge limit stays until the timer interrupt's
   cost is measured on a 16 MHz AVR; see [wiring guide](docs/GAUGE_WIRING.md#hardware-verification).
-- The ESP32 build targets Arduino core 2.x (what the unpinned `espressif32`
-  platform installs) and refuses to compile on 3.x.
 
 ## [3.2.1] - 2026-11-03
 
