@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.3.1] - 2026-11-09
+
+### Fixed
+- **Gauge zero landed on a different angle each time.** The zero sweep hit the end
+  stop at 200°/s, so the needle bounced off it, and it ended on whatever electrical
+  phase its starting position left, so `ZeroGauge` and every `Configure` could put
+  0 up to 2° away from the previous zero. The sweep now backs off 4°, creeps into
+  the stop at 20°/s, ends on the same phase every time and holds the stop for
+  50 ms before calling it 0. It also covers 10° more than the full dial in case the
+  needle lost steps. A VID6606 without RESET_N keeps its phase across `Configure`.
+  Zeroing takes about 0.5 s longer.
+
+### Changed
+- Firmware version is 3.3.1.
+
 ## [3.3.0] - 2026-11-08
 
 ### Added

@@ -67,12 +67,26 @@ void assertNear(double expected, double actual, double fraction)
     TEST_ASSERT_TRUE_MESSAGE(fabs(actual - expected) <= expected * fraction, message);
 }
 
+const uint8_t VID_CYCLE = 24;
+const uint8_t DIRECT_CYCLE = 6;
+
 Motion zeroed(uint16_t travel, uint16_t vmax, uint16_t accel)
 {
     Motion m;
-    m.configure(travel, vmax, accel, 2400, travel);
+    m.configure(travel, vmax, accel, 2400, travel, 240, VID_CYCLE);
     return m;
 }
+
+// Steps of the back-off and slow approach after the fast sweep, ending on
+// phase 0 from `phase` (the phase the fast sweep left).
+uint32_t settleUp(uint8_t cycle) { return (uint32_t)Motion::BACKOFF_CYCLES * cycle; }
+uint32_t settleDown(uint8_t cycle, uint8_t phase)
+{
+    return (uint32_t)(Motion::BACKOFF_CYCLES + Motion::OVERDRIVE_CYCLES) * cycle + phase;
+}
+
+// Phase after n steps down from phase 0.
+uint8_t phaseAfterDown(uint32_t n, uint8_t cycle) { return (uint8_t)((cycle - n % cycle) % cycle); }
 
 } // namespace
 
@@ -85,28 +99,143 @@ void test_speed_conversion()
 void test_zero_sweep_length_rate_and_position()
 {
     Motion m;
-    m.configure(3780, 5000, 50000, 2400, 3780);
+    m.configure(3780, 5000, 50000, 2400, 3780, 240, VID_CYCLE);
     m.setTarget(0);
     m.zero();
     TEST_ASSERT_TRUE(m.isZeroing());
     Run r = runUntilIdle(m);
     TEST_ASSERT_TRUE(r.idle);
-    TEST_ASSERT_EQUAL_UINT32(3780, r.steps_down);
-    TEST_ASSERT_EQUAL_UINT32(0, r.steps_up);
+    // 3780 mod 24 = 12: the fast sweep leaves phase 12, the approach adds 12.
+    uint8_t phase = phaseAfterDown(3780, VID_CYCLE);
+    TEST_ASSERT_EQUAL_UINT8(12, phase);
+    TEST_ASSERT_EQUAL_UINT32(3780 + settleDown(VID_CYCLE, phase), r.steps_down);
+    TEST_ASSERT_EQUAL_UINT32(settleUp(VID_CYCLE), r.steps_up);
     TEST_ASSERT_EQUAL_INT32(0, m.position());
-    // 3780 steps at 2400 steps/s: 15750 ticks, unramped.
-    TEST_ASSERT_UINT32_WITHIN(20, 15750, r.ticks);
+    TEST_ASSERT_EQUAL_UINT8(0, m.phase());
+    // 3780 steps at 2400 steps/s (15750 ticks), 48 + 84 at 240 steps/s
+    // (5500 ticks), the dwell and two turns.
+    TEST_ASSERT_UINT32_WITHIN(60, 15750 + 5500 + Motion::DWELL_TICKS, r.ticks);
     TEST_ASSERT_FALSE(r.consecutive);
+    TEST_ASSERT_FALSE(r.dir_changed_on_step);
 }
 
 void test_zero_speed_capped_by_max_speed()
 {
     Motion m;
-    m.configure(945, 300, 1500, 600, 945);
+    m.configure(945, 300, 1500, 600, 945, 900, DIRECT_CYCLE);
     m.zero();
     Run r = runUntilIdle(m);
-    TEST_ASSERT_EQUAL_UINT32(945, r.steps_down);
-    TEST_ASSERT_UINT32_WITHIN(20, 31500, r.ticks); // 945 steps at 300 steps/s
+    uint8_t phase = phaseAfterDown(945, DIRECT_CYCLE);
+    TEST_ASSERT_EQUAL_UINT32(945 + settleDown(DIRECT_CYCLE, phase), r.steps_down);
+    // Every leg at 300 steps/s, including the settle legs asked for at 900.
+    uint32_t steps = r.steps_down + r.steps_up;
+    TEST_ASSERT_UINT32_WITHIN(60, steps * 10000UL / 300 + Motion::DWELL_TICKS, r.ticks);
+}
+
+void test_zero_always_ends_on_phase_zero()
+{
+    // Wherever the needle starts, and whatever phase the driver held, 0 is
+    // the same electrical phase, so it is the same needle angle.
+    for (uint8_t seed = 0; seed < DIRECT_CYCLE; seed++) {
+        for (uint16_t start = 0; start < 3 * DIRECT_CYCLE; start++) {
+            Motion m;
+            m.configure(945, 1800, 1500, 600, 975, 60, DIRECT_CYCLE);
+            m.setPhase(seed);
+            m.setTarget(start);
+            runUntilIdle(m);
+            TEST_ASSERT_EQUAL_INT32(start, m.position());
+            m.zero();
+            runUntilIdle(m);
+            TEST_ASSERT_EQUAL_INT32(start, m.position()); // back to the target
+            m.setTarget(0);
+            runUntilIdle(m);
+            TEST_ASSERT_EQUAL_INT32(0, m.position());
+            TEST_ASSERT_EQUAL_UINT8(0, m.phase());
+        }
+    }
+}
+
+void test_rezero_matches_the_first_zero()
+{
+    Motion m = zeroed(3780, 5000, 50000);
+    m.zero();
+    runUntilIdle(m);
+    TEST_ASSERT_EQUAL_UINT8(0, m.phase());
+    const uint16_t starts[] = { 0, 1, 13, 1000, 3779 };
+    for (uint8_t i = 0; i < 5; i++) {
+        m.setTarget(starts[i]);
+        runUntilIdle(m);
+        TEST_ASSERT_EQUAL_UINT8(starts[i] % VID_CYCLE, m.phase());
+        m.zero();
+        m.setTarget(0);
+        runUntilIdle(m);
+        TEST_ASSERT_EQUAL_INT32(0, m.position());
+        TEST_ASSERT_EQUAL_UINT8(0, m.phase());
+    }
+}
+
+void test_rezero_during_any_zero_leg_still_ends_on_phase_zero()
+{
+    // Interrupt at points inside the fast sweep, the back-off, the slow
+    // approach and the dwell: 15750 ticks of fast sweep at 2400 steps/s, then
+    // 48 steps at 240 steps/s (2000 ticks), 84 more (3500), then 500 ticks.
+    const uint32_t at[] = { 5000, 16500, 19000, 21300 };
+    for (uint8_t i = 0; i < 4; i++) {
+        Motion m = zeroed(3780, 5000, 50000);
+        m.setTarget(37);
+        m.zero();
+        for (uint32_t t = 0; t < at[i]; t++) m.tick();
+        TEST_ASSERT_TRUE(m.isZeroing());
+        m.zero();
+        Run r = runUntilIdle(m);
+        TEST_ASSERT_TRUE(r.idle);
+        TEST_ASSERT_FALSE(r.consecutive);
+        TEST_ASSERT_FALSE(r.dir_changed_on_step);
+        TEST_ASSERT_EQUAL_INT32(37, m.position());
+        TEST_ASSERT_EQUAL_UINT8(37 % VID_CYCLE, m.phase());
+    }
+}
+
+void test_zero_approaches_the_stop_slowly_then_dwells()
+{
+    Motion m;
+    m.configure(945, 1800, 1500, 600, 945, 60, DIRECT_CYCLE);
+    m.zero();
+    // Skip the fast sweep.
+    uint32_t down = 0;
+    while (down < 945) {
+        if (m.tick() < 0) down++;
+    }
+    // Back-off and approach: one step per 10000 / 60 = 166.7 ticks.
+    uint32_t last_step = 0;
+    uint32_t min_gap = 0xffffffff;
+    uint32_t up = 0;
+    uint32_t settle_down = 0;
+    uint32_t t = 0;
+    uint32_t expected_down = settleDown(DIRECT_CYCLE, phaseAfterDown(945, DIRECT_CYCLE));
+    while (settle_down < expected_down) {
+        t++;
+        int8_t s = m.tick();
+        if (s == 0) continue;
+        if (s > 0) {
+            TEST_ASSERT_EQUAL_UINT32(0, settle_down); // all back-off before the approach
+            up++;
+        } else {
+            settle_down++;
+        }
+        if (last_step != 0 && t - last_step < min_gap) min_gap = t - last_step;
+        last_step = t;
+    }
+    TEST_ASSERT_EQUAL_UINT32(settleUp(DIRECT_CYCLE), up);
+    TEST_ASSERT_GREATER_OR_EQUAL_UINT32(166, min_gap);
+    // Holds the stop without stepping, still zeroing, for the dwell.
+    for (uint32_t i = 0; i + 1 < Motion::DWELL_TICKS; i++) {
+        TEST_ASSERT_EQUAL_INT8(0, m.tick());
+        TEST_ASSERT_TRUE(m.isZeroing());
+    }
+    TEST_ASSERT_EQUAL_INT8(0, m.tick());
+    TEST_ASSERT_FALSE(m.isZeroing());
+    TEST_ASSERT_EQUAL_INT32(0, m.position());
 }
 
 void test_short_moves_land_exactly_without_overshoot()
@@ -221,7 +350,7 @@ void test_target_clamped_to_travel()
 void test_target_set_during_zero_applies_afterwards()
 {
     Motion m;
-    m.configure(945, 1800, 1500, 600, 945);
+    m.configure(945, 1800, 1500, 600, 945, 60, DIRECT_CYCLE);
     m.zero();
     for (int i = 0; i < 100; i++) m.tick();
     TEST_ASSERT_TRUE(m.isZeroing());
@@ -269,6 +398,10 @@ int main()
     RUN_TEST(test_speed_conversion);
     RUN_TEST(test_zero_sweep_length_rate_and_position);
     RUN_TEST(test_zero_speed_capped_by_max_speed);
+    RUN_TEST(test_zero_always_ends_on_phase_zero);
+    RUN_TEST(test_rezero_matches_the_first_zero);
+    RUN_TEST(test_zero_approaches_the_stop_slowly_then_dwells);
+    RUN_TEST(test_rezero_during_any_zero_leg_still_ends_on_phase_zero);
     RUN_TEST(test_short_moves_land_exactly_without_overshoot);
     RUN_TEST(test_speed_never_exceeds_max_and_no_consecutive_steps);
     RUN_TEST(test_long_move_matches_trapezoid_time);

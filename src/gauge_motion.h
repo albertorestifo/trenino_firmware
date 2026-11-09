@@ -20,14 +20,30 @@ class Motion {
 public:
     Motion();
 
-    // speeds in steps/s, acceleration in steps/s^2. Calls sqrt, so never
-    // from the interrupt. Leaves the gauge idle at position 0 with no zero
-    // pending.
-    void configure(uint16_t travel, uint16_t max_speed, uint16_t acceleration,
-        uint16_t zero_speed, uint16_t zero_steps);
+    // Zero sequence, in electrical cycles of the motor (cycle_steps steps).
+    static constexpr uint8_t BACKOFF_CYCLES = 2; // back off the stop after the fast sweep
+    static constexpr uint8_t OVERDRIVE_CYCLES = 1; // slow approach past the backed-off point
+    static constexpr uint16_t DWELL_TICKS = TICK_HZ / 20; // 50 ms holding the stop
 
-    // Sweep zero_steps toward the end stop at the fixed zero speed, then call
-    // that position 0. Starts on the next tick and interrupts any move.
+    // speeds in steps/s, acceleration in steps/s^2. Calls sqrt, so never
+    // from the interrupt. Leaves the gauge idle at position 0 and phase 0
+    // with no zero pending. cycle_steps is one electrical cycle of the motor
+    // (6 direct steps, 24 VID6606 microsteps).
+    void configure(uint16_t travel, uint16_t max_speed, uint16_t acceleration,
+        uint16_t zero_speed, uint16_t zero_steps, uint16_t settle_speed, uint8_t cycle_steps);
+
+    // Find the end stop and call it position 0. Starts on the next tick and
+    // interrupts any move:
+    // 1. sweep zero_steps toward the stop at the zero speed (the needle may
+    //    bounce off it here),
+    // 2. back off BACKOFF_CYCLES at the settle speed,
+    // 3. creep back into the stop at the settle speed, OVERDRIVE_CYCLES past
+    //    the backed-off point plus however many steps it takes to land on
+    //    phase 0,
+    // 4. hold the stop for DWELL_TICKS so the needle settles.
+    // Ending on the same electrical phase every time is what makes 0 land on
+    // the same needle angle: against the stop, the rotor rests where the
+    // energized phase pulls it, so a different phase is a different zero.
     void zero();
 
     // Latest target wins. Clamped to travel. Applied after a zero sweep.
@@ -44,15 +60,26 @@ public:
 
     int32_t position() const { return position_; }
     uint16_t target() const { return target_; }
-    bool isZeroing() const { return state_ == ZEROING || zero_pending_; }
+    // Electrical phase, 0..cycle_steps-1: the phase reached after configure()
+    // is 0, and every step in gauge direction adds one.
+    uint8_t phase() const { return phase_; }
+    // Seeds the phase when the driver kept its own across a reconfigure (a
+    // VID6606 whose RESET_N is not wired). Call before the first tick.
+    void setPhase(uint8_t phase) { phase_ = phase < cycle_ ? phase : 0; }
+    bool isZeroing() const { return state_ >= ZERO_FAST || zero_pending_; }
     bool isIdle() const { return state_ == IDLE && !zero_pending_ && position_ == target_; }
 
 private:
-    enum State : uint8_t { IDLE, MOVING, ZEROING };
+    // Every zero state sorts after MOVING (see isZeroing()).
+    enum State : uint8_t { IDLE, MOVING, ZERO_FAST, ZERO_BACKOFF, ZERO_SEEK, ZERO_DWELL };
+
+    GAUGE_IRAM int8_t zeroLeg(int8_t dir);
+    GAUGE_IRAM void step(int8_t dir);
 
     uint32_t v_max_; // Q32 steps/tick
     uint32_t v_min_; // Q32 steps/tick, speed after one step from rest
     uint32_t v_zero_; // Q32 steps/tick
+    uint32_t v_settle_; // Q32 steps/tick
     uint32_t a_tick_; // Q32 steps/tick per tick
     uint32_t v_; // current speed, Q32 steps/tick
     uint32_t acc_; // step accumulator
@@ -64,6 +91,8 @@ private:
     uint16_t zero_remaining_;
     volatile bool zero_pending_;
     int8_t dir_;
+    uint8_t phase_;
+    uint8_t cycle_;
     State state_;
 };
 

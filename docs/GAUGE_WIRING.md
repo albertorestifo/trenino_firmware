@@ -141,7 +141,7 @@ The board's own bring-up checks (VCC at J5 pin 1 at least 4.6 V with all four ga
 
 None of this has been run on hardware yet. Before relying on it:
 
-1. Pro Micro + VID6606 + one X27: watch the zero sweep at boot, then sweep full scale at increasing `max_speed` and `acceleration` until steps are lost. Record safe values.
+1. Pro Micro + VID6606 + one X27: watch the zero sweep at boot (the slow approach must not bounce, and `ZeroGauge` from different positions must land on the same mark), then sweep full scale at increasing `max_speed` and `acceleration` until steps are lost. Record safe values.
 2. The same with a direct X27 on J5 pins 3–6.
 3. Toggle a spare pin around the timer interrupt and measure it on a scope, with four gauges moving and a matrix configured. Aim for under 30% of the 100 µs tick before raising the four-gauge limit.
 4. Check that an HT16K33 display and a button matrix still behave while gauges move, and that a new `Configure` during a move re-zeros cleanly.

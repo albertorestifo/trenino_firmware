@@ -279,7 +279,7 @@ Fire-and-forget, like `SetOutput`: no reply. The latest position wins. A pin tha
 [type: u8 = 19] [pin: u8]
 ```
 
-Sweeps the gauge into its end stop again, calls that position 0, then moves back to the latest position. No reply. The packet must be exactly 2 bytes.
+Runs the zero sequence again (see below), then moves back to the latest position. No reply. The packet must be exactly 2 bytes.
 
 ## X27 gauge module (type 7)
 
@@ -304,7 +304,12 @@ Firmware 3.3.0 drives X27.168 gauge steppers (and pin-compatible clones) as a no
 
 **Behaviour**
 
-- When the gauge starts (boot, or every completed `Configure`), it sweeps into its end stop at 200°/s with no ramp (2400 steps/s VID6606, 600 steps/s direct, or `max_speed` if lower). The sweep covers the full 315° (3780 or 945 steps, or `travel` if larger), so it works from any starting position. Positions sent meanwhile are applied afterwards.
+- When the gauge starts (boot, or every completed `Configure`), and on `ZeroGauge`, it runs the zero sequence. Positions sent meanwhile are applied afterwards.
+  1. Sweep into the end stop at 200°/s with no ramp (2400 steps/s VID6606, 600 steps/s direct, or `max_speed` if lower). The sweep covers 325°: the full 315° (3780 or 945 steps, or `travel` if larger) plus 10° (120 or 30 steps), so it works from any starting position. The needle may bounce off the stop here.
+  2. Back off 4° (two electrical cycles: 48 or 12 steps) at 20°/s (240 or 60 steps/s, or `max_speed` if lower).
+  3. Creep back into the stop at 20°/s, 2° past the starting point of the back-off plus up to one more cycle, so the sequence ends on the same electrical phase every time.
+  4. Hold the stop for 50 ms, then call that position 0.
+- Ending on the same phase is what makes 0 the same needle angle each time: pressed against the stop, the rotor rests where the energized phase pulls it. A VID6606 whose RESET_N is wired starts each `Configure` from the chip's reset phase; without RESET_N the firmware remembers the chip's phase across `Configure` by STEP pin.
 - **Every completed `Configure` re-zeros every gauge**, because all modules are recreated.
 - Moves ramp up and down with `acceleration`. A new position behind the needle, or closer than the braking distance, brakes, overshoots if it has to, and comes back.
 - The position is open-loop: there is no feedback, so send `ZeroGauge` if a needle was knocked or stalled.

@@ -148,11 +148,11 @@ void test_direct_drive_walks_the_six_state_pattern()
     g.begin();
     TEST_ASSERT_EQUAL_HEX8(SIX_STATE[0], coils(2, 3, 4, 5));
     runZero(g);
-    // 945 steps down from state 0: 945 % 6 = 3, so state (0 - 3) mod 6 = 3.
-    TEST_ASSERT_EQUAL_HEX8(SIX_STATE[3], coils(2, 3, 4, 5));
+    // The zero sequence always ends on the state it started from.
+    TEST_ASSERT_EQUAL_HEX8(SIX_STATE[0], coils(2, 3, 4, 5));
 
     g.setTarget(7);
-    uint8_t expected = 3;
+    uint8_t expected = 0;
     int32_t last = g.motion().position();
     for (int t = 0; t < 20000 && !g.motion().isIdle(); t++) {
         GaugeScheduler::tick();
@@ -172,11 +172,11 @@ void test_direct_drive_reverse_walks_backwards()
     GaugeModule g(c);
     g.begin();
     runZero(g);
-    // Reversed, the zero sweep walks the table forwards: (0 + 945) mod 6 = 3.
-    TEST_ASSERT_EQUAL_HEX8(SIX_STATE[3], coils(2, 3, 4, 5));
+    TEST_ASSERT_EQUAL_HEX8(SIX_STATE[0], coils(2, 3, 4, 5));
     g.setTarget(1);
     for (int t = 0; t < 5000 && !g.motion().isIdle(); t++) GaugeScheduler::tick();
-    TEST_ASSERT_EQUAL_HEX8(SIX_STATE[2], coils(2, 3, 4, 5));
+    // Reversed, a step away from the stop walks the table backwards.
+    TEST_ASSERT_EQUAL_HEX8(SIX_STATE[5], coils(2, 3, 4, 5));
 }
 
 void test_destructor_unregisters_stops_timer_and_releases_coils()
@@ -267,6 +267,53 @@ void test_zero_command_resweeps_then_returns_to_target()
     TEST_ASSERT_EQUAL_INT32(100, g.motion().position());
 }
 
+void test_rezero_lands_on_the_same_coil_state_from_any_position()
+{
+    GaugeModule g(direct(2, 3, 4, 5));
+    g.begin();
+    runZero(g);
+    const uint16_t starts[] = { 0, 1, 2, 100, 503, 945 };
+    for (uint8_t i = 0; i < 6; i++) {
+        g.setTarget(starts[i]);
+        for (int t = 0; t < 200000 && !g.motion().isIdle(); t++) GaugeScheduler::tick();
+        g.zero();
+        runZero(g);
+        TEST_ASSERT_EQUAL_HEX8(SIX_STATE[0], coils(2, 3, 4, 5));
+        TEST_ASSERT_EQUAL_INT32(0, g.motion().position());
+    }
+}
+
+void test_vid6606_without_reset_keeps_its_phase_across_reconfigure()
+{
+    {
+        GaugeModule a(vid(20, 21));
+        a.begin();
+        runZero(a);
+        a.setTarget(7);
+        for (int t = 0; t < 20000 && !a.motion().isIdle(); t++) GaugeScheduler::tick();
+        TEST_ASSERT_EQUAL_UINT8(7, a.motion().phase());
+    }
+    GaugeModule b(vid(20, 21));
+    b.begin();
+    TEST_ASSERT_EQUAL_UINT8(7, b.motion().phase()); // the chip did not move
+    runZero(b);
+    TEST_ASSERT_EQUAL_UINT8(0, b.motion().phase());
+}
+
+void test_vid6606_with_reset_starts_from_phase_zero()
+{
+    {
+        GaugeModule a(vid(22, 23, 24));
+        a.begin();
+        runZero(a);
+        a.setTarget(5);
+        for (int t = 0; t < 20000 && !a.motion().isIdle(); t++) GaugeScheduler::tick();
+    }
+    GaugeModule b(vid(22, 23, 24));
+    b.begin();
+    TEST_ASSERT_EQUAL_UINT8(0, b.motion().phase()); // RESET_N homed the chip
+}
+
 int main()
 {
     UNITY_BEGIN();
@@ -284,5 +331,8 @@ int main()
     RUN_TEST(test_suspend_and_resume_nest);
     RUN_TEST(test_suspend_without_gauges_keeps_timer_off);
     RUN_TEST(test_zero_command_resweeps_then_returns_to_target);
+    RUN_TEST(test_rezero_lands_on_the_same_coil_state_from_any_position);
+    RUN_TEST(test_vid6606_without_reset_keeps_its_phase_across_reconfigure);
+    RUN_TEST(test_vid6606_with_reset_starts_from_phase_zero);
     return UNITY_END();
 }
