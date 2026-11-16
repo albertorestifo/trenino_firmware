@@ -23,6 +23,7 @@ public:
     // Zero sequence, in electrical cycles of the motor (cycle_steps steps).
     static constexpr uint8_t BACKOFF_CYCLES = 2; // back off the stop after the fast sweep
     static constexpr uint8_t OVERDRIVE_CYCLES = 1; // slow approach past the backed-off point
+    static constexpr uint8_t APPROACHES = 3; // back-off and slow approach, repeated
     static constexpr uint16_t DWELL_TICKS = TICK_HZ / 20; // 50 ms holding the stop
 
     // speeds in steps/s, acceleration in steps/s^2. Calls sqrt, so never
@@ -40,7 +41,9 @@ public:
     // 3. creep back into the stop at the settle speed, OVERDRIVE_CYCLES past
     //    the backed-off point plus however many steps it takes to land on
     //    phase 0,
-    // 4. hold the stop for DWELL_TICKS so the needle settles.
+    // 4. repeat 2 and 3 until there have been APPROACHES slow approaches, like
+    //    a 3D printer homing, so the needle seats cleanly against the stop,
+    // 5. hold the stop for DWELL_TICKS so the needle settles.
     // Ending on the same electrical phase every time is what makes 0 land on
     // the same needle angle: against the stop, the rotor rests where the
     // energized phase pulls it, so a different phase is a different zero.
@@ -89,6 +92,7 @@ private:
     volatile uint16_t target_;
     uint16_t ramp_steps_; // steps taken while accelerating, not yet braked off
     uint16_t zero_remaining_;
+    uint8_t approaches_left_; // slow approaches still to run, this one included
     volatile bool zero_pending_;
     int8_t dir_;
     uint8_t phase_;

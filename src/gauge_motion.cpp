@@ -22,6 +22,7 @@ Motion::Motion()
     , target_(0)
     , ramp_steps_(0)
     , zero_remaining_(0)
+    , approaches_left_(0)
     , zero_pending_(false)
     , dir_(-1)
     , phase_(0)
@@ -56,6 +57,7 @@ void Motion::configure(uint16_t travel, uint16_t max_speed, uint16_t acceleratio
     target_ = 0;
     ramp_steps_ = 0;
     zero_remaining_ = 0;
+    approaches_left_ = 0;
     zero_pending_ = false;
     dir_ = -1;
     phase_ = 0;
@@ -94,6 +96,7 @@ GAUGE_IRAM int8_t Motion::tick()
         if (s != 0 && zero_remaining_ == 0) {
             state_ = ZERO_BACKOFF;
             zero_remaining_ = (uint16_t)BACKOFF_CYCLES * cycle_;
+            approaches_left_ = APPROACHES;
             v_ = v_settle_;
             acc_ = 0;
         }
@@ -112,8 +115,16 @@ GAUGE_IRAM int8_t Motion::tick()
     if (state_ == ZERO_SEEK) {
         int8_t s = zeroLeg(-1);
         if (s != 0 && zero_remaining_ == 0) {
-            state_ = ZERO_DWELL;
-            zero_remaining_ = DWELL_TICKS;
+            if (--approaches_left_ > 0) {
+                // Back off and approach again. The phase is 0 here, so the
+                // next approach also ends on phase 0.
+                state_ = ZERO_BACKOFF;
+                zero_remaining_ = (uint16_t)BACKOFF_CYCLES * cycle_;
+                acc_ = 0;
+            } else {
+                state_ = ZERO_DWELL;
+                zero_remaining_ = DWELL_TICKS;
+            }
         }
         return s;
     }

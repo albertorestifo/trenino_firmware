@@ -77,12 +77,12 @@ Motion zeroed(uint16_t travel, uint16_t vmax, uint16_t accel)
     return m;
 }
 
-// Steps of the back-off and slow approach after the fast sweep, ending on
+// Steps of the back-offs and slow approaches after the fast sweep, ending on
 // phase 0 from `phase` (the phase the fast sweep left).
-uint32_t settleUp(uint8_t cycle) { return (uint32_t)Motion::BACKOFF_CYCLES * cycle; }
+uint32_t settleUp(uint8_t cycle) { return (uint32_t)Motion::APPROACHES * Motion::BACKOFF_CYCLES * cycle; }
 uint32_t settleDown(uint8_t cycle, uint8_t phase)
 {
-    return (uint32_t)(Motion::BACKOFF_CYCLES + Motion::OVERDRIVE_CYCLES) * cycle + phase;
+    return (uint32_t)Motion::APPROACHES * (Motion::BACKOFF_CYCLES + Motion::OVERDRIVE_CYCLES) * cycle + phase;
 }
 
 // Phase after n steps down from phase 0.
@@ -112,9 +112,10 @@ void test_zero_sweep_length_rate_and_position()
     TEST_ASSERT_EQUAL_UINT32(settleUp(VID_CYCLE), r.steps_up);
     TEST_ASSERT_EQUAL_INT32(0, m.position());
     TEST_ASSERT_EQUAL_UINT8(0, m.phase());
-    // 3780 steps at 2400 steps/s (15750 ticks), 48 + 84 at 240 steps/s
-    // (5500 ticks), the dwell and two turns.
-    TEST_ASSERT_UINT32_WITHIN(60, 15750 + 5500 + Motion::DWELL_TICKS, r.ticks);
+    // 3780 steps at 2400 steps/s (15750 ticks), three back-offs of 48 and
+    // approaches of 84, 72 and 72 at 240 steps/s (15500 ticks), the dwell and
+    // the turns.
+    TEST_ASSERT_UINT32_WITHIN(60, 15750 + 15500 + Motion::DWELL_TICKS, r.ticks);
     TEST_ASSERT_FALSE(r.consecutive);
     TEST_ASSERT_FALSE(r.dir_changed_on_step);
 }
@@ -176,11 +177,12 @@ void test_rezero_matches_the_first_zero()
 
 void test_rezero_during_any_zero_leg_still_ends_on_phase_zero()
 {
-    // Interrupt at points inside the fast sweep, the back-off, the slow
+    // Interrupt at points inside the fast sweep, each back-off, each slow
     // approach and the dwell: 15750 ticks of fast sweep at 2400 steps/s, then
-    // 48 steps at 240 steps/s (2000 ticks), 84 more (3500), then 500 ticks.
-    const uint32_t at[] = { 5000, 16500, 19000, 21300 };
-    for (uint8_t i = 0; i < 4; i++) {
+    // at 240 steps/s 48 steps up (2000 ticks), 84 down (3500), 48 up, 72 down
+    // (3000), 48 up, 72 down, then 500 ticks.
+    const uint32_t at[] = { 5000, 16500, 19000, 21300, 24000, 26300, 29000, 31500 };
+    for (uint8_t i = 0; i < 8; i++) {
         Motion m = zeroed(3780, 5000, 50000);
         m.setTarget(37);
         m.zero();
@@ -206,28 +208,38 @@ void test_zero_approaches_the_stop_slowly_then_dwells()
     while (down < 945) {
         if (m.tick() < 0) down++;
     }
-    // Back-off and approach: one step per 10000 / 60 = 166.7 ticks.
+    // Back-offs and approaches: one step per 10000 / 60 = 166.7 ticks, as
+    // legs of up, down, up, down, up, down.
+    const uint8_t phase = phaseAfterDown(945, DIRECT_CYCLE);
+    const uint32_t up_leg = (uint32_t)Motion::BACKOFF_CYCLES * DIRECT_CYCLE;
+    const uint32_t down_leg = (uint32_t)(Motion::BACKOFF_CYCLES + Motion::OVERDRIVE_CYCLES) * DIRECT_CYCLE;
+    uint32_t legs[2 * Motion::APPROACHES] = {};
+    uint8_t leg = 0;
+    int8_t leg_dir = 1;
     uint32_t last_step = 0;
     uint32_t min_gap = 0xffffffff;
-    uint32_t up = 0;
-    uint32_t settle_down = 0;
+    uint32_t settled = 0;
     uint32_t t = 0;
-    uint32_t expected_down = settleDown(DIRECT_CYCLE, phaseAfterDown(945, DIRECT_CYCLE));
-    while (settle_down < expected_down) {
+    while (settled < settleUp(DIRECT_CYCLE) + settleDown(DIRECT_CYCLE, phase)) {
         t++;
         int8_t s = m.tick();
         if (s == 0) continue;
-        if (s > 0) {
-            TEST_ASSERT_EQUAL_UINT32(0, settle_down); // all back-off before the approach
-            up++;
-        } else {
-            settle_down++;
+        if (s != leg_dir) {
+            leg++;
+            leg_dir = s;
         }
+        TEST_ASSERT_LESS_THAN_UINT8(2 * Motion::APPROACHES, leg);
+        legs[leg]++;
+        settled++;
         if (last_step != 0 && t - last_step < min_gap) min_gap = t - last_step;
         last_step = t;
     }
-    TEST_ASSERT_EQUAL_UINT32(settleUp(DIRECT_CYCLE), up);
+    for (uint8_t i = 0; i < Motion::APPROACHES; i++) {
+        TEST_ASSERT_EQUAL_UINT32(up_leg, legs[2 * i]);
+        TEST_ASSERT_EQUAL_UINT32(down_leg + (i == 0 ? phase : 0), legs[2 * i + 1]);
+    }
     TEST_ASSERT_GREATER_OR_EQUAL_UINT32(166, min_gap);
+    TEST_ASSERT_EQUAL_UINT8(0, m.phase());
     // Holds the stop without stepping, still zeroing, for the dwell.
     for (uint32_t i = 0; i + 1 < Motion::DWELL_TICKS; i++) {
         TEST_ASSERT_EQUAL_INT8(0, m.tick());

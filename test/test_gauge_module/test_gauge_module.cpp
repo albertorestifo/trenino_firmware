@@ -314,6 +314,27 @@ void test_vid6606_with_reset_starts_from_phase_zero()
     TEST_ASSERT_EQUAL_UINT8(0, b.motion().phase()); // RESET_N homed the chip
 }
 
+void test_vid6606_zero_sweep_runs_at_100_degrees_per_second()
+{
+    GaugeModule g(vid(8, 7, 6));
+    TEST_ASSERT_TRUE(g.begin());
+    // Ticks for the first 1200 STEP pulses of the sweep: one second at 1200 steps/s.
+    uint32_t ticks = 0;
+    uint32_t pulses = 0;
+    uint8_t prev = g_mock_pin_level[8];
+    while (pulses < 1200) {
+        GaugeScheduler::tick();
+        ticks++;
+        uint8_t now = g_mock_pin_level[8];
+        if (!prev && now) {
+            TEST_ASSERT_EQUAL_UINT8(0, g_mock_pin_level[7]); // toward the stop
+            pulses++;
+        }
+        prev = now;
+    }
+    TEST_ASSERT_UINT32_WITHIN(20, Gauge::TICK_HZ, ticks);
+}
+
 int main()
 {
     UNITY_BEGIN();
@@ -334,5 +355,6 @@ int main()
     RUN_TEST(test_rezero_lands_on_the_same_coil_state_from_any_position);
     RUN_TEST(test_vid6606_without_reset_keeps_its_phase_across_reconfigure);
     RUN_TEST(test_vid6606_with_reset_starts_from_phase_zero);
+    RUN_TEST(test_vid6606_zero_sweep_runs_at_100_degrees_per_second);
     return UNITY_END();
 }

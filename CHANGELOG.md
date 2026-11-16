@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.3.2] - 2026-11-16
+
+### Fixed
+- **VID6606 gauge zero bounced off the stop and ran the wrong way.** The zero sweep
+  hit the end stop at 200°/s. The needle lost sync, bounced back by a random amount
+  and kept turning away from the stop at full speed for the rest of the sweep, so
+  the slow approach never reached the stop and 0 landed somewhere different each
+  time. The VID6606 sweep now runs at 100°/s (1200 steps/s). A full sweep takes
+  about 3.3 s instead of 1.6 s. Direct drive is unchanged.
+
+### Changed
+- **Zeroing approaches the stop three times.** Like a 3D printer homing, after the
+  fast sweep the gauge backs off 4° and creeps back into the stop at 20°/s three
+  times instead of once, then holds it. Every approach ends on the same electrical
+  phase. Zeroing takes about 1 s longer.
+- Firmware version is 3.3.2.
+
 ## [3.3.1] - 2026-11-09
 
 ### Fixed

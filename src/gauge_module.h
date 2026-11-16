@@ -19,8 +19,11 @@ public:
     // past where the firmware thinks it is.
     static constexpr uint16_t ZERO_MARGIN_VID6606 = 120;
     static constexpr uint16_t ZERO_MARGIN_DIRECT = 30;
-    // Unramped zero sweep at 200 degrees/s, the X27 start-stop limit.
-    static constexpr uint16_t ZERO_SPEED_VID6606 = 2400;
+    // Unramped zero sweep. VID6606: 100 degrees/s. At 200 degrees/s an X27
+    // on a VID6606 lost sync when it hit the stop, bounced back by a random
+    // amount and kept running the wrong way. Direct: 200 degrees/s, the X27
+    // start-stop limit.
+    static constexpr uint16_t ZERO_SPEED_VID6606 = 1200;
     static constexpr uint16_t ZERO_SPEED_DIRECT = 600;
     // Back-off and slow approach into the stop at 20 degrees/s, slow enough
     // that the needle does not bounce off it.
