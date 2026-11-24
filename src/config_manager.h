@@ -74,6 +74,13 @@ struct ModuleConfig {
 
         // MODULE_TYPE_GAUGE
         Protocol::GaugeConfig gauge;
+
+        // MODULE_TYPE_MT6701
+        struct {
+            uint8_t i2c_address;
+            uint8_t pin;
+            uint8_t sensitivity;
+        } mt6701;
     };
 
     ModuleConfig()
@@ -228,6 +235,15 @@ public:
                 return false;
             }
             modules[cfg.part_number].gauge = cfg.gauge;
+            break;
+
+        case Protocol::MODULE_TYPE_MT6701:
+            if (!Protocol::isValidMT6701Config(cfg.mt6701.i2c_address, cfg.mt6701.sensitivity)) {
+                return false;
+            }
+            modules[cfg.part_number].mt6701.i2c_address = cfg.mt6701.i2c_address;
+            modules[cfg.part_number].mt6701.pin = cfg.mt6701.pin;
+            modules[cfg.part_number].mt6701.sensitivity = cfg.mt6701.sensitivity;
             break;
 
         default:

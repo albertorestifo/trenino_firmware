@@ -45,6 +45,7 @@ EEPROMClass EEPROM;
 #include "../../src/button_sensor.h"
 #include "../../src/matrix_sensor.h"
 #include "../../src/ht16k33_module.h"
+#include "../../src/mt6701_module.h"
 
 namespace Modules {
 
@@ -118,6 +119,20 @@ bool HT16K33Module::writeWithRetry(const uint8_t*, uint8_t) { return true; }
 // ht16k33_module.cpp uses a file-scope g_wire_initialized; provide the
 // UNIT_TEST reset helper so any future include doesn't fail to link.
 void ht16k33_reset_wire_state() {}
+
+MT6701Module::MT6701Module(uint8_t i2c_address, uint8_t report_pin, uint8_t)
+    : i2c_address_(i2c_address)
+    , report_pin_(report_pin)
+    , min_send_interval_(0)
+    , current_value_(0)
+    , last_sent_(0)
+    , scans_since_send_(0)
+    , has_value_(false)
+    , sent_once_(false)
+{}
+bool MT6701Module::begin() { return true; }
+void MT6701Module::scan() {}
+Reading MT6701Module::getReading() { return Reading(); }
 
 } // namespace Modules
 

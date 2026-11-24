@@ -14,6 +14,7 @@ src/
 ├── button_sensor.h/cpp   # Digital button module
 ├── matrix_sensor.h/cpp   # Button matrix module
 ├── ht16k33_module.h/cpp  # HT16K33 14-segment display module (I2C)
+├── mt6701_module.h/cpp   # MT6701 14-bit magnetic angle sensor (I2C)
 ├── gauge_module.h/cpp    # X27 gauge module: VID6606 STEP/DIR or direct six-state pins
 ├── gauge_motion.h/cpp    # Gauge ramp and zero sweep, integer-only, runs in the tick ISR
 ├── gauge_scheduler.h/cpp # Registered gauges, the 10 kHz tick, suspend around flash writes

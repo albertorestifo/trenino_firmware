@@ -102,7 +102,7 @@ The message uses a discriminated union based on `module_type`.
 | config_id | Unique configuration identifier |
 | total_parts | Total number of modules to configure |
 | part_number | This module's index (0-based) |
-| module_type | 0 = Analog, 1 = Button, 2 = Matrix, 3 = reserved, 4 = HT16K33, 5–6 = reserved, 7 = Gauge |
+| module_type | 0 = Analog, 1 = Button, 2 = Matrix, 3 = reserved, 4 = HT16K33, 5–6 = reserved, 7 = Gauge, 8 = MT6701 |
 
 **Analog Payload (module_type = 0)**
 
@@ -155,6 +155,22 @@ Matrix buttons are reported using virtual pins: `pin = 128 + (row * num_cols + c
 
 **Gauge Payload (module_type = 7)**: see [X27 gauge module](#x27-gauge-module-type-7).
 
+**MT6701 Payload (module_type = 8, firmware 3.4.0)**
+
+```
+[i2c_address: u8] [pin: u8] [sensitivity: u8]
+```
+
+| Field | Description |
+|-------|-------------|
+| i2c_address | The sensor's 7-bit address: 0x06 (factory) or 0x46 (alternate, saved in the chip's EEPROM). Accepted: 0x06 and 0x08–0x77 |
+| pin | Report pin: the `pin` the device puts in this sensor's `InputValue` messages. The host picks a number no other input uses |
+| sensitivity | 0-10, as for analog inputs |
+
+The packet must be exactly 11 bytes. An invalid address or sensitivity gives `ConfigurationError`.
+
+The device reads the 14-bit angle from registers 0x03/0x04 every scan and sends it as `InputValue` with `value` 0–16383 (one full turn). It sends when the angle moved more than 3 counts, measured the short way round so 16383 → 0 is one count, no faster than the sensitivity allows, and at least every 2 s. A failed read keeps the last value. A sensor that doesn't answer when the configuration starts is reported as `ModuleError` with its `i2c_address`; reading is retried every scan. The 0/16383 wrap is left to the host, which calibrates the lever's travel.
+
 ### ConfigurationStored (3)
 
 ```
@@ -173,7 +189,7 @@ Matrix buttons are reported using virtual pins: `pin = 128 + (row * num_cols + c
 [type: u8 = 5] [pin: u8] [value: i16]
 ```
 
-Value is the raw ADC reading (0-1023 for 10-bit ADC).
+Value is the raw ADC reading (0-1023 for 10-bit ADC), or the 14-bit angle (0-16383) for an MT6701.
 
 ### Heartbeat (6)
 
@@ -340,6 +356,7 @@ After a successful `ConfigurationStored`, the device may send one `ModuleError (
 Modules are addressed in two ways depending on their type:
 
 - **Hardware-pin modules** (Analog, Button, Matrix, Gauge): identified by the `pin` field in `Configure` and `InputValue`, or `pins[0]` for a gauge. Matrix buttons use virtual pin numbers (`128 + row * num_cols + col`).
+- **MT6701 sensors**: configured by `i2c_address`, reported in `InputValue` under their report `pin`, and in `ModuleError` by `i2c_address`.
 - **I2C-addressed modules** (HT16K33): identified by the `i2c_address` field in `Configure`, `WriteSegments`, `SetModuleBrightness`, and `ModuleError`.
 
 **Only one I2C bus is supported.** All I2C modules share the same bus. Each must have a distinct I2C address.

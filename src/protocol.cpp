@@ -195,6 +195,9 @@ size_t Configure::encode(uint8_t* buffer, size_t buffer_size) const
     case MODULE_TYPE_GAUGE:
         payload_size = GAUGE_PAYLOAD_SIZE;
         break;
+    case MODULE_TYPE_MT6701:
+        payload_size = MT6701_PAYLOAD_SIZE;
+        break;
     default:
         return 0; // Unknown input type
     }
@@ -259,6 +262,12 @@ size_t Configure::encode(uint8_t* buffer, size_t buffer_size) const
         put16(buffer, offset, gauge.max_speed);
         put16(buffer, offset, gauge.acceleration);
         buffer[offset++] = gauge.flags;
+        break;
+
+    case MODULE_TYPE_MT6701:
+        buffer[offset++] = mt6701.i2c_address;
+        buffer[offset++] = mt6701.pin;
+        buffer[offset++] = mt6701.sensitivity;
         break;
     }
 
@@ -357,6 +366,15 @@ bool Configure::decode(const uint8_t* buffer, size_t length)
         gauge.max_speed = get16(buffer, offset);
         gauge.acceleration = get16(buffer, offset);
         gauge.flags = buffer[offset++];
+        break;
+
+    case MODULE_TYPE_MT6701:
+        if (length != HEADER_SIZE + MT6701_PAYLOAD_SIZE) {
+            return false;
+        }
+        mt6701.i2c_address = buffer[offset++];
+        mt6701.pin = buffer[offset++];
+        mt6701.sensitivity = buffer[offset++];
         break;
 
     default:

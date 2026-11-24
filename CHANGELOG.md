@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.4.0] - 2026-11-24
+
+### Added
+- **MT6701 magnetic angle sensor over I2C (module type 8).** Reads the chip's
+  14-bit angle (0-16383 per turn) from registers 0x03/0x04 and reports it in
+  `InputValue` under a report pin the host chooses, so a lever gets about 0.022°
+  per count instead of the 10-bit ADC's 1023 steps. The payload is
+  `[i2c_address][pin][sensitivity]`; the MT6701 answers at 0x06, or 0x46 once that
+  is saved in its EEPROM, so one bus holds two sensors. Sensitivity and the
+  2-second keep-alive send work as for analog inputs; the dead zone is 3 counts,
+  measured across the 16383/0 wrap. A sensor that doesn't answer at start-up is
+  reported as `ModuleError` with its address, and is read again on every scan.
+  Hosts gate it on version >= 3.4.0. Not yet tested on hardware.
+
+### Changed
+- Firmware version is 3.4.0. The EEPROM format is unchanged.
+
 ## [3.3.2] - 2026-11-16
 
 ### Fixed

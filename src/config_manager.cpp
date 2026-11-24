@@ -254,6 +254,12 @@ void storeToEEPROM(uint32_t config_id, const ModuleConfig* modules, uint8_t num_
             eeprom_put(addr++, g.flags);
             break;
         }
+
+        case Protocol::MODULE_TYPE_MT6701:
+            eeprom_put(addr++, modules[i].mt6701.i2c_address);
+            eeprom_put(addr++, modules[i].mt6701.pin);
+            eeprom_put(addr++, modules[i].mt6701.sensitivity);
+            break;
         }
     }
 
@@ -360,6 +366,16 @@ bool loadFromEEPROM()
             }
             break;
         }
+
+        case Protocol::MODULE_TYPE_MT6701:
+            eeprom_get(addr++, g_current_modules[i].mt6701.i2c_address);
+            eeprom_get(addr++, g_current_modules[i].mt6701.pin);
+            eeprom_get(addr++, g_current_modules[i].mt6701.sensitivity);
+            if (!Protocol::isValidMT6701Config(g_current_modules[i].mt6701.i2c_address,
+                    g_current_modules[i].mt6701.sensitivity)) {
+                return false;
+            }
+            break;
 
         default:
             return false; // Unknown input type

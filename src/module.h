@@ -12,7 +12,8 @@ enum class ModuleType : uint8_t {
     // 3 = reserved (formerly BLDCLever)
     HT16K33 = 4,
     // 5, 6 = reserved (formerly MCP23017, ADS1115)
-    Gauge = 7
+    Gauge = 7,
+    MT6701 = 8
 };
 
 // Module reading result

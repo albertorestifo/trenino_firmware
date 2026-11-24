@@ -316,6 +316,37 @@ void test_configure_gauge_roundtrip_and_exact_length()
     TEST_ASSERT_FALSE(out.decode(b, n + 1));
 }
 
+void test_configure_mt6701_wire_layout_and_roundtrip()
+{
+    Configure cfg;
+    cfg.config_id = 0x01020304; cfg.total_parts = 2; cfg.part_number = 1;
+    cfg.module_type = MODULE_TYPE_MT6701;
+    cfg.mt6701.i2c_address = 0x46; cfg.mt6701.pin = 241; cfg.mt6701.sensitivity = 7;
+    uint8_t b[32];
+    TEST_ASSERT_EQUAL(11, cfg.encode(b, sizeof(b)));
+    const uint8_t expected[] = { 2, 4, 3, 2, 1, 2, 1, 8, 0x46, 241, 7 };
+    TEST_ASSERT_EQUAL_UINT8_ARRAY(expected, b, 11);
+
+    Configure out;
+    TEST_ASSERT_TRUE(out.decode(b, 11));
+    TEST_ASSERT_EQUAL_UINT8(MODULE_TYPE_MT6701, out.module_type);
+    TEST_ASSERT_EQUAL_UINT8(0x46, out.mt6701.i2c_address);
+    TEST_ASSERT_EQUAL_UINT8(241, out.mt6701.pin);
+    TEST_ASSERT_EQUAL_UINT8(7, out.mt6701.sensitivity);
+    TEST_ASSERT_FALSE(out.decode(b, 10));
+    TEST_ASSERT_FALSE(out.decode(b, 12));
+}
+
+void test_mt6701_config_validation()
+{
+    TEST_ASSERT_TRUE(isValidMT6701Config(0x06, 5));
+    TEST_ASSERT_TRUE(isValidMT6701Config(0x46, 10));
+    TEST_ASSERT_FALSE(isValidMT6701Config(0x00, 5));
+    TEST_ASSERT_FALSE(isValidMT6701Config(0x07, 5));
+    TEST_ASSERT_FALSE(isValidMT6701Config(0x78, 5));
+    TEST_ASSERT_FALSE(isValidMT6701Config(0x46, 11));
+}
+
 void test_gauge_config_validation()
 {
     TEST_ASSERT_TRUE(isValidGaugeConfig(validVid()));
@@ -410,6 +441,8 @@ int main()
     RUN_TEST(test_set_gauge_position_roundtrip);
     RUN_TEST(test_zero_gauge_roundtrip);
     RUN_TEST(test_removed_stepper_message_types_are_ignored);
+    RUN_TEST(test_configure_mt6701_wire_layout_and_roundtrip);
+    RUN_TEST(test_mt6701_config_validation);
 
     return UNITY_END();
 }

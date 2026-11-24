@@ -1,5 +1,6 @@
 #include "sensor_manager.h"
 #include "gauge_module.h"
+#include "mt6701_module.h"
 
 namespace ModuleManager {
 
@@ -78,6 +79,13 @@ bool applyConfiguration(const ConfigManager::ModuleConfig* modules, uint8_t modu
 
         case Protocol::MODULE_TYPE_GAUGE:
             module = new Modules::GaugeModule(config.gauge);
+            break;
+
+        case Protocol::MODULE_TYPE_MT6701:
+            module = new Modules::MT6701Module(
+                config.mt6701.i2c_address,
+                config.mt6701.pin,
+                config.mt6701.sensitivity);
             break;
 
         default:

@@ -52,6 +52,14 @@ static unsigned long wire_timeout_us = 0;
 static bool wire_timeout_reset_on_timeout = false;
 static uint8_t wire_timeout_call_count = 0;
 
+// Bytes returned by requestFrom()/read(), in order (queueRead).
+constexpr uint8_t MAX_READ_BYTES = 64;
+static uint8_t read_queue[MAX_READ_BYTES];
+static uint8_t read_queue_len = 0;
+static uint8_t read_queue_pos = 0;
+static uint8_t rx_available = 0;
+static uint8_t request_count = 0;
+
 static uint8_t current_address = 0;
 static uint8_t current_buffer[MAX_BYTES_PER_TRANSACTION];
 static uint8_t current_length = 0;
@@ -66,6 +74,18 @@ static inline void reset() {
     wire_timeout_call_count = 0;
     transaction_active = false;
     current_length = 0;
+    read_queue_len = 0;
+    read_queue_pos = 0;
+    rx_available = 0;
+    request_count = 0;
+}
+
+static inline void queueRead(uint8_t byte) {
+    if (read_queue_pos == read_queue_len && rx_available == 0) {
+        read_queue_pos = 0; // all consumed: start over
+        read_queue_len = 0;
+    }
+    if (read_queue_len < MAX_READ_BYTES) read_queue[read_queue_len++] = byte;
 }
 
 static inline void scheduleNacks(uint8_t address, uint8_t count, uint8_t status = 2) {
@@ -144,9 +164,19 @@ public:
         return status;
     }
 
-    uint8_t requestFrom(uint8_t /*address*/, uint8_t /*quantity*/) { return 0; }
-    int available() { return 0; }
-    int read() { return -1; }
+    // Returns as many queued bytes as are left, up to quantity (0 = NACK).
+    uint8_t requestFrom(uint8_t /*address*/, uint8_t quantity) {
+        MockWire::request_count++;
+        uint8_t left = MockWire::read_queue_len - MockWire::read_queue_pos;
+        MockWire::rx_available = quantity < left ? quantity : left;
+        return MockWire::rx_available;
+    }
+    int available() { return MockWire::rx_available; }
+    int read() {
+        if (MockWire::rx_available == 0) return -1;
+        MockWire::rx_available--;
+        return MockWire::read_queue[MockWire::read_queue_pos++];
+    }
 };
 
 static TwoWire Wire;

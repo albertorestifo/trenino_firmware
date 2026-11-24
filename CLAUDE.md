@@ -53,6 +53,7 @@ See [docs/PROTOCOL.md](docs/PROTOCOL.md) for the serial communication protocol s
 - **config_manager.h/cpp** - Configuration and EEPROM persistence
 - **sensor_manager.h/cpp** - Sensor lifecycle management
 - **analog_sensor.h/cpp** - Analog input implementation
+- **mt6701_module.h/cpp** - MT6701 angle sensor over I2C, 14-bit, reported like an analog input
 - **gauge_module.h/cpp**, **gauge_motion.h/cpp**, **gauge_scheduler.h/cpp**, **gauge_hal*.{h,cpp}** - X27 gauge steppers on a 10 kHz timer interrupt; wiring in [docs/GAUGE_WIRING.md](docs/GAUGE_WIRING.md)
 
 ## Testing

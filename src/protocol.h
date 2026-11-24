@@ -33,6 +33,7 @@ constexpr uint8_t MODULE_TYPE_MATRIX = 2;
 constexpr uint8_t MODULE_TYPE_HT16K33 = 4;
 // Note: 5 and 6 are reserved (formerly MCP23017 and ADS1115)
 constexpr uint8_t MODULE_TYPE_GAUGE = 7;
+constexpr uint8_t MODULE_TYPE_MT6701 = 8; // MT6701 angle sensor over I2C (3.4.0)
 // Configure-only sentinel for an explicit empty legacy module deployment.
 // Canonical header: total_parts=0, part_number=0, no payload.
 constexpr uint8_t MODULE_TYPE_EMPTY = 0xff;
@@ -66,6 +67,16 @@ struct GaugeConfig {
 // Range and pin checks shared by Configure handling and EEPROM load.
 // Does not check board support for the direct driver (ConfigManager does).
 bool isValidGaugeConfig(const GaugeConfig& gauge);
+
+// MT6701 payload: [i2c_address][pin][sensitivity]
+constexpr uint8_t MT6701_PAYLOAD_SIZE = 3;
+
+// 7-bit address 0x08-0x77 and sensitivity 0-10.
+inline bool isValidMT6701Config(uint8_t i2c_address, uint8_t sensitivity)
+{
+    // 0x06 is reserved in the I2C spec but is the MT6701's factory address.
+    return (i2c_address == 0x06 || (i2c_address >= 0x08 && i2c_address <= 0x77)) && sensitivity <= 10;
+}
 
 // Maximum payload size
 constexpr size_t MAX_PAYLOAD_SIZE = 64;
@@ -137,6 +148,13 @@ struct Configure {
 
         // MODULE_TYPE_GAUGE
         GaugeConfig gauge;
+
+        // MODULE_TYPE_MT6701
+        struct {
+            uint8_t i2c_address;
+            uint8_t pin; // report pin: InputValue messages carry it
+            uint8_t sensitivity;
+        } mt6701;
     };
 
     Configure()

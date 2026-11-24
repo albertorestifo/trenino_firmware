@@ -258,6 +258,53 @@ void test_gauge_record_eeprom_roundtrip_is_field_by_field()
     TEST_ASSERT_EQUAL_UINT8(9, loaded[1].button.pin);
 }
 
+void test_mt6701_record_eeprom_roundtrip()
+{
+    ConfigManager::ModuleConfig modules[2];
+    modules[0].module_type = Protocol::MODULE_TYPE_MT6701;
+    modules[0].mt6701.i2c_address = 0x46;
+    modules[0].mt6701.pin = 241;
+    modules[0].mt6701.sensitivity = 6;
+    modules[1].module_type = Protocol::MODULE_TYPE_BUTTON;
+    modules[1].button.pin = 9;
+    modules[1].button.debounce = 3;
+    ConfigManager::storeToEEPROM(78, modules, 2);
+
+    const uint8_t expected[] = { Protocol::MODULE_TYPE_MT6701, 0x46, 241, 6, Protocol::MODULE_TYPE_BUTTON, 9, 3 };
+    TEST_ASSERT_EQUAL_UINT8_ARRAY(expected, &mock_eeprom_storage[ConfigManager::EEPROM_INPUTS_ADDR], sizeof(expected));
+
+    TEST_ASSERT_TRUE(ConfigManager::loadFromEEPROM());
+    uint8_t count = 0;
+    const ConfigManager::ModuleConfig* loaded = ConfigManager::getCurrentConfig(count);
+    TEST_ASSERT_EQUAL(2, count);
+    TEST_ASSERT_EQUAL_UINT8(0x46, loaded[0].mt6701.i2c_address);
+    TEST_ASSERT_EQUAL_UINT8(241, loaded[0].mt6701.pin);
+    TEST_ASSERT_EQUAL_UINT8(6, loaded[0].mt6701.sensitivity);
+    TEST_ASSERT_EQUAL_UINT8(9, loaded[1].button.pin);
+
+    mock_eeprom_storage[ConfigManager::EEPROM_INPUTS_ADDR + 1] = 0x00; // bad address
+    TEST_ASSERT_FALSE(ConfigManager::loadFromEEPROM());
+}
+
+void test_configure_rejects_invalid_mt6701_part()
+{
+    ConfigManager::g_config_state.reset();
+    Protocol::Configure cfg;
+    cfg.config_id = 301; cfg.total_parts = 1; cfg.part_number = 0;
+    cfg.module_type = Protocol::MODULE_TYPE_MT6701;
+    cfg.mt6701.i2c_address = 0x06; cfg.mt6701.pin = 240; cfg.mt6701.sensitivity = 11;
+    bool complete = false;
+    bool error = false;
+    ConfigManager::handleConfigure(cfg, complete, error);
+    TEST_ASSERT_TRUE(error);
+
+    ConfigManager::g_config_state.reset();
+    cfg.config_id = 302; cfg.mt6701.sensitivity = 5;
+    ConfigManager::handleConfigure(cfg, complete, error);
+    TEST_ASSERT_FALSE(error);
+    TEST_ASSERT_TRUE(complete);
+}
+
 void test_load_rejects_corrupt_gauge_record()
 {
     ConfigManager::ModuleConfig m = gaugeModule(8);
@@ -387,6 +434,8 @@ int main()
     RUN_TEST(test_configure_rejects_fifth_gauge_at_completion_in_any_order);
     RUN_TEST(test_configure_rejects_gauges_sharing_pins);
     RUN_TEST(test_shield_registration_bytes_are_left_alone);
+    RUN_TEST(test_mt6701_record_eeprom_roundtrip);
+    RUN_TEST(test_configure_rejects_invalid_mt6701_part);
 
     return UNITY_END();
 }
