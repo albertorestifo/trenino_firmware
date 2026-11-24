@@ -21,6 +21,9 @@ MT6701Module::MT6701Module(uint8_t i2c_address, uint8_t report_pin, uint8_t sens
     , scans_since_send_(0)
     , has_value_(false)
     , sent_once_(false)
+    , lost_(false)
+    , failed_reads_(0)
+    , retry_countdown_(0)
 {
 }
 
@@ -41,10 +44,16 @@ bool MT6701Module::begin()
     scans_since_send_ = 0;
     has_value_ = false;
     sent_once_ = false;
+    failed_reads_ = 0;
+    retry_countdown_ = 0;
+    lost_ = false;
 
     uint16_t angle;
     if (!readAngle(angle)) {
-        return false; // reported to the host as a ModuleError; scan() keeps trying
+        // Reported to the host as a ModuleError; scan() keeps trying, slowly.
+        lost_ = true;
+        retry_countdown_ = RETRY_INTERVAL;
+        return false;
     }
     current_value_ = angle;
     has_value_ = true;
@@ -74,13 +83,35 @@ bool MT6701Module::readAngle(uint16_t& angle)
 
 void MT6701Module::scan()
 {
+    if (scans_since_send_ < 0xFFFF) {
+        scans_since_send_++;
+    }
+
+    if (lost_ && retry_countdown_ > 0) {
+        retry_countdown_--;
+        return;
+    }
+
     uint16_t angle;
     if (readAngle(angle)) {
         current_value_ = angle;
         has_value_ = true;
+        failed_reads_ = 0;
+        if (lost_) {
+            // Back: send the first good value at once.
+            lost_ = false;
+            sent_once_ = false;
+            scans_since_send_ = min_send_interval_;
+        }
+        return;
     }
-    if (scans_since_send_ < 0xFFFF) {
-        scans_since_send_++;
+
+    if (lost_) {
+        retry_countdown_ = RETRY_INTERVAL;
+    } else if (++failed_reads_ >= LOST_AFTER) {
+        lost_ = true;
+        has_value_ = false; // stop the keep-alive so the host sees the sensor go quiet
+        retry_countdown_ = RETRY_INTERVAL;
     }
 }
 

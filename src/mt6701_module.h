@@ -12,7 +12,11 @@ namespace Modules {
 // The MT6701 answers at 0x06 by default, or at 0x46 once that is saved in
 // its EEPROM, so one I2C bus holds two sensors.
 //
-// A failed read keeps the last good value and sends nothing.
+// A failed read keeps the last good value. After LOST_AFTER failed reads in a
+// row the sensor counts as lost: it sends nothing (no stale keep-alive, so the
+// host sees it go quiet) and is retried only every RETRY_INTERVAL scans, since
+// a stuck bus can block each attempt for the Wire timeout. The first good read
+// after that is sent at once.
 class MT6701Module : public IModule {
 public:
     static constexpr uint8_t REG_ANGLE_H = 0x03; // Angle<13:6>
@@ -20,6 +24,8 @@ public:
     static constexpr uint16_t MAX_VALUE = 16383;
     static constexpr uint16_t MAX_SEND_INTERVAL = 200; // force a send every ~2 s
     static constexpr uint16_t DEAD_ZONE = 3; // counts, about 0.07 degrees
+    static constexpr uint8_t LOST_AFTER = 3; // failed reads in a row
+    static constexpr uint8_t RETRY_INTERVAL = 50; // scans between reads while lost
 
     MT6701Module(uint8_t i2c_address, uint8_t report_pin, uint8_t sensitivity);
 
@@ -33,6 +39,7 @@ public:
 #ifdef UNIT_TEST
     uint16_t getCurrentValue() const { return current_value_; }
     bool hasValue() const { return has_value_; }
+    bool isLost() const { return lost_; }
 #endif
 
     // 14-bit angle from the two register bytes.
@@ -50,6 +57,9 @@ private:
     uint16_t scans_since_send_;
     bool has_value_;
     bool sent_once_;
+    bool lost_;
+    uint8_t failed_reads_;
+    uint8_t retry_countdown_;
 
     bool readAngle(uint16_t& angle);
     bool shouldSend() const;

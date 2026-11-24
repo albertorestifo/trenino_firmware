@@ -16,7 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   is saved in its EEPROM, so one bus holds two sensors. Sensitivity and the
   2-second keep-alive send work as for analog inputs; the dead zone is 3 counts,
   measured across the 16383/0 wrap. A sensor that doesn't answer at start-up is
-  reported as `ModuleError` with its address, and is read again on every scan.
+  reported as `ModuleError` with its address. A sensor that fails 3 reads in a
+  row goes quiet (no stale keep-alive, so the host sees it is missing) and is
+  retried about every 0.5 s, so a stuck bus doesn't slow the rest of the
+  controller; its first good read is sent at once.
   Hosts gate it on version >= 3.4.0. Not yet tested on hardware.
 
 ### Changed

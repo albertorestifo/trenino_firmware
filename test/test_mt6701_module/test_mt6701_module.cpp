@@ -167,13 +167,70 @@ void test_recovers_after_failed_begin()
     MT6701Module mod(0x06, 240, 10);
     MockWire::scheduleNacks(0x06, 1);
     TEST_ASSERT_FALSE(mod.begin());
+    TEST_ASSERT_TRUE(mod.isLost());
 
-    mod.scan(); // nothing queued: still no value
-    TEST_ASSERT_FALSE(mod.getReading().has_value);
+    // While lost, the bus is only tried every RETRY_INTERVAL scans.
+    uint8_t requests_before = MockWire::request_count;
+    for (uint8_t i = 0; i < MT6701Module::RETRY_INTERVAL; i++) {
+        mod.scan();
+        TEST_ASSERT_FALSE(mod.getReading().has_value);
+    }
+    TEST_ASSERT_EQUAL_UINT8(requests_before, MockWire::request_count);
 
-    Reading r = scanUntilReading(mod, 777, 3);
+    queueAngle(777);
+    mod.scan();
+    TEST_ASSERT_FALSE(mod.isLost());
+    Reading r = mod.getReading();
     TEST_ASSERT_TRUE(r.has_value);
     TEST_ASSERT_EQUAL_INT16(777, r.value);
+}
+
+void test_lost_sensor_goes_quiet()
+{
+    MT6701Module mod(0x06, 240, 10);
+    queueAngle(2000);
+    mod.begin();
+    TEST_ASSERT_TRUE(scanUntilReading(mod, 2000, 3).has_value);
+
+    // Two failures are a glitch: still not lost.
+    MockWire::scheduleNacks(0x06, MT6701Module::LOST_AFTER - 1);
+    for (uint8_t i = 0; i < MT6701Module::LOST_AFTER - 1; i++) mod.scan();
+    TEST_ASSERT_FALSE(mod.isLost());
+
+    MockWire::reset();
+    MockWire::scheduleNacks(0x06, 1);
+    mod.scan();
+    TEST_ASSERT_TRUE(mod.isLost());
+
+    // No keep-alive with the stale value, however long it stays lost.
+    for (uint16_t i = 0; i < MT6701Module::MAX_SEND_INTERVAL + 10; i++) {
+        MockWire::scheduleNacks(0x06, 1);
+        mod.scan();
+        TEST_ASSERT_FALSE(mod.getReading().has_value);
+        MockWire::reset();
+    }
+}
+
+void test_lost_sensor_retries_slowly_and_resends_at_once()
+{
+    MT6701Module mod(0x06, 240, 0); // slowest rate: 11 scans between sends
+    queueAngle(3000);
+    mod.begin();
+    TEST_ASSERT_TRUE(scanUntilReading(mod, 3000, 20).has_value);
+
+    MockWire::scheduleNacks(0x06, MT6701Module::LOST_AFTER);
+    for (uint8_t i = 0; i < MT6701Module::LOST_AFTER; i++) mod.scan();
+    TEST_ASSERT_TRUE(mod.isLost());
+
+    uint8_t requests = MockWire::request_count;
+    for (uint8_t i = 0; i < MT6701Module::RETRY_INTERVAL; i++) mod.scan();
+    TEST_ASSERT_EQUAL_UINT8(requests, MockWire::request_count);
+
+    queueAngle(3001); // inside the dead zone, but it is sent: the host must see it is back
+    mod.scan();
+    Reading r = mod.getReading();
+    TEST_ASSERT_TRUE(r.has_value);
+    TEST_ASSERT_EQUAL_INT16(3001, r.value);
 }
 
 int main(int argc, char** argv)
@@ -189,5 +246,7 @@ int main(int argc, char** argv)
     RUN_TEST(test_wrap_is_a_small_change);
     RUN_TEST(test_failed_read_keeps_last_value);
     RUN_TEST(test_recovers_after_failed_begin);
+    RUN_TEST(test_lost_sensor_goes_quiet);
+    RUN_TEST(test_lost_sensor_retries_slowly_and_resends_at_once);
     return UNITY_END();
 }
