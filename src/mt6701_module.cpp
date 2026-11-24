@@ -23,7 +23,8 @@ MT6701Module::MT6701Module(uint8_t i2c_address, uint8_t report_pin, uint8_t sens
     , sent_once_(false)
     , lost_(false)
     , failed_reads_(0)
-    , retry_countdown_(0)
+    , last_send_ms_(0)
+    , last_try_ms_(0)
 {
 }
 
@@ -45,14 +46,14 @@ bool MT6701Module::begin()
     has_value_ = false;
     sent_once_ = false;
     failed_reads_ = 0;
-    retry_countdown_ = 0;
     lost_ = false;
+    last_send_ms_ = millis();
+    last_try_ms_ = millis();
 
     uint16_t angle;
     if (!readAngle(angle)) {
         // Reported to the host as a ModuleError; scan() keeps trying, slowly.
         lost_ = true;
-        retry_countdown_ = RETRY_INTERVAL;
         return false;
     }
     current_value_ = angle;
@@ -87,10 +88,11 @@ void MT6701Module::scan()
         scans_since_send_++;
     }
 
-    if (lost_ && retry_countdown_ > 0) {
-        retry_countdown_--;
+    unsigned long now = millis();
+    if (lost_ && now - last_try_ms_ < RETRY_MS) {
         return;
     }
+    last_try_ms_ = now;
 
     uint16_t angle;
     if (readAngle(angle)) {
@@ -106,12 +108,9 @@ void MT6701Module::scan()
         return;
     }
 
-    if (lost_) {
-        retry_countdown_ = RETRY_INTERVAL;
-    } else if (++failed_reads_ >= LOST_AFTER) {
+    if (!lost_ && ++failed_reads_ >= LOST_AFTER) {
         lost_ = true;
         has_value_ = false; // stop the keep-alive so the host sees the sensor go quiet
-        retry_countdown_ = RETRY_INTERVAL;
     }
 }
 
@@ -119,7 +118,7 @@ bool MT6701Module::shouldSend() const
 {
     if (!has_value_) return false;
     if (!sent_once_) return scans_since_send_ >= min_send_interval_;
-    if (scans_since_send_ >= MAX_SEND_INTERVAL) return true;
+    if (millis() - last_send_ms_ >= KEEPALIVE_MS) return true;
     if (scans_since_send_ < min_send_interval_) return false;
     // Circular distance, so 16383 -> 0 counts as a step of 1.
     uint16_t delta = (current_value_ > last_sent_) ? (current_value_ - last_sent_) : (last_sent_ - current_value_);
@@ -133,6 +132,7 @@ Reading MT6701Module::getReading()
         return Reading();
     }
     last_sent_ = current_value_;
+    last_send_ms_ = millis();
     scans_since_send_ = 0;
     sent_once_ = true;
     return Reading((int16_t)current_value_, ModuleType::MT6701, report_pin_);
